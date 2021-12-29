@@ -1,0 +1,40 @@
+use crate::prelude::*;
+
+pub struct Resolver {
+    cwd:         PathBuf,
+    names:       Vec<OsString>,
+    lookup_dirs: OsString,
+}
+
+impl Resolver {
+    pub fn new(names: Vec<&'static str>, fallback_dirs: Vec<PathBuf>) -> Result<Self> {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let env_path_dirs = std::env::split_paths(&path);
+        let lookup_dirs = std::env::join_paths(env_path_dirs.chain(fallback_dirs.clone()))?;
+        let names = names.into_iter().map(OsString::from).collect();
+        let cwd = std::env::current_dir()?;
+        Ok(Resolver { cwd, names, lookup_dirs })
+    }
+    pub fn lookup_all(self) -> impl Iterator<Item = PathBuf> {
+        let Self { names, lookup_dirs, cwd } = self;
+        names
+            .into_iter()
+            .map(move |name| {
+                // We discard this error, as "error finding program" is like "no program available".
+                which::which_in_all(name, Some(lookup_dirs.clone()), cwd.clone()).ok()
+            })
+            .flatten()
+            .flatten()
+    }
+
+    pub fn lookup(self) -> Result<PathBuf> {
+        let empty = Cow::from("<MISSING NAME>");
+        let names = self.names.iter().map(|name| name.to_string_lossy()).collect_vec();
+        let name = names.first().unwrap_or(&empty).to_string();
+        let names = names.join(", ");
+        let locations = self.lookup_dirs.clone();
+        self.lookup_all().next().ok_or_else(|| {
+            anyhow!("Failed to find a program `{}`. Recognized executable names: {}. Tested locations: {}", name, names, locations.to_string_lossy())
+        })
+    }
+}

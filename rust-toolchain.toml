@@ -1,0 +1,3 @@
+[toolchain]
+# Bump when https://github.com/rust-lang/rust/issues/91991 is fixed.
+channel = "nightly-2021-11-08"

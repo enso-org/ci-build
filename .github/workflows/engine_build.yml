@@ -1,0 +1,96 @@
+name: Build Engine
+
+# Controls when the workflow will run
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest, [self-hosted, Windows], [self-hosted, Linux], [self-hosted, macOS]]
+      fail-fast: false
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - run: rm -rf ../enso
+        if: runner.os != 'Windows'
+      - uses: actions/checkout@v2
+      - run: git clone https://github.com/enso-org/enso ../enso
+#       - name: Checkout tools repo
+#         uses: actions/checkout@v2
+#         with:
+#           repository: enso-org/enso
+#           path: ../enso
+      - name: Setup conda
+        uses: s-weigand/setup-conda@v1.0.5
+        if: runner.name != 'First'
+        with:
+          update-conda: false
+          conda-channels: anaconda, conda-forge
+      - name: Configure Pagefile (Windows)
+        if: runner.os == 'Windows'
+        uses: al-cheb/configure-pagefile-action@v1.2
+        with:
+          minimum-size: 16GB
+          maximum-size: 16GB
+          disk-root: "C:"
+#      - name: Setup conda
+#        uses: s-weigand/setup-conda@v1.0.5
+#        with:
+#          update-conda: false
+#          conda-channels: anaconda, conda-forge
+#      - name: Setup Conda Environment on Windows
+#        if: runner.os == 'Windows'
+#        run: |
+#          conda create --name enso
+#          conda init powershell
+#      - name: Activate Conda Environment on Windows
+#        if: runner.os == 'Windows'
+#        run: conda activate enso
+#      - name: Install FlatBuffers Compiler
+#        run: conda install --freeze-installed flatbuffers=1.12.0
+#
+#
+
+      # Runs a set of commands using the runners shell
+      - name: Run a multi-line script
+        run: cargo run --bin build-enso -- ../enso
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      ###################################################################################
+      - name: Publish the Engine Distribution Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.ENGINE_DIST_NAME }}
+          path: ${{ env.ENGINE_DIST_ROOT }}/${{ env.ENGINE_DIST_NAME }}.zip
+      - name: Publish the Launcher
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.LAUNCHER_DIST_NAME }}
+          path: ${{ env.LAUNCHER_DIST_ROOT }}
+      - name: Publish the Project Manager
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.PROJECTMANAGER_DIST_NAME }}
+          path: ${{ env.PROJECTMANAGER_DIST_ROOT }}
+      - name: Publish the FlatBuffers Schemas
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v2
+        with:
+          name: Engine Protocol FlatBuffers Schemas
+          path: ${{ env.TARGET_DIR }}/fbs-upload/fbs-schema.zip
+      - name: Publish the Parser JS Bundle
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v2
+        with:
+          name: Parser JS Bundle
+          path: ${{ env.TARGET_DIR }}/scala-parser.js

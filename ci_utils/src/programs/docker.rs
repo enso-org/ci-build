@@ -1,0 +1,309 @@
+use crate::prelude::*;
+
+use anyhow::Context;
+use platforms::TARGET_OS;
+use shrinkwraprs::Shrinkwrap;
+use std::collections::HashMap;
+use std::fmt::Formatter;
+
+pub struct Docker;
+
+impl Program for Docker {
+    fn executable_name() -> &'static str {
+        "docker"
+    }
+}
+
+impl Docker {
+    pub async fn build(&self, options: BuildOptions) -> Result<ImageId> {
+        let mut command = self.cmd()?;
+        command.arg("build").args(options.args());
+        println!("{:?}", command);
+        let output = command.output().await?;
+        output.status.exit_ok().with_context(|| {
+            format!(
+                "Stdout:\n{}\n\nStderr:\n{}\n",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            )
+        })?;
+        let built_image_id = std::str::from_utf8(&output.stdout)?
+            .lines()
+            .inspect(|line| println!("{}", line))
+            .filter(|line| !line.is_empty())
+            .last()
+            .ok_or_else(|| anyhow!("Docker provided no output"))?
+            .split(' ')
+            .last()
+            .ok_or_else(|| anyhow!("The last line has no space!"))?;
+        println!("Image {} successfully built!", built_image_id);
+        Ok(ImageId(built_image_id.into()))
+    }
+
+    pub async fn run(&self, options: &RunOptions) -> Result {
+        self.cmd()?.arg("run").args(options.args()).run_ok().await
+    }
+
+    pub async fn create(&self, options: &RunOptions) -> Result<ContainerId> {
+        let output = self.cmd()?.arg("create").args(options.args()).output().await?;
+        Ok(ContainerId(output.run_ok_single_line_stdout()?))
+    }
+
+    pub async fn remove_container(&self, name: impl AsRef<OsStr>) -> Result {
+        self.cmd()?.args(["rm", "-f"]).arg(name).run_ok().await
+    }
+
+    pub async fn run_detached(&self, options: &RunOptions) -> Result<ContainerId> {
+        let output = dbg!(self.cmd()?.arg("run").arg("-d").args(options.args())).output().await?;
+        // dbg!(&output);
+        Ok(ContainerId(output.run_ok_single_line_stdout()?))
+        // output.status.exit_ok()?;
+    }
+
+    pub async fn upload(
+        &self,
+        from: impl AsRef<Path>,
+        container: &ContainerId,
+        to: impl AsRef<Path>,
+    ) -> Result {
+        self.cmd()?
+            .arg("cp")
+            .arg("--archive")
+            .arg(from.as_ref())
+            .arg(format!("{}:{}", container.as_str(), to.as_ref().display()))
+            .run_ok()
+            .await
+    }
+
+    pub async fn start(&self, container: &ContainerId) -> Result {
+        self.cmd()?.arg("start").arg(container.as_str()).run_ok().await
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BuildOptions {
+    pub context:    PathBuf,
+    pub target:     Option<OsString>,
+    pub tags:       Vec<String>,
+    pub build_args: HashMap<String, Option<String>>,
+    pub file:       Option<PathBuf>,
+}
+
+impl BuildOptions {
+    pub fn new(context_path: impl Into<PathBuf>) -> Self {
+        Self {
+            context:    context_path.into(),
+            target:     default(),
+            tags:       default(),
+            build_args: default(),
+            file:       default(),
+        }
+    }
+
+    pub fn add_build_arg_from_env_or<R>(
+        &mut self,
+        name: impl AsRef<str>,
+        f: impl FnOnce() -> Result<R>,
+    ) -> Result
+    where
+        R: ToString,
+    {
+        let value = match std::env::var(name.as_ref()) {
+            Ok(env_value) => env_value,
+            Err(_) => f()?.to_string(),
+        };
+        self.build_args.insert(name.as_ref().into(), Some(value));
+        Ok(())
+    }
+
+    pub fn args(&self) -> Vec<OsString> {
+        let mut ret = Vec::new();
+        ret.push(self.context.clone().into());
+        if let Some(target) = self.target.as_ref() {
+            ret.push("--target".into());
+            ret.push(target.clone());
+        }
+        for tag in &self.tags {
+            ret.push("--tag".into());
+            ret.push(tag.into());
+        }
+        for (name, value) in &self.build_args {
+            ret.push("--build-arg".into());
+            if let Some(value) = value {
+                ret.push(iformat!("{name}={value}").into());
+            } else {
+                ret.push(iformat!("{name}").into());
+            }
+        }
+        if let Some(file) = self.file.as_ref() {
+            ret.push("--file".into());
+            ret.push(file.into());
+        }
+        ret
+    }
+}
+
+/// Using the --restart flag on Docker run you can specify a restart policy for how a container
+/// should or should not be restarted on exit.
+#[derive(Clone, Copy, Debug)]
+pub enum RestartPolicy {
+    /// Do not automatically restart the container when it exits. This is the default.
+    No,
+    /// Restart only if the container exits with a non-zero exit status.
+    OnFailure {
+        /// Optionally, limit the number of restart retries the Docker daemon attempts.
+        max_retries: Option<u32>,
+    },
+    /// Always restart the container regardless of the exit status. When you specify always, the
+    /// Docker daemon will try to restart the container indefinitely. The container will also
+    /// always start on daemon startup, regardless of the current state of the container.
+    Always,
+    /// Always restart the container regardless of the exit status, including on daemon startup,
+    /// except if the container was put into a stopped state before the Docker daemon was stopped.
+    UnlessStopped,
+}
+
+impl RestartPolicy {
+    pub fn print_args(self) -> [OsString; 2] {
+        let value = match self {
+            RestartPolicy::No => "no".into(),
+            RestartPolicy::OnFailure { max_retries: Some(max_retries) } =>
+                format!("on-failure:{}", max_retries).into(),
+            RestartPolicy::OnFailure { max_retries: None } => "on-failure:{}".into(),
+            RestartPolicy::Always => "always".into(),
+            RestartPolicy::UnlessStopped => "unless-stopped".into(),
+        };
+        ["--restart".into(), value]
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum Network {
+    Bridge,
+    Host,
+    User(String),
+}
+
+impl Default for Network {
+    fn default() -> Self {
+        Network::Bridge
+    }
+}
+
+impl Display for Network {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Network::Bridge => "bridge",
+            Network::Host => "host",
+            Network::User(name) => name,
+        };
+        str.fmt(f)
+    }
+}
+
+pub struct RunOptions {
+    pub image:             ImageId,
+    pub working_directory: Option<PathBuf>,
+    pub volume:            Vec<(PathBuf, PathBuf)>,
+    pub command:           Vec<OsString>,
+    pub name:              Option<String>,
+    pub restart:           Option<RestartPolicy>,
+    pub env:               HashMap<OsString, OsString>,
+    /// Mapping host port => guest port.
+    pub ports:             HashMap<u16, u16>,
+    pub network:           Option<Network>,
+}
+
+impl RunOptions {
+    pub fn new(image: ImageId) -> Self {
+        Self {
+            image,
+            working_directory: default(),
+            volume: default(),
+            command: default(),
+            name: default(),
+            restart: default(),
+            env: default(),
+            ports: default(),
+            network: default(),
+        }
+    }
+
+    pub fn env(&mut self, name: impl Into<OsString>, value: impl Into<OsString>) -> &mut Self {
+        self.env.insert(name.into(), value.into());
+        self
+    }
+
+    pub fn bind_docker_daemon(&mut self) {
+        let path = match TARGET_OS {
+            OS::Windows => r"\\.\pipe\docker_engine",
+            OS::Linux => r"/var/run/docker.sock",
+            _ => unimplemented!("OS {} is not supported!", TARGET_OS),
+        };
+        self.volume.push((PathBuf::from(path), PathBuf::from(path)));
+    }
+
+    pub fn args(&self) -> Vec<OsString> {
+        let mut ret = Vec::new();
+        if let Some(working_directory) = self.working_directory.as_ref() {
+            ret.push("--workdir".into());
+            ret.push(working_directory.clone().into());
+        }
+        for (volume_src, volume_dst) in &self.volume {
+            ret.push("--volume".into());
+
+            let mut mapping = volume_src.clone().into_os_string();
+            mapping.push(":");
+            mapping.push(volume_dst);
+            ret.push(mapping);
+        }
+        if let Some(name) = self.name.as_ref() {
+            ret.push("--name".into());
+            ret.push(name.into());
+        }
+        if let Some(restart) = self.restart.as_ref() {
+            ret.extend(restart.print_args());
+        }
+
+        for (name, value) in &self.env {
+            ret.push("--env".into());
+            let mut mapping = name.clone();
+            mapping.push("=");
+            mapping.push(value);
+            ret.push(mapping);
+        }
+
+        for (host, guest) in &self.ports {
+            ret.push("-p".into());
+            ret.push(iformat!("{host}:{guest}").into());
+        }
+
+        if let Some(network) = self.network.as_ref() {
+            let arg = iformat!(r#"--network={network}"#);
+            ret.push(arg.into());
+        }
+
+        ret.push(OsString::from(&self.image.0));
+
+        ret.extend(self.command.clone());
+        ret
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ImageId(pub String);
+
+#[derive(Clone, Debug, Shrinkwrap)]
+pub struct ContainerId(pub String);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn build() -> Result {
+        let opts = BuildOptions::new(r"C:\Users\mwu\ci\image\windows\");
+        dbg!(Docker.build(opts).await?);
+        Ok(())
+    }
+}
