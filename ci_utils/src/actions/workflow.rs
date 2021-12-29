@@ -4,7 +4,7 @@ use std::io::Write;
 /// Sets an action's output parameter.
 ///
 /// See: <https://docs.github.com/en/actions/learn-github-actions/workflow-commands-for-github-actions#setting-an-output-parameter>
-pub fn set_output(name: &str, value: &str) {
+pub fn set_output(name: &str, value: impl Display) {
     iprintln!("::set-output name={name}::{value}");
 }
 

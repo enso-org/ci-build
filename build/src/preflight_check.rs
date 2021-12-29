@@ -1,7 +1,10 @@
 use crate::prelude::*;
+use chrono::DateTime;
+use chrono::Utc;
 use octocrab::models::repos::Release;
 use regex::Regex;
 use semver::Prerelease;
+use std::collections::BTreeSet;
 
 const OWNER: &str = "enso-org";
 const REPO: &str = "enso"; // FIXME
@@ -43,12 +46,22 @@ pub fn check_proceed(current_head_sha: &str, nightlies: &[Release]) -> bool {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Versions {
+    engine:  Version,
+    edition: String,
+}
+
 /// Prepares a version string and edition name for the nightly build.
 ///
 /// A `-SNAPSHOT` suffix is added if it is not already present, next the current
 /// date is appended. If this is not the first nightly build on that date, an
 /// increasing numeric suffix is added.
-pub fn prepare_version(repo_root: impl AsRef<Path>, nightlies: &[Release]) -> Result<Version> {
+pub fn prepare_version(
+    date: DateTime<Utc>,
+    repo_root: impl AsRef<Path>,
+    nightlies: &[Release],
+) -> Result<Versions> {
     let is_taken = |suffix: &str| nightlies.iter().any(|entry| entry.tag_name.ends_with(suffix));
     let build_sbt_path = repo_root.as_ref().join("build.sbt");
     let build_sbt_content = std::fs::read_to_string(&build_sbt_path)?;
@@ -56,7 +69,7 @@ pub fn prepare_version(repo_root: impl AsRef<Path>, nightlies: &[Release]) -> Re
     let found_version = enso_build::get_enso_version(&build_sbt_content)?;
 
 
-    let date = chrono::Utc::now().format("%F").to_string();
+    let date = date.format("%F").to_string();
     let generate_nightly_identifier = |index: u32| {
         if index == 0 {
             date.clone()
@@ -64,76 +77,37 @@ pub fn prepare_version(repo_root: impl AsRef<Path>, nightlies: &[Release]) -> Re
             format!("{}.{}", date, index)
         }
     };
-    //
-    // let relevant_nightly_versions = nightlies.into_iter().filter_map(|release| {
-    //
-    //     let version_str = release.tag_name.strip_prefix("enso-").unwrap_or(&release.tag_name);
-    //     let version = Version::parse(version_str).unwrap();
-    //     todo!()
-    // });
-    //
-    // // let relevant_releases = nightlies.into_iter().filter(|r| r.name.contains(&date));
-    //
-    //
-    // for index in 0.. {
-    //     let nightly = generate_nightly_identifier(index);
-    //     let prerelease_text = format!("SNAPSHOT.{}", nightly);
-    // }
 
 
-
-    // let mut version = found_version.clone();
-    // for suffix in 0.. {
-    //     let mut prerelease_text = if suffix == 0 {
-    //         prerelease_text.clone()
-    //     } else {
-    //         format!("{}.{}", prerelease_text, suffix)
-    //     };
-    //     version.pre = Prerelease::new(&prerelease_text)?;
-    //     if !is_taken(&version.to_string()) {
-    //         break;
-    //     }
-    // }
-
+    let relevant_nightly_versions = nightlies
+        .into_iter()
+        .filter_map(|release| {
+            if release.tag_name.contains(&date) {
+                let version_str =
+                    release.tag_name.strip_prefix("enso-").unwrap_or(&release.tag_name);
+                Version::parse(version_str).ok().map(|v| v.pre)
+            } else {
+                None
+            }
+        })
+        .collect::<BTreeSet<_>>();
 
 
-    //
-    // if version.pre.as_str() == "SNAPSHOT" {
-    //     version.pre = Prerelease::new(version.pre.to_string() + "SNAPSHOT")?;
-    // };
+    for index in 0.. {
+        let nightly = generate_nightly_identifier(index);
+        let prerelease_text = format!("SNAPSHOT.{}", nightly);
+        let pre = Prerelease::new(&prerelease_text)?;
+        if !relevant_nightly_versions.contains(&pre) {
+            let edition = format!("nightly-{}", nightly);
+            let mut engine = Version { pre, ..found_version };
+            return Ok(Versions { engine, edition });
+        }
+    }
 
-    Ok(found_version)
-
-    // const version = match[1]
-    // let baseName = version
-    // if (!baseName.endsWith('SNAPSHOT')) {
-    //     baseName += '-SNAPSHOT'
-    // }
-    //
-    // const now = isoDate()
-    // function makeSuffix(ix) {
-    //     if (ix == 0) {
-    //         return now
-    //     } else {
-    //         return now + '.' + ix
-    //     }
-    // }
-    //
-    // let ix = 0
-    // while (isTaken(makeSuffix(ix))) {
-    //     ix++
-    // }
-    //
-    // const suffix = makeSuffix(ix)
-    // const versionName = baseName + '.' + suffix
-    // const edition = 'nightly-' + suffix
-    // console.log("The build will be using version '" + versionName + "'")
-    // console.log("The build will be using edition '" + edition + "'")
-    // return {
-    //     version: versionName,
-    //     edition: edition,
-    // }
+    // After infinite loop.
+    unreachable!()
 }
+
 
 // async function main() {
 //     const nightlies = await github.fetchNightlies()
@@ -161,11 +135,17 @@ mod tests {
     async fn foo() -> Result {
         let octocrab = Octocrab::default();
         let repo_path = PathBuf::from(r"H:\NBO\enso");
-        // let git = Git::new(&repo_path);
-        dbg!(prepare_version(&repo_path, &[]))?;
+        let git = Git::new(&repo_path);
+        let nightlies = nightly_releases(&octocrab).await?;
 
-        // dbg!(git.head_hash().await);
-        // ide_ci::programs::git::Git::dbg!(nightly_releases(&octocrab).await?);
+        let proceed = check_proceed(&git.head_hash().await?, &nightlies);
+        ide_ci::actions::workflow::set_output("proceed", proceed);
+        if proceed {
+            let date = chrono::Utc::now();
+            let versions = prepare_version(date, &repo_path, &nightlies)?;
+            ide_ci::actions::workflow::set_output("nightly-version", &versions.engine);
+            ide_ci::actions::workflow::set_output("nightly-edition", &versions.edition);
+        }
         Ok(())
     }
 }

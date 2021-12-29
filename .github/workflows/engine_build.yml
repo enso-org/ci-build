@@ -62,7 +62,7 @@ jobs:
 
       # Runs a set of commands using the runners shell
       - name: Run a multi-line script
-        run: cargo run --bin build-enso -- ../enso
+        run: cargo run --bin enso-build -- ../enso
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

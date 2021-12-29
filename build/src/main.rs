@@ -6,6 +6,7 @@
 #![feature(result_flattening)]
 #![feature(async_stream)]
 #![feature(default_free_fn)]
+#![feature(map_first_last)]
 
 pub mod paths;
 pub mod preflight_check;
