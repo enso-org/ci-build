@@ -6,13 +6,16 @@ pub mod prelude {
     pub use ide_ci::prelude::*;
 }
 
+pub mod paths;
+pub mod preflight_check;
+
 pub fn get_enso_version(build_sbt_contents: &str) -> Result<Version> {
     let version_regex = Regex::new(r#"(?m)^val *ensoVersion *= *"([^"]*)".*$"#)?;
     let version_string = version_regex
         .captures(&build_sbt_contents)
         .ok_or_else(|| anyhow!("Failed to find line with version string."))?
         .get(1)
-        .ok_or_else(|| anyhow!("Missing subcapture #1 with version despite matching the regex."))?
+        .expect("Missing subcapture #1 with version despite matching the regex.")
         .as_str();
     Version::parse(version_string).anyhow_err()
 }

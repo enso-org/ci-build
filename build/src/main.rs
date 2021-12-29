@@ -8,13 +8,10 @@
 #![feature(default_free_fn)]
 #![feature(map_first_last)]
 
-pub mod paths;
-pub mod preflight_check;
-
 pub use ide_ci::prelude;
 use ide_ci::prelude::*;
 
-use crate::paths::Paths;
+use enso_build::paths::Paths;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
 use ide_ci::goodie::GoodieDatabase;
@@ -567,7 +564,7 @@ impl Postgresql {
     }
 }
 
-async fn fix_duplicated_env_var(var_name: impl AsRef<OsStr>) -> Result {
+pub async fn fix_duplicated_env_var(var_name: impl AsRef<OsStr>) -> Result {
     let var_name = var_name.as_ref();
 
     let mut paths = indexmap::IndexSet::new();
@@ -706,7 +703,7 @@ mod tests {
         let path = PathBuf::from(r"H:\NBO\enso");
         ide_ci::programs::vs::apply_dev_environment().await?;
         let git = Git::new(&path);
-        // git.clean_xfd().await?;
+        git.clean_xfd().await?;
         Sbt.cmd()?.current_dir(&path).arg("bootstrap").run_ok().await?;
         Sbt.cmd()?.current_dir(&path).arg("all buildLauncherDistribution buildEngineDistribution buildProjectManagerDistribution").run_ok().await?;
         Ok(())

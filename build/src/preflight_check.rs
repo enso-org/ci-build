@@ -2,7 +2,6 @@ use crate::prelude::*;
 use chrono::DateTime;
 use chrono::Utc;
 use octocrab::models::repos::Release;
-use regex::Regex;
 use semver::Prerelease;
 use std::collections::BTreeSet;
 
@@ -24,7 +23,7 @@ pub fn is_nightly(release: &Release) -> bool {
 
 pub async fn nightly_releases(octocrab: &Octocrab) -> Result<Vec<Release>> {
     let repo = octocrab.repos(OWNER, REPO);
-    let mut page = repo.releases().list().per_page(MAX_PER_PAGE).send().await?;
+    let page = repo.releases().list().per_page(MAX_PER_PAGE).send().await?;
     // TODO: rate limit?
     let releases = octocrab.all_pages(page).await?.into_iter().filter(is_nightly);
     Ok(releases.collect())
@@ -48,8 +47,8 @@ pub fn check_proceed(current_head_sha: &str, nightlies: &[Release]) -> bool {
 
 #[derive(Clone, Debug)]
 pub struct Versions {
-    engine:  Version,
-    edition: String,
+    pub engine:  Version,
+    pub edition: String,
 }
 
 /// Prepares a version string and edition name for the nightly build.
@@ -62,11 +61,10 @@ pub fn prepare_version(
     repo_root: impl AsRef<Path>,
     nightlies: &[Release],
 ) -> Result<Versions> {
-    let is_taken = |suffix: &str| nightlies.iter().any(|entry| entry.tag_name.ends_with(suffix));
     let build_sbt_path = repo_root.as_ref().join("build.sbt");
     let build_sbt_content = std::fs::read_to_string(&build_sbt_path)?;
 
-    let found_version = enso_build::get_enso_version(&build_sbt_content)?;
+    let found_version = crate::get_enso_version(&build_sbt_content)?;
 
 
     let date = date.format("%F").to_string();
@@ -99,7 +97,7 @@ pub fn prepare_version(
         let pre = Prerelease::new(&prerelease_text)?;
         if !relevant_nightly_versions.contains(&pre) {
             let edition = format!("nightly-{}", nightly);
-            let mut engine = Version { pre, ..found_version };
+            let engine = Version { pre, ..found_version };
             return Ok(Versions { engine, edition });
         }
     }
@@ -145,7 +143,13 @@ mod tests {
             let versions = prepare_version(date, &repo_path, &nightlies)?;
             ide_ci::actions::workflow::set_output("nightly-version", &versions.engine);
             ide_ci::actions::workflow::set_output("nightly-edition", &versions.edition);
+
+            ide_ci::actions::workflow::set_env("ENSO_RELEASE_MODE", true)?;
+            ide_ci::actions::workflow::set_env("ENSO_VERSION", &versions.engine)?;
+            ide_ci::actions::workflow::set_env("ENSO_EDITION", &versions.edition)?;
         }
+
+
         Ok(())
     }
 }

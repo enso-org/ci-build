@@ -22,10 +22,9 @@ pub fn debug(message: &str) {
 ///
 /// This step and all subsequent steps in a job will have access to the variable. Environment
 /// variables are case-sensitive and you can include punctuation.
-pub fn set_env(name: &str, value: impl AsRef<str>) -> Result {
-    let value = value.as_ref();
+pub fn set_env(name: &str, value: impl Display) -> Result {
     iprintln!("Will try writing Github Actions environment variable: {name}={value}");
-    std::env::set_var(name, value);
+    std::env::set_var(name, value.to_string());
     let env_file = crate::env::expect_var_os("GITHUB_ENV")?;
     let line = iformat!("{name}={value}\n");
     std::fs::OpenOptions::new()
