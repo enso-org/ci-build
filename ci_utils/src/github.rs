@@ -57,9 +57,20 @@ pub trait RepoPointer {
     }
 }
 
+#[async_trait]
 pub trait OrganizationPointer {
     /// Organization name.
     fn name(&self) -> &str;
+
+    /// Generate a token that can be used to register a new runner for this repository.
+    async fn generate_runner_registration_token(
+        &self,
+        octocrab: &Octocrab,
+    ) -> anyhow::Result<RegistrationToken> {
+        let path = iformat!("/orgs/{self.name()}/actions/runners/registration-token");
+        let url = octocrab.absolute_url(path)?;
+        octocrab.post(url, EMPTY_REQUEST_BODY).await.map_err(Into::into)
+    }
 
     /// The organization's URL.
     fn url(&self) -> Result<Url> {

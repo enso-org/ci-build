@@ -37,6 +37,7 @@ pub mod prelude {
     pub use argh::FromArgs;
     pub use async_trait::async_trait;
     pub use bytes::Bytes;
+    pub use derive_more::Display;
     pub use futures_util::future::BoxFuture;
     pub use futures_util::stream::BoxStream;
     pub use futures_util::AsyncWrite;

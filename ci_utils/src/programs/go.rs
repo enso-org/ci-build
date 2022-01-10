@@ -16,4 +16,10 @@ impl Program for Go {
             .into_iter()
             .collect()
     }
+
+    fn version_command(&self) -> Result<Command> {
+        let mut cmd = self.cmd()?;
+        cmd.arg("version");
+        Ok(cmd)
+    }
 }

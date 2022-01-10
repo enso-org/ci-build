@@ -6,6 +6,7 @@ pub mod prelude {
     pub use ide_ci::prelude::*;
 }
 
+pub mod bump_version;
 pub mod paths;
 pub mod preflight_check;
 

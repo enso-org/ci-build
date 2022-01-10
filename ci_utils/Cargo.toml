@@ -14,8 +14,10 @@ cached = "0.26.2"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 command-group = { version = "1.0.8", features = ["with-tokio"] }
+derive_more = "0.99.17"
 dirs = "4.0.0"
 flate2 = "1.0.22"
+fn-error-context = "0.2.0"
 fs_extra = "1.2.0"
 futures = "0.3.17"
 futures-util = "0.3.17"

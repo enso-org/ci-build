@@ -54,7 +54,12 @@ pub trait Program {
         Resolver::new(Self::executable_names(), self.default_locations())?.lookup()
     }
 
-    fn cmd(&self) -> anyhow::Result<Command> {
+    async fn require_present(&self) -> Result {
+        println!("Found {}: {}", Self::executable_name(), self.version_string().await?.trim());
+        Ok(())
+    }
+
+    fn cmd(&self) -> Result<Command> {
         let mut command = self.lookup().map(Command::new)?;
         if let Some(current_dir) = self.current_directory() {
             command.current_dir(current_dir);
@@ -75,8 +80,14 @@ pub trait Program {
         status.exit_ok().anyhow_err()
     }
 
+    fn version_command(&self) -> Result<Command> {
+        let mut cmd = self.cmd()?;
+        cmd.arg("--version");
+        Ok(cmd)
+    }
+
     async fn version_string(&self) -> Result<String> {
-        let output = self.cmd()?.arg("--version").output().await?;
+        let output = self.version_command()?.output().await?;
         String::from_utf8(output.stdout).anyhow_err()
     }
 

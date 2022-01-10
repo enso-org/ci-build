@@ -2,6 +2,10 @@ use crate::prelude::*;
 use crate::programs::cmd;
 use crate::programs::vswhere::VsWhere;
 
+/// Microsoft C/C++ Optimizing compiler.
+///
+/// A possible component of Microsoft Visual Studio IDE, or part of the self-contained Microsoft
+/// Visual C++ Build Tools.
 pub struct Cl;
 
 impl Program for Cl {
@@ -12,9 +16,10 @@ impl Program for Cl {
 
 pub async fn apply_dev_environment() -> Result {
     let msvc = VsWhere::msvc().await?;
-    let path =
-        msvc.installation_path.join("VC").join("Auxiliary").join("Build").join("vcvarsall.bat");
+    let path = msvc.installation_path.join_many(["VC", "Auxiliary", "Build", "vcvarsall.bat"]);
     let changes = cmd::compare_env(|command| {
+        // The telemetry introduces undesired dependency on Power Shell. We should not need it to
+        // just set a few environment variables.
         command.arg(path).arg("x64").env("VSCMD_SKIP_SENDTELEMETRY", "true")
     })
     .await?;

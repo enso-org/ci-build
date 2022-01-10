@@ -154,6 +154,9 @@ pub struct Args {
     /// disable development-specific Engine features.
     #[argh(option, default = "true")]
     pub release_mode: bool,
+    /// build a nightly release
+    #[argh(option, default = "true")]
+    pub nightly:      bool,
     /// path to the Enso Engine repository
     #[argh(positional)]
     pub repository:   PathBuf,
@@ -244,43 +247,96 @@ pub fn setup_octocrab() -> Result<Octocrab> {
     builder.build().anyhow_err()
 }
 
+#[derive(Clone, Copy, Debug, Display, PartialEq)]
+pub enum BuildMode {
+    Local,
+    NightlyRelease,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BuildConfiguration {
+    /// If true, repository shall be cleaned at the build start.
+    ///
+    /// Makes sense given that incremental builds with SBT are currently broken.
+    clean_repo:            bool,
+    mode:                  BuildMode,
+    test_scala:            bool,
+    test_standard_library: bool,
+    benchmark_compilation: bool,
+}
+
+const LOCAL: BuildConfiguration = BuildConfiguration {
+    clean_repo:            true,
+    mode:                  BuildMode::Local,
+    test_scala:            true,
+    test_standard_library: true,
+    benchmark_compilation: true,
+};
+
+const NIGHTLY: BuildConfiguration = BuildConfiguration {
+    clean_repo:            true,
+    mode:                  BuildMode::NightlyRelease,
+    test_scala:            false,
+    test_standard_library: false,
+    benchmark_compilation: false,
+};
+
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("Initial environment:");
     for (key, value) in std::env::vars() {
-        iprintln!("{key}={value}");
+        iprintln!("\t{key}={value}");
     }
 
     let args: Args = argh::from_env();
+    let octocrab = setup_octocrab()?;
     let enso_root = args.repository.clone();
-    let paths = Paths::new(&enso_root)?;
+    println!("Repository path: {}", enso_root.display());
 
-    Git::new(&paths.repo_root).clean_xfd().await?;
+    let paths = if args.nightly {
+        let versions = enso_build::preflight_check::prepare_nightly(&octocrab, &enso_root).await?;
+        Paths::new_version(&enso_root, versions.engine)?
+    } else {
+        Paths::new(&enso_root)?
+    };
+
+
+    let config = if args.nightly { NIGHTLY } else { LOCAL };
+
+    if config.clean_repo {
+        Git::new(&paths.repo_root).clean_xfd().await?;
+    }
 
     let _ = paths.emit_to_actions(); // Ignore error: we might not be run on CI.
     println!("PATH is {}", std::env::var("PATH").unwrap());
 
+
+
     let goodies = GoodieDatabase::new()?;
-    let octocrab = setup_octocrab()?;
     let client = reqwest::Client::new();
 
-    // Building native images on Windows requires Microsoft Visual C++ Build Tools available in the
-    // environment. If it is not visible, we need to add it. Note that MSVC must be installed in the
-    // system for this to work.
+    // Building native images with Graal on Windows requires Microsoft Visual C++ Build Tools
+    // available in the environment. If it is not visible, we need to add it.
     if TARGET_OS == OS::Windows && ide_ci::programs::vs::Cl.lookup().is_err() {
         ide_ci::programs::vs::apply_dev_environment().await?;
     }
 
     // ide_ci::actions::workflow::set_env("ENSO_RELEASE_MODE", args.release_mode.to_string()).ok();
+    ide_ci::programs::Go.require_present().await?;
+    ide_ci::programs::Cargo.require_present().await?;
+    ide_ci::programs::Node.require_present().await?;
+    ide_ci::programs::Npm.require_present().await?;
 
-    ide_ci::programs::Go.lookup()?;
+
     // Disable TCP/UDP Offloading
-    ide_ci::programs::Cargo.lookup()?;
-    // Setup Conda Environment
 
+    // Setup Conda Environment
     // Install FlatBuffers Compiler
     // If it is not available, we require conda to install it. We should not require conda in other
     // scenarios.
+    // TODO: After flatc version is bumped, it should be possible to get it without `conda`.
+    //       See: https://www.pivotaltracker.com/story/show/180303547
     if let Err(e) = expect_flatc(&FLATC_VERSION).await {
         println!("Cannot find expected flatc: {}", e);
         // GitHub-hosted runner has `conda` on PATH but not things installed by it.
@@ -299,12 +355,10 @@ async fn main() -> anyhow::Result<()> {
             .await?;
         ide_ci::programs::Flatc.lookup()?;
     }
-    ide_ci::programs::Node.lookup()?;
-    ide_ci::programs::Npm.lookup()?;
 
     // Install Dependencies of the Simple Library Server
     ide_ci::programs::Npm
-        .install(enso_root.join("tools/simple-library-server"))?
+        .install(enso_root.join_many(["tools", "simple-library-server"]))?
         .status()
         .await?
         .exit_ok()?;
@@ -320,36 +374,19 @@ async fn main() -> anyhow::Result<()> {
         os:            TARGET_OS,
         arch:          TARGET_ARCH,
     };
-
     goodies.require(&graalvm).await?;
-    goodies.require(&sbt::Sbt).await?; // Setup SBT
+    graalvm::Gu.require_present().await?;
+
+    // Setup SBT
+    goodies.require(&sbt::Sbt).await?;
+    ide_ci::programs::Sbt.require_present().await?;
+
 
     graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
 
-    let full = true;
-    Sbt.lookup()?;
 
     let sbt = WithCwd::new(Sbt, &enso_root);
 
-
-    //
-    // println!("Bootstrap Enso project.");
-    // sbt.call_arg("bootstrap").await?;
-    //
-    // println!("Prepare distribution.");
-    // sbt.call_args(["--mem", "1536",
-    //     "stdlib-version-updater/run check; all buildEngineDistribution
-    // buildProjectManagerDistribution buildLauncherDistribution syntaxJS/fullOptJS
-    // engine-runner/assembly", ]).await?;
-    //
-    //
-    // // Setup Tests on Windows
-    // if TARGET_OS == OS::Windows {
-    //     std::env::set_var("CI_TEST_TIMEFACTOR", "2");
-    //     std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
-    // }
-    // let result = sbt.call_args(["set Global / parallelExecution := false; test"]).await;
-    // println!("Test results: {:?}", result);
 
     let mut system = sysinfo::System::new();
     system.refresh_memory();
@@ -357,13 +394,19 @@ async fn main() -> anyhow::Result<()> {
 
     // Build packages.
     if true {
-        // Bootstrap Enso project
+        println!("Bootstrapping Enso project.");
         sbt.call_arg("bootstrap").await?;
 
-
-        // Verify the Stdlib Version
-        sbt.call_arg("stdlib-version-updater/run check").await?;
-
+        println!("Verifying the Stdlib Version.");
+        match config.mode {
+            BuildMode::Local => {
+                sbt.call_arg("stdlib-version-updater/run check").await?;
+            }
+            BuildMode::NightlyRelease => {
+                sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
+                sbt.call_arg("verifyLicensePackages").await?;
+            }
+        };
         // Compile
         sbt.call_arg("compile").await?;
 
@@ -373,6 +416,9 @@ async fn main() -> anyhow::Result<()> {
             std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
         }
 
+        // Build the Runner & Runtime Uberjars
+        sbt.call_arg("runtime/clean; engine-runner/assembly").await?;
+
         // Build the Launcher Native Image
         sbt.call_arg("launcher/assembly").await?;
         sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
@@ -381,43 +427,48 @@ async fn main() -> anyhow::Result<()> {
         sbt.call_arg("project-manager/assembly").await?;
         sbt.call_args(["--mem", "1536", "project-manager/buildNativeImage"]).await?;
 
-        // Build the Runner & Runtime Uberjars
-        sbt.call_arg("runtime/clean; engine-runner/assembly").await?;
+        if config.test_scala {
+            // Test Enso
+            sbt.call_arg("set Global / parallelExecution := false; runtime/clean; compile; test")
+                .await
+                .ok(); // FIXME
+        }
 
-        // Test Enso
-        sbt.call_arg("set Global / parallelExecution := false; runtime/clean; compile; test")
-            .await?;
+        if config.benchmark_compilation {
+            // Check Runtime Benchmark Compilation
+            sbt.call_arg("runtime/clean; runtime/Benchmark/compile").await?;
 
-        // Check Runtime Benchmark Compilation
-        sbt.call_arg("runtime/clean; runtime/Benchmark/compile").await?;
+            // Check Language Server Benchmark Compilation
+            sbt.call_arg("runtime/clean; language-server/Benchmark/compile").await?;
 
-        // Check Language Server Benchmark Compilation
-        sbt.call_arg("runtime/clean; language-server/Benchmark/compile").await?;
-
-        // Check Searcher Benchmark Compilation
-        sbt.call_arg("searcher/Benchmark/compile").await?;
+            // Check Searcher Benchmark Compilation
+            sbt.call_arg("searcher/Benchmark/compile").await?;
+        }
 
         // === Build Distribution ===
         // Build the Project Manager Native Image
         // FIXME looks like a copy-paste error
-        sbt.call_arg("project-manager/assembly").await?;
-        sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
 
-        // Build the Parser JS Bundle
-        // TODO do once across the build
-        // The builds are run on 3 platforms, but
-        // Flatbuffer schemas are platform agnostic, so they just need to be
-        // uploaded from one of the runners.
-        sbt.call_arg("syntaxJS/fullOptJS").await?;
-        ide_ci::io::copy_to(
-            paths.target.join("scala-parser.js"),
-            paths.target.join("parser-upload"),
-        )?;
+        if config.mode == BuildMode::Local {
+            sbt.call_arg("project-manager/assembly").await?;
+            sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
 
-        // docs-generator fails on Windows because it can't understand non-Unix-style paths.
-        if TARGET_OS != OS::Windows {
-            // Build the docs from standard library sources.
-            sbt.call_arg("docs-generator/run").await?;
+            // Build the Parser JS Bundle
+            // TODO do once across the build
+            // The builds are run on 3 platforms, but
+            // Flatbuffer schemas are platform agnostic, so they just need to be
+            // uploaded from one of the runners.
+            sbt.call_arg("syntaxJS/fullOptJS").await?;
+            ide_ci::io::copy_to(
+                paths.target.join("scala-parser.js"),
+                paths.target.join("parser-upload"),
+            )?;
+
+            // docs-generator fails on Windows because it can't understand non-Unix-style paths.
+            if TARGET_OS != OS::Windows {
+                // Build the docs from standard library sources.
+                sbt.call_arg("docs-generator/run").await?;
+            }
         }
 
         // Prepare Launcher Distribution
@@ -427,7 +478,11 @@ async fn main() -> anyhow::Result<()> {
         sbt.call_arg("runtime/clean; buildEngineDistribution").await?;
 
         // Prepare Project Manager Distribution
-        sbt.call_arg("buildProjectManagerDistribution").await?;
+
+        if config.mode == BuildMode::NightlyRelease {
+            // Prepare GraalVM Distribution
+            sbt.call_arg("buildGraalDistribution").await?;
+        }
     }
 
 
@@ -439,7 +494,7 @@ async fn main() -> anyhow::Result<()> {
         graalvm::Gu.call_args(["install", "python", "r"]).await?;
     }
 
-    if full {
+    if config.test_standard_library {
         // Prepare Engine Test Environment
         if let Ok(gdoc_key) = std::env::var("GDOC_KEY") {
             let google_api_test_data_dir =
@@ -459,6 +514,42 @@ async fn main() -> anyhow::Result<()> {
         }
 
         run_tests(&paths, IrCaches::Yes, PARALLEL_ENSO_TESTS).await?;
+    }
+
+    if config.mode == BuildMode::NightlyRelease {
+        /*  refversion=${{ env.ENSO_VERSION }}
+            binversion=${{ env.DIST_VERSION }}
+            engineversion=$(${{ env.ENGINE_DIST_DIR }}/bin/enso --version --json | jq -r '.version')
+            test $binversion = $refversion || (echo "Tag version $refversion and the launcher version $binversion do not match" && false)
+            test $engineversion = $refversion || (echo "Tag version $refversion and the engine version $engineversion do not match" && false)
+        */
+
+
+        // Verify License Packages in Distributions
+        async fn verify_generated_package(
+            sbt: &impl Program,
+            package: &str,
+            path: impl AsRef<Path>,
+        ) -> Result {
+            sbt.cmd()?
+                .arg("enso/verifyGeneratedPackage")
+                .arg(package)
+                .arg(path.as_ref().join("THIRD-PARTY"))
+                .run_ok()
+                .await
+        }
+
+        verify_generated_package(&sbt, "engine", &paths.engine.dir).await?;
+        verify_generated_package(&sbt, "launcher", &paths.launcher.dir).await?;
+        verify_generated_package(&sbt, "project-manager", &paths.project_manager.dir).await?;
+        for libname in ["Base", "Table", "Image", "Database"] {
+            verify_generated_package(
+                &sbt,
+                libname,
+                paths.engine.dir.join_many(["lib", "Standard"]).join(libname),
+            )
+            .await?
+        }
     }
 
     // Compress the built artifacts for upload

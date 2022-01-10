@@ -3,11 +3,11 @@
 use crate::prelude::*;
 use std::collections::HashMap;
 
-use crate::serde::regex_vec;
-use crate::serde::single_or_sequence;
-
 use crate::github::OrganizationPointer;
 use crate::github::RepoPointer;
+use crate::models::actions::RegistrationToken;
+use crate::serde::regex_vec;
+use crate::serde::single_or_sequence;
 use regex::Regex;
 
 /// Root type of the configuration file.
@@ -43,6 +43,19 @@ pub enum RunnerLocation {
 }
 
 impl RunnerLocation {
+    /// Generate a token that can be used to register a new runner for this repository.
+    pub async fn generate_runner_registration_token(
+        &self,
+        octocrab: &Octocrab,
+    ) -> anyhow::Result<RegistrationToken> {
+        match self {
+            RunnerLocation::Organization(org) =>
+                org.generate_runner_registration_token(octocrab).await,
+            RunnerLocation::Repository(repo) =>
+                repo.generate_runner_registration_token(octocrab).await,
+        }
+    }
+
     /// The runner's registration target URL.
     pub fn url(&self) -> anyhow::Result<Url> {
         match self {
@@ -116,6 +129,10 @@ fn default_target() -> String {
     "runner".into()
 }
 
+fn default_count() -> usize {
+    1
+}
+
 /// Description of the runners deployment for a specific GitHub repository.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Runner {
@@ -132,6 +149,8 @@ pub struct Runner {
     pub ports:         HashMap<u16, u16>,
     #[serde(default)]
     pub docker_access: bool,
+    #[serde(default = "default_count")]
+    pub count:         usize,
 }
 
 impl Runner {
@@ -144,6 +163,7 @@ impl Runner {
             args:          default(),
             ports:         default(),
             docker_access: default(),
+            count:         1,
         }
     }
 }
@@ -163,7 +183,7 @@ mod tests {
     target: metarunner
     docker_access: true";
 
-        let config = serde_yaml::from_str::<Config>(contents)?;
+        let _config = serde_yaml::from_str::<Config>(contents)?;
         Ok(())
     }
 }

@@ -4,9 +4,11 @@ name: Build Engine
 on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
-  
+  push:
+    branches:
+      - develop
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+      # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
   build:
@@ -15,6 +17,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest, [self-hosted, Windows], [self-hosted, Linux], [self-hosted, macOS]]
+        nightly: [true, false]
       fail-fast: false
 
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -42,27 +45,10 @@ jobs:
           minimum-size: 16GB
           maximum-size: 16GB
           disk-root: "C:"
-#      - name: Setup conda
-#        uses: s-weigand/setup-conda@v1.0.5
-#        with:
-#          update-conda: false
-#          conda-channels: anaconda, conda-forge
-#      - name: Setup Conda Environment on Windows
-#        if: runner.os == 'Windows'
-#        run: |
-#          conda create --name enso
-#          conda init powershell
-#      - name: Activate Conda Environment on Windows
-#        if: runner.os == 'Windows'
-#        run: conda activate enso
-#      - name: Install FlatBuffers Compiler
-#        run: conda install --freeze-installed flatbuffers=1.12.0
-#
-#
 
       # Runs a set of commands using the runners shell
       - name: Run a multi-line script
-        run: cargo run --bin enso-build -- ../enso
+        run: cargo run --bin enso-build -- ../enso --nightly ${{ matrix.nightly }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

@@ -5,7 +5,7 @@ use anyhow::Context;
 pub trait CommandExt {
     fn run_ok(&mut self) -> BoxFuture<'static, Result<()>>;
 
-    fn describe(&self) -> String;
+    // fn describe(&self) -> String;
 }
 
 impl CommandExt for Command {
@@ -19,8 +19,8 @@ impl CommandExt for Command {
         .boxed()
     }
 
-    fn describe(&self) -> String {
-        default()
-        // ?self.as_std().get_program()
-    }
+    // fn describe(&self) -> String {
+    //     default()
+    //     // ?self.as_std().get_program()
+    // }
 }

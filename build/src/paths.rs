@@ -49,6 +49,14 @@ impl Paths {
         let build_sbt = repo_root.join("build.sbt");
         let build_sbt_contents = std::fs::read_to_string(build_sbt)?;
         let version = crate::get_enso_version(&build_sbt_contents)?;
+        Self::new_version(repo_root, version)
+    }
+
+    pub fn new_version(repo_root: impl Into<PathBuf>, version: Version) -> Result<Self> {
+        let repo_root: PathBuf = repo_root.into().absolutize()?.into();
+        // let build_sbt = repo_root.join("build.sbt");
+        // let build_sbt_contents = std::fs::read_to_string(build_sbt)?;
+        // let version = crate::get_enso_version(&build_sbt_contents)?;
         let build_dist_root = repo_root.join("built-distribution");
         let target = repo_root.join("target");
         let arch = match TARGET_ARCH {

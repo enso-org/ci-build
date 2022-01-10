@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use chrono::DateTime;
 use chrono::Utc;
+use ide_ci::programs::git::Git;
 use octocrab::models::repos::Release;
 use semver::Prerelease;
 use std::collections::BTreeSet;
@@ -64,7 +65,8 @@ pub fn prepare_version(
     let build_sbt_path = repo_root.as_ref().join("build.sbt");
     let build_sbt_content = std::fs::read_to_string(&build_sbt_path)?;
 
-    let found_version = crate::get_enso_version(&build_sbt_content)?;
+    let found_version =
+        crate::get_enso_version(&build_sbt_content).unwrap_or(Version::parse("0.0.0-LOCAL")?);
 
 
     let date = date.format("%F").to_string();
@@ -106,7 +108,27 @@ pub fn prepare_version(
     unreachable!()
 }
 
+pub async fn prepare_nightly(octocrab: &Octocrab, repo_path: impl AsRef<Path>) -> Result<Versions> {
+    let repo_path = repo_path.as_ref();
+    let git = Git::new(&repo_path);
+    let nightlies = nightly_releases(&octocrab).await?;
 
+    let proceed = check_proceed(&git.head_hash().await?, &nightlies);
+    ide_ci::actions::workflow::set_output("proceed", proceed);
+    if proceed {
+        let date = chrono::Utc::now();
+        let versions = prepare_version(date, &repo_path, &nightlies)?;
+        ide_ci::actions::workflow::set_output("nightly-version", &versions.engine);
+        ide_ci::actions::workflow::set_output("nightly-edition", &versions.edition);
+
+        ide_ci::actions::workflow::set_env("ENSO_RELEASE_MODE", true)?;
+        ide_ci::actions::workflow::set_env("ENSO_VERSION", &versions.engine)?;
+        ide_ci::actions::workflow::set_env("ENSO_EDITION", &versions.edition)?;
+        Ok(versions)
+    } else {
+        bail!("Decided not to proceed with the build.")
+    }
+}
 // async function main() {
 //     const nightlies = await github.fetchNightlies()
 //     const shouldProceed = checkProceed(nightlies)

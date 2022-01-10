@@ -212,6 +212,7 @@ pub struct RunOptions {
     /// Mapping host port => guest port.
     pub ports:             HashMap<u16, u16>,
     pub network:           Option<Network>,
+    pub storage_size_gb:   Option<usize>,
 }
 
 impl RunOptions {
@@ -226,6 +227,7 @@ impl RunOptions {
             env: default(),
             ports: default(),
             network: default(),
+            storage_size_gb: default(),
         }
     }
 
@@ -241,6 +243,11 @@ impl RunOptions {
             _ => unimplemented!("OS {} is not supported!", TARGET_OS),
         };
         self.volume.push((PathBuf::from(path), PathBuf::from(path)));
+    }
+
+    pub fn storage_size_gb(&mut self, storage_size_in_gb: usize) -> &mut Self {
+        self.storage_size_gb = Some(storage_size_in_gb);
+        self
     }
 
     pub fn args(&self) -> Vec<OsString> {
@@ -281,6 +288,12 @@ impl RunOptions {
         if let Some(network) = self.network.as_ref() {
             let arg = iformat!(r#"--network={network}"#);
             ret.push(arg.into());
+        }
+
+        if let Some(storage_size_gb) = self.storage_size_gb {
+            // e.g. --storage-opt size=120G
+            ret.push("--storage-opt".into());
+            ret.push(format!("size={}G", storage_size_gb).into());
         }
 
         ret.push(OsString::from(&self.image.0));
