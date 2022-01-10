@@ -11,12 +11,13 @@ pub trait CommandExt {
 impl CommandExt for Command {
     fn run_ok(&mut self) -> BoxFuture<'static, Result<()>> {
         let pretty_printed = format!("{:?}", self.as_std());
-        println!("Will run command: {}", pretty_printed);
-        let status = self.status();
-        async move {
-            status.await?.exit_ok().context(format!("When running command: {}", pretty_printed))
+        println!("Spawning command:\n\t{}", pretty_printed);
+        if let Some(cwd) = self.as_std().get_current_dir() {
+            println!("\twith working directory: {}", cwd.display())
         }
-        .boxed()
+        let status = self.status();
+        async move { status.await?.exit_ok().context(format!("Command: {}", pretty_printed)) }
+            .boxed()
     }
 
     // fn describe(&self) -> String {
