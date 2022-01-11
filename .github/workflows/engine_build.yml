@@ -33,10 +33,11 @@ jobs:
 
       - name: Setup conda
         uses: s-weigand/setup-conda@v1.0.5
-        if: runner.name != 'First'
+        if: !contains( ${{ matrix.os }},  "self-hosted")
         with:
           update-conda: false
           conda-channels: anaconda, conda-forge
+
       - name: Configure Pagefile (Windows)
         if: runner.os == 'Windows'
         uses: al-cheb/configure-pagefile-action@v1.2
