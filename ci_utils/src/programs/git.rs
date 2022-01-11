@@ -17,6 +17,7 @@ impl Program for Git {
 impl Git {
     pub fn new(repo_path: impl Into<PathBuf>) -> Self {
         // TODO likely should normalize path to repo root (from e.g. repo subtree path)
+        //      but consider e.g. being invoked in the submodule tree
         Self { repo_path: Some(repo_path.into()) }
     }
 

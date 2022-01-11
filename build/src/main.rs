@@ -151,15 +151,12 @@ impl Program for BuiltEnso {
 /// Build, test and packave Enso Engine.
 #[derive(Clone, Debug, FromArgs)]
 pub struct Args {
-    /// disable development-specific Engine features.
-    #[argh(option, default = "true")]
-    pub release_mode: bool,
     /// build a nightly release
-    #[argh(option, default = "true")]
-    pub nightly:      bool,
+    #[argh(option, default = "false")]
+    pub nightly:    bool,
     /// path to the Enso Engine repository
     #[argh(positional)]
-    pub repository:   PathBuf,
+    pub repository: PathBuf,
 }
 
 pub async fn download_project_templates(client: reqwest::Client, enso_root: PathBuf) -> Result {
@@ -249,7 +246,7 @@ pub fn setup_octocrab() -> Result<Octocrab> {
 
 #[derive(Clone, Copy, Debug, Display, PartialEq)]
 pub enum BuildMode {
-    Local,
+    Development,
     NightlyRelease,
 }
 
@@ -267,7 +264,7 @@ pub struct BuildConfiguration {
 
 const LOCAL: BuildConfiguration = BuildConfiguration {
     clean_repo:            true,
-    mode:                  BuildMode::Local,
+    mode:                  BuildMode::Development,
     test_scala:            true,
     test_standard_library: true,
     benchmark_compilation: true,
@@ -292,7 +289,7 @@ async fn main() -> anyhow::Result<()> {
     let args: Args = argh::from_env();
     let octocrab = setup_octocrab()?;
     let enso_root = args.repository.clone();
-    println!("Repository path: {}", enso_root.display());
+    println!("Repository location: {}", enso_root.display());
 
     let paths = if args.nightly {
         let versions = enso_build::preflight_check::prepare_nightly(&octocrab, &enso_root).await?;
@@ -309,9 +306,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let _ = paths.emit_to_actions(); // Ignore error: we might not be run on CI.
-    println!("PATH is {}", std::env::var("PATH").unwrap());
-
-
+    println!("Build configuration: {:#?}", config);
 
     let goodies = GoodieDatabase::new()?;
     let client = reqwest::Client::new();
@@ -399,7 +394,7 @@ async fn main() -> anyhow::Result<()> {
 
         println!("Verifying the Stdlib Version.");
         match config.mode {
-            BuildMode::Local => {
+            BuildMode::Development => {
                 sbt.call_arg("stdlib-version-updater/run check").await?;
             }
             BuildMode::NightlyRelease => {
@@ -449,7 +444,7 @@ async fn main() -> anyhow::Result<()> {
         // Build the Project Manager Native Image
         // FIXME looks like a copy-paste error
 
-        if config.mode == BuildMode::Local {
+        if config.mode == BuildMode::Development {
             sbt.call_arg("project-manager/assembly").await?;
             sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
 
