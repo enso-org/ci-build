@@ -22,16 +22,18 @@ pub struct Config {
     /// Operating system of the runner's image. It is possible to have Linux on Windows or macOS,
     /// so we don't assume this to be always equal to `TARGET_OS`.
     pub os:       OS,
+    pub index:    usize,
 }
 
 impl Config {
     /// Pretty printed triple with repository owner, repository name and runner name.
     pub fn qualified_name(&self) -> String {
-        match &self.location {
-            RunnerLocation::Organization(org) => iformat!("{org.name}-{self.runner.name}"),
+        let location_prefix = match &self.location {
+            RunnerLocation::Organization(org) => iformat!("{org.name}"),
             RunnerLocation::Repository(repo) =>
-                iformat!("{repo.owner}-{repo.name}-{self.runner.name}"),
-        }
+                iformat!("{repo.owner}-{repo.name}"),
+        };
+        iformat!("{location_prefix}-{self.runner.name}-{self.index}")
     }
 
     /// The custom labels that the runner will be registered with.
@@ -48,7 +50,7 @@ impl Config {
     }
 
     pub fn registered_name(&self) -> String {
-        format!("{}-{}", &self.runner.name, self.os)
+        format!("{}-{}-{}", &self.runner.name, self.os, self.index)
     }
 
     pub fn register_script_call_args(
