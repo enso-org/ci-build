@@ -33,7 +33,7 @@ jobs:
 
       - name: Setup conda
         uses: s-weigand/setup-conda@v1.0.5
-        if: !contains(matrix.os, 'self-hosted')
+        if: contains(matrix.os, 'self-hosted') == false
         with:
           update-conda: false
           conda-channels: anaconda, conda-forge
