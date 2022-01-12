@@ -287,9 +287,18 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let args: Args = argh::from_env();
+    let config = if args.nightly { NIGHTLY } else { LOCAL };
+
     let octocrab = setup_octocrab()?;
     let enso_root = args.repository.clone();
     println!("Repository location: {}", enso_root.display());
+
+    let git = Git::new(&enso_root);
+
+    if config.clean_repo {
+        git.clean_xfd().await?;
+        git.args(["checkout", "."])?.run_ok().await?;
+    }
 
     let paths = if args.nightly {
         let versions = enso_build::preflight_check::prepare_nightly(&octocrab, &enso_root).await?;
@@ -299,7 +308,6 @@ async fn main() -> anyhow::Result<()> {
     };
 
 
-    let config = if args.nightly { NIGHTLY } else { LOCAL };
 
     if config.clean_repo {
         Git::new(&paths.repo_root).clean_xfd().await?;
@@ -473,6 +481,7 @@ async fn main() -> anyhow::Result<()> {
         sbt.call_arg("runtime/clean; buildEngineDistribution").await?;
 
         // Prepare Project Manager Distribution
+        sbt.call_arg("buildProjectManagerDistribution").await?;
 
         if config.mode == BuildMode::NightlyRelease {
             // Prepare GraalVM Distribution
