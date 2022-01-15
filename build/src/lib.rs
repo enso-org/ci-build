@@ -7,7 +7,9 @@ pub mod prelude {
 }
 
 pub mod bump_version;
+pub mod httpbin;
 pub mod paths;
+pub mod postgres;
 pub mod preflight_check;
 
 pub fn get_enso_version(build_sbt_contents: &str) -> Result<Version> {

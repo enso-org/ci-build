@@ -459,6 +459,7 @@ dependencies = [
  "path-absolutize",
  "pin-project",
  "platforms",
+ "port_check",
  "rand",
  "regex",
  "reqwest",
@@ -906,11 +907,13 @@ dependencies = [
  "indexmap",
  "itertools 0.10.3",
  "lazy_static",
+ "new_mime_guess",
  "nix 0.23.1",
  "octocrab",
  "path-absolutize",
  "pin-project",
  "platforms",
+ "port_check",
  "rand",
  "regex",
  "reqwest",
@@ -925,6 +928,7 @@ dependencies = [
  "tar",
  "tempfile",
  "tokio",
+ "tokio-util",
  "unicase",
  "url",
  "uuid",
@@ -1169,6 +1173,16 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "tempfile",
+]
+
+[[package]]
+name = "new_mime_guess"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb3253391c5e7939360b2f7f27c7e7821dbc1a0bdab65884dde484fd71132764"
+dependencies = [
+ "mime",
+ "unicase",
 ]
 
 [[package]]
@@ -1419,6 +1433,12 @@ name = "platforms"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8d0eef3571242013a0d5dc84861c3ae4a652e56e12adf8bdc26ff5f8cb34c94"
+
+[[package]]
+name = "port_check"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6519412c9e0d4be579b9f0618364d19cb434b324fc6ddb1b27b1e682c7105ed"
 
 [[package]]
 name = "ppv-lite86"
@@ -1990,9 +2010,11 @@ checksum = "9e99e1983e5d376cd8eb4b66604d2e99e79f5bd988c3055891dcd8c9e2604cc0"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "log",
  "pin-project-lite",
+ "slab",
  "tokio",
 ]
 

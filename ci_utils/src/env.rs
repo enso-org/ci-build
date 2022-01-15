@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use anyhow::Context;
 use std::collections::BTreeSet;
 use std::env::join_paths;
 use std::env::set_var;
@@ -6,6 +7,11 @@ use std::env::split_paths;
 use unicase::UniCase;
 
 const PATH_ENVIRONMENT_NAME: &str = "PATH";
+
+pub fn expect_var(name: impl AsRef<str>) -> Result<String> {
+    let name = name.as_ref();
+    std::env::var(name).context(anyhow!("Missing environment variable {}", name))
+}
 
 pub fn expect_var_os(name: impl AsRef<OsStr>) -> Result<OsString> {
     let name = name.as_ref();

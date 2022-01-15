@@ -3,6 +3,7 @@
 #![feature(associated_type_defaults)]
 #![feature(associated_type_bounds)]
 #![feature(generic_associated_types)]
+#![feature(exact_size_is_empty)]
 #![feature(result_cloned)]
 #![feature(async_closure)]
 #![feature(async_stream)]
@@ -101,3 +102,12 @@ pub mod prelude {
 
 /// `None` that is used to represent an empty request body in calls `octocrab`.
 pub const EMPTY_REQUEST_BODY: Option<&()> = None;
+
+use prelude::*;
+
+use ::anyhow::Context;
+
+/// Looks up a free port in the IANA private or dynamic port range.
+pub fn get_free_port() -> Result<u16> {
+    port_check::free_local_port_in_range(49152, 65535).context("Failed to find a free local port.")
+}

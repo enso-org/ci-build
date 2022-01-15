@@ -12,6 +12,8 @@ pub use ide_ci::prelude;
 use ide_ci::prelude::*;
 
 use enso_build::paths::Paths;
+use enso_build::postgres;
+use enso_build::postgres::Postgresql;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
 use ide_ci::goodie::GoodieDatabase;
@@ -19,19 +21,12 @@ use ide_ci::goodies::graalvm;
 use ide_ci::goodies::sbt;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::git::Git;
-use ide_ci::programs::Docker;
-use ide_ci::programs::Go;
 use ide_ci::programs::Sbt;
 use ide_ci::programs::SevenZip;
 use octocrab::OctocrabBuilder;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
-use std::process::Stdio;
 use sysinfo::SystemExt;
-use tokio::io::AsyncBufReadExt;
-use tokio::io::AsyncRead;
-use tokio::io::BufReader;
-use tokio::process::Child;
 
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
 const GRAAL_VERSION: Version = Version::new(21, 1, 0);
@@ -39,7 +34,6 @@ const GRAAL_JAVA_VERSION: graalvm::JavaVersion = graalvm::JavaVersion::Java11;
 
 const PARALLEL_ENSO_TESTS: AsyncPolicy = AsyncPolicy::Sequential;
 
-const POSTGRESQL_PORT: u16 = 5432;
 
 #[cfg(target_os = "linux")]
 const LIBRARIES_TO_TEST: [&str; 6] =
@@ -86,20 +80,10 @@ impl BuiltEnso {
         self.paths.engine.dir.join("bin").join("enso")
     }
 
-    pub fn test_path(&self, test_project_name: &str) -> PathBuf {
-        self.paths.repo_root.join("test").join(test_project_name)
-    }
-
-    pub fn run_test(&self, test: impl AsRef<str>, ir_caches: IrCaches) -> Result<Command> {
+    pub fn run_test(&self, test: impl AsRef<Path>, ir_caches: IrCaches) -> Result<Command> {
+        let test_path = self.paths.stdlib_test(test);
         let mut command = self.cmd()?;
-        command
-            .arg(ir_caches)
-            .arg("--run")
-            .arg(self.test_path(test.as_ref()))
-            .env("ENSO_DATABASE_TEST_DB_NAME", "enso_test_db")
-            .env("ENSO_DATABASE_TEST_HOST", "127.0.0.1")
-            .env("ENSO_DATABASE_TEST_DB_USER", "enso_test_user")
-            .env("ENSO_DATABASE_TEST_DB_PASSWORD", "enso_test_password");
+        command.arg(ir_caches).arg("--run").arg(test_path);
         Ok(command)
     }
 
@@ -205,12 +189,24 @@ pub async fn run_tests(paths: &Paths, ir_caches: IrCaches, async_policy: AsyncPo
         std::fs::write(google_api_test_data_dir.join("secret.json"), &gdoc_key)?;
     }
 
-    let _httpbin = get_and_spawn_httpbin().await?;
+    let _httpbin = enso_build::httpbin::get_and_spawn_httpbin_on_free_port().await?;
     let _postgres = match TARGET_OS {
-        OS::Linux => Some(
-            Postgresql::start("enso_test_db", "enso_test_user", "enso_test_password", "latest")
-                .await?,
-        ),
+        OS::Linux => {
+            let port = ide_ci::get_free_port()?;
+            let runner_context_string =
+                ide_ci::actions::env::runner_name().unwrap_or_else(|_| Uuid::new_v4().to_string());
+            let container_name = format!("postgres-for-{}", runner_context_string);
+            let config = postgres::Configuration {
+                container_name,
+                database_name: "enso_test_db".to_string(),
+                user: "enso_test_user".to_string(),
+                password: "enso_test_password".to_string(),
+                port,
+                version: "latest".to_string(),
+            };
+            let postgres = Postgresql::start(config).await?;
+            Some(postgres)
+        }
         _ => None,
     };
 
@@ -574,91 +570,6 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Retrieve input from asynchronous reader line by line and feed them into the given function.
-pub async fn process_lines<R: AsyncRead + Unpin>(reader: R, f: impl Fn(String)) -> Result<R> {
-    println!("Started line processor.");
-    let mut reader = BufReader::new(reader);
-    let mut line = String::new();
-    while reader.read_line(&mut line).await? != 0 {
-        f(std::mem::take(&mut line));
-    }
-    Ok(reader.into_inner())
-}
-
-pub async fn process_lines_until<R: AsyncRead + Unpin>(
-    reader: R,
-    f: &impl Fn(&str) -> bool,
-) -> Result<R> {
-    let mut reader = BufReader::new(reader);
-    let mut line = String::new();
-    loop {
-        let bytes_read = reader.read_line(&mut line).await?;
-        ensure!(bytes_read != 0, "Postgresql container closed without being ready!");
-        if f(&line) {
-            break;
-        }
-        line.clear();
-    }
-    Ok(reader.into_inner())
-}
-
-pub struct PostgresContainer {
-    _docker_run: Child,
-    name:        String,
-}
-
-impl Drop for PostgresContainer {
-    fn drop(&mut self) {
-        println!("Will kill the postgres container");
-        let kill_fut = Docker.call_args(["kill", self.name.as_str()]);
-        if let Err(e) = futures::executor::block_on(kill_fut) {
-            println!("Failed to kill the Postgres container named {}: {}", self.name, e);
-        } else {
-            println!("Postgres container killed.");
-        }
-    }
-}
-
-pub struct Postgresql;
-
-impl Postgresql {
-    pub async fn start(
-        dbname: &str,
-        user: &str,
-        password: &str,
-        version: &str,
-    ) -> Result<PostgresContainer> {
-        let name = Uuid::new_v4().to_string();
-        let env =
-            [("POSTGRES_DB", dbname), ("POSTGRES_USER", user), ("POSTGRES_PASSWORD", password)];
-
-
-        let mut cmd = Docker.cmd()?;
-        cmd.arg("run");
-        for (var, val) in env {
-            cmd.arg("-e").arg(format!("{}={}", var, val));
-        }
-        cmd.arg("--sig-proxy=true");
-        cmd.arg("-p").arg(format!("{}:{}", POSTGRESQL_PORT, POSTGRESQL_PORT));
-        cmd.arg("--name").arg(&name);
-        cmd.stderr(Stdio::piped());
-        cmd.arg(format!("postgres:{}", version));
-        cmd.kill_on_drop(true);
-        let mut child = cmd.spawn().anyhow_err()?;
-        let stderr = child
-            .stderr
-            .ok_or_else(|| anyhow!("Failed to access standard output of the spawned process!"))?;
-        let check_line = |line: &str| {
-            println!("ERR: {}", line);
-            line.contains("database system is ready to accept connections")
-        };
-        let stderr = process_lines_until(stderr, &check_line).await?;
-        child.stderr = Some(stderr);
-        Ok(PostgresContainer { _docker_run: child, name })
-        // bail!("Error reading Postgres service standard output.")
-    }
-}
-
 pub async fn fix_duplicated_env_var(var_name: impl AsRef<OsStr>) -> Result {
     let var_name = var_name.as_ref();
 
@@ -671,52 +582,27 @@ pub async fn fix_duplicated_env_var(var_name: impl AsRef<OsStr>) -> Result {
     Ok(())
 }
 
-
-pub async fn get_and_spawn_httpbin() -> Result<Child> {
-    Go.call_args(["get", "-v", "github.com/ahmetb/go-httpbin/cmd/httpbin"]).await?;
-    let gopath = String::from_utf8(
-        Go.cmd()?.args(["env", "GOPATH"]).stdout(Stdio::piped()).output().await?.stdout,
-    )?;
-    let gopath = gopath.trim();
-    let gopath = PathBuf::from(gopath); // be careful of trailing newline!
-    let program = gopath.join("bin").join("httpbin");
-    println!("Will spawn {}", program.display());
-    Command::new(program).args(["-host", ":8080"]).kill_on_drop(true).spawn().anyhow_err()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Stdio;
 
+    use enso_build::postgres::process_lines;
     use ide_ci::extensions::path::PathExt;
     use ide_ci::programs::git::Git;
     use ide_ci::programs::Cmd;
     use std::time::Duration;
     use tokio::io::AsyncReadExt;
-    use tokio::time::sleep;
+    use tokio::io::BufReader;
 
     #[tokio::test]
-    async fn start_postgres() -> Result {
-        let child = Postgresql::start("test", "test", "test", "latest").await?;
-        sleep(Duration::from_secs(5)).await;
-        drop(child);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn spawn_httpbin() -> Result {
-        let mut httpbin = get_and_spawn_httpbin().await?;
-        sleep(Duration::from_secs(15)).await;
-        httpbin.kill().await?;
-        Ok(())
-    }
-
-    #[tokio::test]
+    #[ignore]
     async fn download_stuff() -> Result {
         download_project_templates(reqwest::Client::new(), PathBuf::from("C:/temp")).await?;
         Ok(())
     }
     #[tokio::test]
+    #[ignore]
     async fn test_paths() -> Result {
         let paths = Paths::new(r"H:\NBO\enso")?;
         let mut output_archive = paths.engine.dir.join(&paths.engine.name);
@@ -736,6 +622,7 @@ mod tests {
 
     #[cfg(target_os = "windows")]
     #[tokio::test]
+    #[ignore]
     async fn named_pipe_sbt() -> Result {
         use tokio::net::windows::named_pipe::ClientOptions;
 
@@ -794,6 +681,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn good_batch_package() -> Result {
         let path = PathBuf::from(r"H:\NBO\enso");
         ide_ci::programs::vs::apply_dev_environment().await?;
@@ -805,6 +693,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn good_batch_test() -> Result {
         let path = PathBuf::from(r"H:\NBO\enso");
         // ide_ci::programs::vs::apply_dev_environment().await?;
@@ -816,6 +705,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn interactive_sbt() -> Result {
         let paths = Paths::new(r"H:\NBO\enso")?;
 
@@ -858,6 +748,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn copy_file_js() -> Result {
         let paths = Paths::new(r"H:\NBO\enso")?;
         ide_ci::io::copy_to(
@@ -877,6 +768,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn system() {
         let mut system = sysinfo::System::new();
         system.refresh_memory();

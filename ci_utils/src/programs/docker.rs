@@ -40,8 +40,14 @@ impl Docker {
         Ok(ImageId(built_image_id.into()))
     }
 
+    pub fn run_cmd(&self, options: &RunOptions) -> Result<Command> {
+        let mut cmd = self.cmd()?;
+        cmd.arg("run").args(options.args());
+        Ok(cmd)
+    }
+
     pub async fn run(&self, options: &RunOptions) -> Result {
-        self.cmd()?.arg("run").args(options.args()).run_ok().await
+        self.run_cmd(options)?.run_ok().await
     }
 
     pub async fn create(&self, options: &RunOptions) -> Result<ContainerId> {
@@ -49,8 +55,9 @@ impl Docker {
         Ok(ContainerId(output.run_ok_single_line_stdout()?))
     }
 
-    pub async fn remove_container(&self, name: impl AsRef<OsStr>) -> Result {
-        self.cmd()?.args(["rm", "-f"]).arg(name).run_ok().await
+    pub async fn remove_container(&self, name: impl AsRef<OsStr>, force: bool) -> Result {
+        let force_arg = if force { ["-f"].as_slice() } else { [].as_slice() };
+        self.cmd()?.arg("rm").args(force_arg).arg(name).run_ok().await
     }
 
     pub async fn run_detached(&self, options: &RunOptions) -> Result<ContainerId> {
@@ -58,6 +65,10 @@ impl Docker {
         // dbg!(&output);
         Ok(ContainerId(output.run_ok_single_line_stdout()?))
         // output.status.exit_ok()?;
+    }
+
+    pub async fn kill(&self, target: impl AsRef<str>) -> Result {
+        Docker.call_args(["kill", target.as_ref()]).await
     }
 
     pub async fn upload(
@@ -213,6 +224,8 @@ pub struct RunOptions {
     pub ports:             HashMap<u16, u16>,
     pub network:           Option<Network>,
     pub storage_size_gb:   Option<usize>,
+    /// Proxy all received signals to the process (non-TTY mode only).
+    pub sig_proxy:         Option<bool>,
 }
 
 impl RunOptions {
@@ -228,6 +241,7 @@ impl RunOptions {
             ports: default(),
             network: default(),
             storage_size_gb: default(),
+            sig_proxy: default(),
         }
     }
 
@@ -247,6 +261,11 @@ impl RunOptions {
 
     pub fn storage_size_gb(&mut self, storage_size_in_gb: usize) -> &mut Self {
         self.storage_size_gb = Some(storage_size_in_gb);
+        self
+    }
+
+    pub fn publish_port(&mut self, host_port: u16, container_port: u16) -> &mut Self {
+        self.ports.insert(host_port, container_port);
         self
     }
 
@@ -296,6 +315,11 @@ impl RunOptions {
             ret.push(format!("size={}G", storage_size_gb).into());
         }
 
+        if let Some(sig_proxy) = self.sig_proxy {
+            let arg = iformat!(r#"--sig-proxy={sig_proxy}"#);
+            ret.push(arg.into());
+        }
+
         ret.push(OsString::from(&self.image.0));
 
         ret.extend(self.command.clone());
@@ -314,6 +338,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore]
     async fn build() -> Result {
         let opts = BuildOptions::new(r"C:\Users\mwu\ci\image\windows\");
         dbg!(Docker.build(opts).await?);

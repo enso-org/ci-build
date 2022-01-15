@@ -48,7 +48,8 @@ impl Paths {
         let repo_root: PathBuf = repo_root.into().absolutize()?.into();
         let build_sbt = repo_root.join("build.sbt");
         let build_sbt_contents = std::fs::read_to_string(build_sbt)?;
-        let version = crate::get_enso_version(&build_sbt_contents)?;
+        let version = crate::get_enso_version(&build_sbt_contents)
+            .unwrap_or(Version::parse("0.2.32-SNAPSHOT").unwrap());
         Self::new_version(repo_root, version)
     }
 
@@ -88,5 +89,13 @@ impl Paths {
 
         ide_ci::actions::workflow::set_env("TARGET_DIR", self.target.to_string_lossy())?;
         Ok(())
+    }
+
+    pub fn stdlib_tests(&self) -> PathBuf {
+        self.repo_root.join("test")
+    }
+
+    pub fn stdlib_test(&self, test_name: impl AsRef<Path>) -> PathBuf {
+        self.stdlib_tests().join(test_name)
     }
 }
