@@ -55,9 +55,9 @@ impl Docker {
         Ok(ContainerId(output.run_ok_single_line_stdout()?))
     }
 
-    pub async fn remove_container(&self, name: impl AsRef<OsStr>, force: bool) -> Result {
+    pub async fn remove_container(&self, name: &ContainerId, force: bool) -> Result {
         let force_arg = if force { ["-f"].as_slice() } else { [].as_slice() };
-        self.cmd()?.arg("rm").args(force_arg).arg(name).run_ok().await
+        self.cmd()?.arg("rm").args(force_arg).arg(name.as_ref()).run_ok().await
     }
 
     pub async fn run_detached(&self, options: &RunOptions) -> Result<ContainerId> {
@@ -193,7 +193,7 @@ pub enum Network {
     Bridge,
     Host,
     User(String),
-    Container(String),
+    Container(ContainerId),
 }
 
 impl Default for Network {
@@ -328,10 +328,10 @@ impl RunOptions {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Display, Debug)]
 pub struct ImageId(pub String);
 
-#[derive(Clone, Debug, Shrinkwrap)]
+#[derive(Clone, Debug, Display, Shrinkwrap)]
 pub struct ContainerId(pub String);
 
 #[cfg(test)]

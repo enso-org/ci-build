@@ -30,8 +30,7 @@ impl Config {
     pub fn qualified_name(&self) -> String {
         let location_prefix = match &self.location {
             RunnerLocation::Organization(org) => iformat!("{org.name}"),
-            RunnerLocation::Repository(repo) =>
-                iformat!("{repo.owner}-{repo.name}"),
+            RunnerLocation::Repository(repo) => iformat!("{repo.owner}-{repo.name}"),
         };
         iformat!("{location_prefix}-{self.runner.name}-{self.index}")
     }
@@ -103,11 +102,7 @@ impl Config {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct RegistrationContext {
-    pub octocrab: Octocrab,
-}
-
+/// The extension used by the scripts that are part of GitHub Actions Runner distribution.
 pub fn script_extension(os: OS) -> &'static str {
     if os == OS::Windows {
         "cmd"

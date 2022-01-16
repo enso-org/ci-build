@@ -13,6 +13,7 @@ use ide_ci::prelude::*;
 
 use enso_build::paths::Paths;
 use enso_build::postgres;
+use enso_build::postgres::EndpointConfiguration;
 use enso_build::postgres::Postgresql;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
@@ -20,6 +21,7 @@ use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies::graalvm;
 use ide_ci::goodies::sbt;
 use ide_ci::program::with_cwd::WithCwd;
+use ide_ci::programs::docker::ContainerId;
 use ide_ci::programs::git::Git;
 use ide_ci::programs::Sbt;
 use ide_ci::programs::SevenZip;
@@ -192,17 +194,16 @@ pub async fn run_tests(paths: &Paths, ir_caches: IrCaches, async_policy: AsyncPo
     let _httpbin = enso_build::httpbin::get_and_spawn_httpbin_on_free_port().await?;
     let _postgres = match TARGET_OS {
         OS::Linux => {
-            let port = ide_ci::get_free_port()?;
             let runner_context_string =
                 ide_ci::actions::env::runner_name().unwrap_or_else(|_| Uuid::new_v4().to_string());
             let container_name = format!("postgres-for-{}", runner_context_string);
             let config = postgres::Configuration {
-                container_name,
-                database_name: "enso_test_db".to_string(),
-                user: "enso_test_user".to_string(),
-                password: "enso_test_password".to_string(),
-                port,
-                version: "latest".to_string(),
+                postgres_container: ContainerId(container_name),
+                database_name:      "enso_test_db".to_string(),
+                user:               "enso_test_user".to_string(),
+                password:           "enso_test_password".to_string(),
+                endpoint:           EndpointConfiguration::deduce()?,
+                version:            "latest".to_string(),
             };
             let postgres = Postgresql::start(config).await?;
             Some(postgres)

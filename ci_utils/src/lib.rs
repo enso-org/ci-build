@@ -14,6 +14,7 @@
 pub mod actions;
 pub mod anyhow;
 pub mod archive;
+pub mod deploy;
 pub mod env;
 pub mod extensions;
 pub mod future;
@@ -26,7 +27,6 @@ pub mod platform;
 pub mod program;
 pub mod programs;
 pub mod pure_evil;
-pub mod runner;
 pub mod serde;
 
 pub mod prelude {
