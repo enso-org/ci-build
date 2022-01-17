@@ -430,8 +430,7 @@ async fn main() -> anyhow::Result<()> {
         if config.test_scala {
             // Test Enso
             sbt.call_arg("set Global / parallelExecution := false; runtime/clean; compile; test")
-                .await
-                .ok(); // FIXME
+                .await;
         }
 
         if config.benchmark_compilation {
