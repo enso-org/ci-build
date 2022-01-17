@@ -5,7 +5,6 @@ use std::collections::HashMap;
 
 use crate::github::OrganizationPointer;
 use crate::github::RepoPointer;
-use crate::models::actions::RegistrationToken;
 use crate::serde::regex_vec;
 use crate::serde::single_or_sequence;
 use regex::Regex;
@@ -47,7 +46,7 @@ impl RunnerLocation {
     pub async fn generate_runner_registration_token(
         &self,
         octocrab: &Octocrab,
-    ) -> anyhow::Result<RegistrationToken> {
+    ) -> anyhow::Result<crate::github::model::RegistrationToken> {
         match self {
             RunnerLocation::Organization(org) =>
                 org.generate_runner_registration_token(octocrab).await,

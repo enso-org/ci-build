@@ -1,9 +1,10 @@
 use crate::prelude::*;
 
-use crate::models::actions::RegistrationToken;
 use octocrab::models::repos::Release;
 
 const MAX_PER_PAGE: u8 = 100;
+
+pub mod model;
 
 /// Entity that uniquely identifies a GitHub-hosted repository.
 #[async_trait]
@@ -15,7 +16,7 @@ pub trait RepoPointer {
     async fn generate_runner_registration_token(
         &self,
         octocrab: &Octocrab,
-    ) -> anyhow::Result<RegistrationToken> {
+    ) -> anyhow::Result<model::RegistrationToken> {
         let path =
             iformat!("/repos/{self.owner()}/{self.name()}/actions/runners/registration-token");
         let url = octocrab.absolute_url(path)?;
@@ -66,7 +67,7 @@ pub trait OrganizationPointer {
     async fn generate_runner_registration_token(
         &self,
         octocrab: &Octocrab,
-    ) -> anyhow::Result<RegistrationToken> {
+    ) -> anyhow::Result<model::RegistrationToken> {
         let path = iformat!("/orgs/{self.name()}/actions/runners/registration-token");
         let url = octocrab.absolute_url(path)?;
         octocrab.post(url, EMPTY_REQUEST_BODY).await.map_err(Into::into)

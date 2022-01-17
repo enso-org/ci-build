@@ -16,6 +16,7 @@ chrono = { version = "0.4.19", features = ["serde"] }
 command-group = { version = "1.0.8", features = ["with-tokio"] }
 derive_more = "0.99.17"
 dirs = "4.0.0"
+filetime = "0.2.15"
 flate2 = "1.0.22"
 fn-error-context = "0.2.0"
 fs_extra = "1.2.0"

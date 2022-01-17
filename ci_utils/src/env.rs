@@ -28,6 +28,18 @@ pub fn prepend_to_path(path: impl Into<PathBuf>) -> Result {
     Ok(())
 }
 
+pub async fn fix_duplicated_env_var(var_name: impl AsRef<OsStr>) -> Result {
+    let var_name = var_name.as_ref();
+
+    let mut paths = indexmap::IndexSet::new();
+    while let Ok(path) = std::env::var(var_name) {
+        paths.extend(std::env::split_paths(&path));
+        std::env::remove_var(var_name);
+    }
+    std::env::set_var(var_name, std::env::join_paths(paths)?);
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 pub enum Action {
     Remove,
