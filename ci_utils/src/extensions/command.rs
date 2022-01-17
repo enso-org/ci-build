@@ -2,11 +2,13 @@ use crate::prelude::*;
 
 use anyhow::Context;
 use std::fmt::Write;
+use std::process::Output;
 use tokio::process::Child;
 
 pub trait CommandExt {
     fn run_ok(&mut self) -> BoxFuture<'static, Result<()>>;
 
+    fn output_ok(&mut self) -> BoxFuture<'static, Result<Output>>;
     // TODO: `spawn` but does logs like some other methods. They all need a naming unification pass.
     fn spawn_nicer(&mut self) -> Result<Child>;
 
@@ -20,6 +22,13 @@ impl CommandExt for Command {
         let status = self.status();
         async move { status.await?.exit_ok().context(format!("Command failed: {}", pretty)) }
             .boxed()
+    }
+
+    fn output_ok(&mut self) -> BoxFuture<'static, Result<Output>> {
+        let pretty = self.describe();
+        println!("Will run: {}", pretty);
+        let output = self.output();
+        async move { output.await.context(format!("Command failed: {}", pretty)) }.boxed()
     }
 
     fn spawn_nicer(&mut self) -> Result<Child> {

@@ -5,7 +5,7 @@ use anyhow::Context;
 pub trait OutputExt {
     fn run_ok_single_line_stdout(&self) -> Result<String>;
     fn run_ok(&self) -> Result;
-    fn context(&self) -> String;
+    fn describe(&self) -> String;
 }
 
 impl OutputExt for std::process::Output {
@@ -19,9 +19,9 @@ impl OutputExt for std::process::Output {
     }
 
     fn run_ok(&self) -> Result {
-        self.status.exit_ok().with_context(|| self.context())
+        self.status.exit_ok().with_context(|| self.describe())
     }
-    fn context(&self) -> String {
+    fn describe(&self) -> String {
         format!(
             "Stdout:\n{:?}\n\nStderr:\n{:?}\n",
             std::str::from_utf8(&self.stdout).unwrap_or("<INVALID ENCODING>"),

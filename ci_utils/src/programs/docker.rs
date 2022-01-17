@@ -5,6 +5,66 @@ use platforms::TARGET_OS;
 use shrinkwraprs::Shrinkwrap;
 use std::collections::HashMap;
 use std::fmt::Formatter;
+use std::process::Stdio;
+
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Hash)]
+pub enum NetworkDriver {
+    // Linux
+    Bridge,
+    Host,
+    Overlay,
+    Ipvlan,
+    Macvlan,
+    None,
+    // Windows
+    Ics,
+    Nat,
+    Transparent,
+    L2bridge,
+    Null,
+    //
+    Other(String),
+}
+
+impl AsRef<str> for NetworkDriver {
+    fn as_ref(&self) -> &str {
+        match self {
+            NetworkDriver::Bridge => "bridge",
+            NetworkDriver::Host => "host",
+            NetworkDriver::Overlay => "overlay",
+            NetworkDriver::Ipvlan => "ipvlan",
+            NetworkDriver::Macvlan => "macvlan",
+            NetworkDriver::None => "none",
+            NetworkDriver::Ics => "ics",
+            NetworkDriver::Nat => "nat",
+            NetworkDriver::Transparent => "transparent",
+            NetworkDriver::L2bridge => "l2bridge",
+            NetworkDriver::Null => "null",
+            NetworkDriver::Other(name) => name.as_str(),
+        }
+    }
+}
+
+impl Default for NetworkDriver {
+    fn default() -> Self {
+        if TARGET_OS == OS::Windows {
+            NetworkDriver::Nat
+        } else {
+            NetworkDriver::Bridge
+        }
+    }
+}
+
+
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Hash)]
+pub struct NetworkInfo {
+    pub id:     String,
+    pub name:   String,
+    pub driver: NetworkDriver,
+    pub scope:  String,
+}
+
+
 
 pub struct Docker;
 
@@ -88,6 +148,67 @@ impl Docker {
 
     pub async fn start(&self, container: &ContainerId) -> Result {
         self.cmd()?.arg("start").arg(container.as_str()).run_ok().await
+    }
+
+    /// Returns network ID.
+    pub async fn create_network(
+        &self,
+        driver: &NetworkDriver,
+        name: impl AsRef<str>,
+    ) -> Result<String> {
+        Ok(Docker
+            .cmd()?
+            .args(["network", "create", "--driver", driver.as_ref(), name.as_ref()])
+            .output_ok()
+            .await?
+            .run_ok_single_line_stdout()?)
+    }
+
+    /// Returns network ID.
+    pub async fn remove_network(&self, name_or_id: impl AsRef<str>) -> Result<String> {
+        Ok(Docker
+            .cmd()?
+            .args(["network", "rm", name_or_id.as_ref()])
+            .output_ok()
+            .await?
+            .run_ok_single_line_stdout()?)
+    }
+
+    pub async fn list_networks(&self) -> Result<Vec<NetworkInfo>> {
+        let mut cmd = Docker.cmd()?;
+        cmd.args(["network", "ls", "--no-trunc"]);
+        cmd.stdout(Stdio::piped());
+        let stdout = cmd.output().await?.stdout;
+        let stdout = String::from_utf8(stdout)?;
+
+        let mut ret = Vec::new();
+        for line in stdout.lines().skip(1) {
+            // Network name can contain spaces, e.g. "Default Switch".
+            // It seems that columns are separated by at least 3 spaces.
+            match line.split("   ").filter(|word| !word.is_empty()).collect_vec().as_slice() {
+                [id, name, driver, scope] => ret.push(NetworkInfo {
+                    id:     id.to_string(),
+                    driver: match *driver {
+                        "bridge" => NetworkDriver::Bridge,
+                        "host" => NetworkDriver::Host,
+                        "overlay" => NetworkDriver::Overlay,
+                        "ipvlan" => NetworkDriver::Ipvlan,
+                        "macvlan" => NetworkDriver::Macvlan,
+                        "none" => NetworkDriver::None,
+                        "ics" => NetworkDriver::Ics,
+                        "nat" => NetworkDriver::Nat,
+                        "transparent" => NetworkDriver::Transparent,
+                        "l2bridge" => NetworkDriver::L2bridge,
+                        "null" => NetworkDriver::Null,
+                        name => NetworkDriver::Other(name.to_string()),
+                    },
+                    name:   name.to_string(),
+                    scope:  scope.to_string(),
+                }),
+                _ => bail!("Failed to parse line: {}", line),
+            }
+        }
+        Ok(ret)
     }
 }
 
@@ -337,6 +458,17 @@ pub struct ContainerId(pub String);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::program::shell::Recognized::Command;
+    use std::process::Stdio;
+
+    #[tokio::test]
+    #[ignore]
+    async fn network() -> Result {
+        dbg!(Docker.list_networks().await?);
+        dbg!(Docker.remove_network("fd").await?);
+        dbg!(Docker.create_network(&default(), "fd").await?);
+        Ok(())
+    }
 
     #[tokio::test]
     #[ignore]

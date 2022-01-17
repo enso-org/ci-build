@@ -39,7 +39,7 @@ jobs:
           conda-channels: anaconda, conda-forge
 
       - name: Configure Pagefile (Windows)
-        if: runner.os == 'Windows'
+        if: contains(matrix.os, 'self-hosted') == false  &&  runner.os == 'Windows'
         uses: al-cheb/configure-pagefile-action@v1.2
         with:
           minimum-size: 16GB
