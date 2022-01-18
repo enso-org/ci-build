@@ -51,7 +51,8 @@ pub fn mask_environment_variable(variable_name: impl AsRef<str>) {
     }
 }
 
-#[derive(Clone, Copy, Debug, Display)]
+#[derive(Clone, Copy, Debug, strum::Display)]
+#[strum(serialize_all = "snake_case")]
 pub enum MessageLevel {
     Debug,
     Notice,

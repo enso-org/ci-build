@@ -323,6 +323,12 @@ async fn main() -> anyhow::Result<()> {
         ide_ci::programs::vs::apply_dev_environment().await?;
     }
 
+    // Setup Tests on Windows
+    if TARGET_OS == OS::Windows {
+        std::env::set_var("CI_TEST_TIMEFACTOR", "2");
+        std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
+    }
+
     // ide_ci::actions::workflow::set_env("ENSO_RELEASE_MODE", args.release_mode.to_string()).ok();
     ide_ci::programs::Go.require_present().await?;
     ide_ci::programs::Cargo.require_present().await?;
@@ -410,12 +416,6 @@ async fn main() -> anyhow::Result<()> {
         };
         // Compile
         sbt.call_arg("compile").await?;
-
-        // Setup Tests on Windows
-        if TARGET_OS == OS::Windows {
-            std::env::set_var("CI_TEST_TIMEFACTOR", "2");
-            std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
-        }
 
         // Build the Runner & Runtime Uberjars
         sbt.call_arg("runtime/clean; engine-runner/assembly").await?;
@@ -584,7 +584,9 @@ async fn main() -> anyhow::Result<()> {
 
     if config.mode == BuildMode::NightlyRelease {
         // Make packages.
+
         if paths.launcher.root.exists() {
+            println!("Packaging launcher.");
             // Fix launcher permission.
             #[allow(unused_variables)]
             let bin_path =
@@ -627,27 +629,6 @@ async fn main() -> anyhow::Result<()> {
 pub async fn extract_release_notes(changelog_file: impl AsRef<Path>) -> Result<String> {
     Ok("Release notes placeholder".into())
 }
-
-/*
- private def getFragileFiles(
-   root: File,
-   classFilesDirectory: File
- ): FragileFiles = {
-   val fragileSources =
-     (file(s"$root/src/main/java/") ** "*Instrument.java").get ++
-     Seq(
-       file(s"$root/src/main/java/org/enso/interpreter/Language.java"),
-       file(s"$root/src/main/java/org/enso/interpreter/epb/EpbLanguage.java")
-     )
-   val fragileClassFiles =
-     (classFilesDirectory ** "*Instrument.class").get ++
-     Seq(
-       file(s"$classFilesDirectory/org/enso/interpreter/Language.class"),
-       file(s"$classFilesDirectory/org/enso/interpreter/epb/EpbLanguage.class")
-     )
-   FragileFiles(fragileSources, fragileClassFiles)
- }
-*/
 
 #[derive(Clone, Debug)]
 pub struct FragileFiles {
