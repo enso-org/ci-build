@@ -157,7 +157,6 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
         } else {
             std::fs::copy(source_file, destination_file)?;
         }
-        
     } else {
         bail!("Cannot copy to the root path: {}", destination_file.display());
     }
@@ -167,8 +166,8 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
 #[cfg(not(target_os = "windows"))]
 #[context("Failed to update permissions on `{}`", path.as_ref().display())]
 pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
-    use std::os::unix::prelude::*;
     use crate::anyhow::ResultExt;
+    use std::os::unix::prelude::*;
     let metadata = path.as_ref().metadata()?;
     let mut permissions = metadata.permissions();
     let mode = permissions.mode();

@@ -12,11 +12,13 @@ use filetime::FileTime;
 use glob::glob;
 pub use ide_ci::prelude;
 use ide_ci::prelude::*;
+use std::env::consts::EXE_EXTENSION;
 
 use enso_build::paths::Paths;
 use enso_build::postgres;
 use enso_build::postgres::EndpointConfiguration;
 use enso_build::postgres::Postgresql;
+use ide_ci::actions::workflow;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
 use ide_ci::goodie::GoodieDatabase;
@@ -259,6 +261,7 @@ pub struct BuildConfiguration {
     test_scala:            bool,
     test_standard_library: bool,
     benchmark_compilation: bool,
+    build_js_parser:       bool,
 }
 
 const LOCAL: BuildConfiguration = BuildConfiguration {
@@ -267,6 +270,7 @@ const LOCAL: BuildConfiguration = BuildConfiguration {
     test_scala:            true,
     test_standard_library: true,
     benchmark_compilation: true,
+    build_js_parser:       true,
 };
 
 const NIGHTLY: BuildConfiguration = BuildConfiguration {
@@ -275,6 +279,7 @@ const NIGHTLY: BuildConfiguration = BuildConfiguration {
     test_scala:            false,
     test_standard_library: false,
     benchmark_compilation: false,
+    build_js_parser:       false,
 };
 
 
@@ -425,8 +430,21 @@ async fn main() -> anyhow::Result<()> {
 
         if config.test_scala {
             // Test Enso
-            sbt.call_arg("set Global / parallelExecution := false; runtime/clean; compile; test")
+            let test_result = sbt
+                .call_arg("set Global / parallelExecution := false; runtime/clean; compile; test")
                 .await;
+            if let Err(err) = test_result {
+                workflow::Message {
+                    level: workflow::MessageLevel::Error,
+                    text:  iformat!("Tests failed: {err}"),
+                }
+            } else {
+                workflow::Message {
+                    level: workflow::MessageLevel::Notice,
+                    text:  iformat!("Tests were completed successfully."),
+                }
+            }
+            .send();
         }
 
         if config.benchmark_compilation {
@@ -448,6 +466,14 @@ async fn main() -> anyhow::Result<()> {
             sbt.call_arg("project-manager/assembly").await?;
             sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
 
+            // docs-generator fails on Windows because it can't understand non-Unix-style paths.
+            if TARGET_OS != OS::Windows {
+                // Build the docs from standard library sources.
+                sbt.call_arg("docs-generator/run").await?;
+            }
+        }
+
+        if config.build_js_parser {
             // Build the Parser JS Bundle
             // TODO do once across the build
             // The builds are run on 3 platforms, but
@@ -458,12 +484,6 @@ async fn main() -> anyhow::Result<()> {
                 paths.target.join("scala-parser.js"),
                 paths.target.join("parser-upload"),
             )?;
-
-            // docs-generator fails on Windows because it can't understand non-Unix-style paths.
-            if TARGET_OS != OS::Windows {
-                // Build the docs from standard library sources.
-                sbt.call_arg("docs-generator/run").await?;
-            }
         }
 
         // Prepare Launcher Distribution
@@ -555,8 +575,6 @@ async fn main() -> anyhow::Result<()> {
     // the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
     SevenZip.pack_cmd(&output_archive, once("*"))?.current_dir(&paths.engine.root).run_ok().await?;
 
-    ide_ci::io::copy_to(paths.target.join("scala-parser.js"), paths.target.join("parser-upload"))?;
-
     let schema_dir =
         paths.repo_root.join_many(["engine", "language-server", "src", "main", "schema"]);
     ide_ci::io::copy_to(&schema_dir, paths.target.join("fbs-upload"))?;
@@ -565,11 +583,49 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     if config.mode == BuildMode::NightlyRelease {
+        // Make packages.
+        if paths.launcher.root.exists() {
+            // Fix launcher permission.
+            #[allow(unused_variables)]
+            let bin_path =
+                paths.launcher.dir.join_many(["bin", "enso"]).with_extension(EXE_EXTENSION);
+            #[cfg(not(target_os = "windows"))]
+            ide_ci::io::allow_owner_execute(&bin_path);
+            ide_ci::programs::SevenZip
+                .pack(&paths.launcher.artifact_archive, [&paths.launcher.root])
+                .await?;
+        }
+        // val launcher = builtArtifact("launcher", os, arch)
+        // if (launcher.exists()) {
+        //     fixLauncher(launcher, os)
+        //     val archive = builtArchive("launcher", os, arch)
+        //     makeArchive(launcher, "enso", archive)
+        //     log.info(s"Created $archive")
+        // }
+        //
+        // val engine = builtArtifact("engine", os, arch)
+        // if (engine.exists()) {
+        //     if (os.isUNIX) {
+        //         makeExecutable(engine / s"enso-$ensoVersion" / "bin" / "enso")
+        //     }
+        //     val archive = builtArchive("engine", os, arch)
+        //     makeArchive(engine, s"enso-$ensoVersion", archive)
+        //     log.info(s"Created $archive")
+        // }
+
         sbt.call_arg("makePackages").await?;
         sbt.call_arg("makeBundles").await?;
+
+        let release_notes =
+            extract_release_notes(enso_root.join_many(["app", "gui", "CHANGELOG.md"])).await?;
     }
 
     Ok(())
+}
+
+
+pub async fn extract_release_notes(changelog_file: impl AsRef<Path>) -> Result<String> {
+    Ok("Release notes placeholder".into())
 }
 
 /*

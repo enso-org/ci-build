@@ -3,19 +3,26 @@ use crate::prelude::*;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
 
+const ARCHIVE_EXTENSION: &str = match TARGET_OS {
+    OS::Windows => "zip",
+    _ => "tar.gz",
+};
+
 #[derive(Clone, Debug)]
-pub struct DistPaths {
-    pub name: PathBuf,
-    pub root: PathBuf,
-    pub dir:  PathBuf,
+pub struct ComponentPaths {
+    pub name:             PathBuf,
+    pub root:             PathBuf,
+    pub dir:              PathBuf,
+    pub artifact_archive: PathBuf,
 }
 
-impl DistPaths {
+impl ComponentPaths {
     pub fn new(build_root: &Path, name_prefix: &str, dirname: &str, triple: &str) -> Self {
         let name = PathBuf::from(iformat!("{name_prefix}-{triple}"));
         let root = build_root.join(&name);
         let dir = root.join(dirname);
-        Self { name, root, dir }
+        let artifact_archive = root.with_extension(ARCHIVE_EXTENSION);
+        Self { name, root, dir, artifact_archive }
     }
 
     pub fn emit_to_actions(&self, prefix: &str) -> Result {
@@ -35,9 +42,9 @@ pub struct Paths {
     pub repo_root:       PathBuf,
     pub build_dist_root: PathBuf,
     pub target:          PathBuf,
-    pub launcher:        DistPaths,
-    pub engine:          DistPaths,
-    pub project_manager: DistPaths,
+    pub launcher:        ComponentPaths,
+    pub engine:          ComponentPaths,
+    pub project_manager: ComponentPaths,
     pub version:         Version,
     /* graal_dist_name: PathBuf,
      * graal_dist_root: PathBuf, */
@@ -68,11 +75,15 @@ impl Paths {
             _ => panic!("Unrecognized architecture {}", TARGET_ARCH),
         };
         let triple = format!("{}-{}-{}", version, TARGET_OS, arch);
-        let launcher = DistPaths::new(&build_dist_root, "enso-launcher", "enso", &triple);
-        let engine =
-            DistPaths::new(&build_dist_root, "enso-engine", &format!("enso-{}", version), &triple);
+        let launcher = ComponentPaths::new(&build_dist_root, "enso-launcher", "enso", &triple);
+        let engine = ComponentPaths::new(
+            &build_dist_root,
+            "enso-engine",
+            &format!("enso-{}", version),
+            &triple,
+        );
         let project_manager =
-            DistPaths::new(&build_dist_root, "enso-project-manager", "enso", &triple);
+            ComponentPaths::new(&build_dist_root, "enso-project-manager", "enso", &triple);
         Ok(Paths { repo_root, build_dist_root, target, launcher, engine, project_manager, version })
     }
 
