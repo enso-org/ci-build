@@ -163,3 +163,16 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
     }
     Ok(())
 }
+
+#[cfg(not(target_os = "windows"))]
+#[context("Failed to update permissions on `{}`", path.as_ref().display())]
+pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
+    use std::os::unix::prelude::*;
+    use crate::anyhow::ResultExt;
+    let metadata = path.as_ref().metadata()?;
+    let mut permissions = metadata.permissions();
+    let mode = permissions.mode();
+    let owner_can_execute = 0o0100;
+    permissions.set_mode(mode | owner_can_execute);
+    std::fs::set_permissions(path.as_ref(), permissions).anyhow_err()
+}
