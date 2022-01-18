@@ -72,6 +72,6 @@ impl Message {
     }
 
     pub fn send(&self) {
-        println!("::{}::{}", self.level, self.text);
+        println!("::{} ::{}", self.level, self.text);
     }
 }

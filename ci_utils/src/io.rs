@@ -168,6 +168,7 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
 pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
     use crate::anyhow::ResultExt;
     use std::os::unix::prelude::*;
+    println!("Setting executable permission on {}", path.as_ref().display());
     let metadata = path.as_ref().metadata()?;
     let mut permissions = metadata.permissions();
     let mode = permissions.mode();

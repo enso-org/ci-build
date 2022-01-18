@@ -14,6 +14,7 @@ pub use ide_ci::prelude;
 use ide_ci::prelude::*;
 use std::env::consts::EXE_EXTENSION;
 
+use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
 use enso_build::postgres;
 use enso_build::postgres::EndpointConfiguration;
@@ -587,35 +588,17 @@ async fn main() -> anyhow::Result<()> {
 
         if paths.launcher.root.exists() {
             println!("Packaging launcher.");
-            // Fix launcher permission.
-            #[allow(unused_variables)]
-            let bin_path =
-                paths.launcher.dir.join_many(["bin", "enso"]).with_extension(EXE_EXTENSION);
-            #[cfg(not(target_os = "windows"))]
-            ide_ci::io::allow_owner_execute(&bin_path);
-            ide_ci::programs::SevenZip
-                .pack(&paths.launcher.artifact_archive, [&paths.launcher.root])
-                .await?;
+            package_component(&paths.launcher).await?;
+            // IO.createDirectories(
+            //     Seq("dist", "config", "runtime").map(root / "enso" / _)
+            // )
         }
-        // val launcher = builtArtifact("launcher", os, arch)
-        // if (launcher.exists()) {
-        //     fixLauncher(launcher, os)
-        //     val archive = builtArchive("launcher", os, arch)
-        //     makeArchive(launcher, "enso", archive)
-        //     log.info(s"Created $archive")
-        // }
-        //
-        // val engine = builtArtifact("engine", os, arch)
-        // if (engine.exists()) {
-        //     if (os.isUNIX) {
-        //         makeExecutable(engine / s"enso-$ensoVersion" / "bin" / "enso")
-        //     }
-        //     val archive = builtArchive("engine", os, arch)
-        //     makeArchive(engine, s"enso-$ensoVersion", archive)
-        //     log.info(s"Created $archive")
-        // }
 
-        sbt.call_arg("makePackages").await?;
+        if paths.engine.root.exists() {
+            println!("Packaging engine.");
+            package_component(&paths.engine).await?;
+        }
+
         sbt.call_arg("makeBundles").await?;
 
         let release_notes =
@@ -625,6 +608,17 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+pub async fn package_component(paths: &ComponentPaths) -> Result {
+    #[cfg(not(target_os = "windows"))]
+    {
+        let pattern =
+            paths.dir.join_many(["bin", "*"]).with_extension(EXE_EXTENSION).display().to_string();
+        for binary in glob::glob(&pattern)? {
+            ide_ci::io::allow_owner_execute(binary?);
+        }
+    }
+    ide_ci::programs::SevenZip.pack(&paths.artifact_archive, [&paths.root]).await
+}
 
 pub async fn extract_release_notes(changelog_file: impl AsRef<Path>) -> Result<String> {
     Ok("Release notes placeholder".into())
