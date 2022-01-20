@@ -3,51 +3,45 @@ use fs_extra::dir::CopyOptions;
 
 use crate::archive::ArchiveFormat;
 use reqwest::IntoUrl;
-use snafu::ResultExt;
-
-#[derive(Debug, Snafu)]
-pub enum IoOperationFailed {
-    #[snafu(display("Failed to create directory {}: {}", path.display(), source))]
-    CreateDir { path: PathBuf, source: std::io::Error },
-    #[snafu(display("Failed to remove {}: {}", path.display(), source))]
-    Remove { path: PathBuf, source: std::io::Error },
-}
 
 /// Create a directory (and all missing parent directories),
 ///
 /// Does not fail when a directory already exists.
-pub fn create_dir_if_missing(path: impl AsRef<Path>) -> std::io::Result<()> {
-    let result = std::fs::create_dir_all(path);
+#[context("Failed to create directory {}", path.as_ref().display())]
+pub fn create_dir_if_missing(path: impl AsRef<Path>) -> Result {
+    let result = std::fs::create_dir_all(&path);
     match result {
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
-        result => result,
+        result => result.anyhow_err(),
     }
 }
 
 /// Remove a directory with all its subtree.
 ///
 /// Does not fail if the directory is already gone.
-pub fn remove_dir_if_exists(path: impl AsRef<Path>) -> std::io::Result<()> {
-    let result = std::fs::remove_dir_all(path);
+#[context("Failed to remove directory {}", path.as_ref().display())]
+pub fn remove_dir_if_exists(path: impl AsRef<Path>) -> Result {
+    let result = std::fs::remove_dir_all(&path);
     match result {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        result => dbg!(result),
+        result => result.anyhow_err(),
     }
 }
 
 /// Remove a regular file.
 ///
 /// Does not fail if the file is already gone.
-pub fn remove_file_if_exists(path: impl AsRef<Path>) -> std::io::Result<()> {
-    let result = std::fs::remove_file(path);
+#[context("Failed to remove file {}", path.as_ref().display())]
+pub fn remove_file_if_exists(path: impl AsRef<Path>) -> Result<()> {
+    let result = std::fs::remove_file(&path);
     match result {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        result => dbg!(result),
+        result => result.anyhow_err(),
     }
 }
 
 
-pub fn remove_if_exists(path: impl AsRef<Path>) -> std::io::Result<()> {
+pub fn remove_if_exists(path: impl AsRef<Path>) -> Result {
     let path = path.as_ref();
     if path.is_dir() {
         remove_dir_if_exists(path)
@@ -60,8 +54,8 @@ pub fn remove_if_exists(path: impl AsRef<Path>) -> std::io::Result<()> {
 pub fn reset_dir(path: impl AsRef<Path>) -> Result {
     let path = path.as_ref();
     println!("Will reset directory {}", path.display());
-    remove_dir_if_exists(&path).context(Remove { path: path.clone() })?;
-    create_dir_if_missing(&path).context(CreateDir { path: path.clone() })?;
+    remove_dir_if_exists(&path)?;
+    create_dir_if_missing(&path)?;
     Ok(())
 }
 

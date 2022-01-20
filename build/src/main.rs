@@ -12,7 +12,6 @@ use filetime::FileTime;
 use glob::glob;
 pub use ide_ci::prelude;
 use ide_ci::prelude::*;
-use std::env::consts::EXE_EXTENSION;
 
 use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
@@ -25,6 +24,7 @@ use ide_ci::future::AsyncPolicy;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies::graalvm;
 use ide_ci::goodies::sbt;
+use ide_ci::models::config::RepoContext;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::docker::ContainerId;
 use ide_ci::programs::git::Git;
@@ -238,8 +238,12 @@ async fn expect_flatc(version: &Version) -> Result {
     }
 }
 
+pub fn retrieve_pat() -> Result<String> {
+    ide_ci::env::expect_var("GITHUB_TOKEN")
+}
+
 pub fn setup_octocrab() -> Result<Octocrab> {
-    let builder = match (OctocrabBuilder::new(), std::env::var("GITHUB_TOKEN")) {
+    let builder = match (OctocrabBuilder::new(), retrieve_pat()) {
         (builder, Ok(github_token)) => builder.personal_token(github_token),
         (builder, _) => builder,
     };
@@ -305,14 +309,19 @@ async fn main() -> anyhow::Result<()> {
         git.args(["checkout", "."])?.run_ok().await?;
     }
 
+    let repo = ide_ci::actions::env::repository()
+        .unwrap_or(RepoContext { owner: "enso-org".into(), name: "ci-build".into() });
+
     let paths = if args.nightly {
-        let versions = enso_build::preflight_check::prepare_nightly(&octocrab, &enso_root).await?;
+        let versions =
+            enso_build::preflight_check::generate_nightly_version(&octocrab, &enso_root, &repo)
+                .await?;
         Paths::new_version(&enso_root, versions.engine)?
     } else {
         Paths::new(&enso_root)?
     };
 
-    let _ = paths.emit_to_actions(); // Ignore error: we might not be run on CI.
+    let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
     println!("Build configuration: {:#?}", config);
 
     let goodies = GoodieDatabase::new()?;
@@ -526,7 +535,7 @@ async fn main() -> anyhow::Result<()> {
         // Compile the Standard Libraries (Unix)
         for entry in std_libs.read_dir()? {
             let entry = entry?;
-            let target = entry.path().join(paths.version.to_string());
+            let target = entry.path().join(paths.triple.version.to_string());
             enso.compile_lib(target)?.run_ok().await?;
         }
 
@@ -571,10 +580,10 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Compress the built artifacts for upload
-    let output_archive = paths.engine.root.join(&paths.engine.name).append_extension("zip");
+    let output_archive = paths.engine.root.join(&paths.engine.name).with_appended_extension("zip");
     // The artifacts are compressed before upload to work around an error with long path handling in
     // the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
-    SevenZip.pack_cmd(&output_archive, once("*"))?.current_dir(&paths.engine.root).run_ok().await?;
+    SevenZip.add_cmd(&output_archive, once("*"))?.current_dir(&paths.engine.root).run_ok().await?;
 
     let schema_dir =
         paths.repo_root.join_many(["engine", "language-server", "src", "main", "schema"]);
@@ -585,30 +594,144 @@ async fn main() -> anyhow::Result<()> {
 
     if config.mode == BuildMode::NightlyRelease {
         // Make packages.
+        let packages = create_packages(&paths).await?;
 
-        if paths.launcher.root.exists() {
-            println!("Packaging launcher.");
-            package_component(&paths.launcher).await?;
-            // IO.createDirectories(
-            //     Seq("dist", "config", "runtime").map(root / "enso" / _)
-            // )
+        // Launcher bundle
+        let bundles = create_bundles(&paths).await?;
+
+        let changelog_path = enso_root.join_many(["app", "gui", "CHANGELOG.md"]);
+        let release_notes = extract_release_notes(changelog_path).await?;
+
+        let client = ide_ci::github::create_client(std::env::var("GITHUB_TOKEN").unwrap())?;
+        let repo = RepoContext { owner: "enso-org".into(), name: "ci-build".into() };
+
+        let release_name = format!("Enso {}", paths.triple.version);
+        let release = repo
+            .repos(&octocrab)
+            .releases()
+            .create(&release_name)
+            .body(&release_notes)
+            .send()
+            .await?;
+
+        let client = ide_ci::github::create_client(retrieve_pat()?)?;
+        for bundle in bundles {
+            ide_ci::github::release::upload_asset(&repo, &client, release.id, bundle).await?;
         }
-
-        if paths.engine.root.exists() {
-            println!("Packaging engine.");
-            package_component(&paths.engine).await?;
-        }
-
-        sbt.call_arg("makeBundles").await?;
-
-        let release_notes =
-            extract_release_notes(enso_root.join_many(["app", "gui", "CHANGELOG.md"])).await?;
     }
 
     Ok(())
 }
 
-pub async fn package_component(paths: &ComponentPaths) -> Result {
+pub async fn create_packages(paths: &Paths) -> Result<Vec<PathBuf>> {
+    let mut ret = Vec::new();
+    if paths.launcher.root.exists() {
+        println!("Packaging launcher.");
+        ret.push(package_component(&paths.launcher).await?);
+        // IO.createDirectories(
+        //     Seq("dist", "config", "runtime").map(root / "enso" / _)
+        // )
+    }
+
+    if paths.engine.root.exists() {
+        println!("Packaging engine.");
+        ret.push(package_component(&paths.engine).await?);
+    }
+    Ok(ret)
+}
+
+#[context("Placing a GraalVM package under {}", target_directory.as_ref().display())]
+pub fn place_graal_under(target_directory: impl AsRef<Path>) -> Result {
+    let graal_path = PathBuf::from(ide_ci::env::expect_var_os("JAVA_HOME")?);
+    ide_ci::io::copy_to(&graal_path, target_directory.as_ref())
+}
+
+#[context("Placing a Enso Engine package in {}", target_engine_dir.as_ref().display())]
+pub fn place_component_at(
+    engine_paths: &ComponentPaths,
+    target_engine_dir: impl AsRef<Path>,
+) -> Result {
+    ide_ci::io::copy(&engine_paths.dir, &target_engine_dir)
+}
+
+#[async_trait]
+trait ComponentPathExt {
+    async fn pack(&self) -> Result;
+    fn clear(&self) -> Result;
+}
+
+#[async_trait]
+impl ComponentPathExt for ComponentPaths {
+    async fn pack(&self) -> Result {
+        SevenZip.pack(&self.artifact_archive, [&self.dir]).await
+    }
+    fn clear(&self) -> Result {
+        ide_ci::io::remove_dir_if_exists(&self.root)?;
+        ide_ci::io::remove_file_if_exists(&self.artifact_archive)
+    }
+}
+
+pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
+    let engine_bundle =
+        ComponentPaths::new(&paths.build_dist_root, "enso-bundle", "enso", &paths.triple);
+    engine_bundle.clear()?;
+    ide_ci::io::copy(&paths.launcher.root, &engine_bundle.root)?;
+    // Copy engine into the bundle.
+    let bundled_engine_dir = engine_bundle.dir.join("dist").join(paths.triple.version.to_string());
+    place_component_at(&paths.engine, &bundled_engine_dir)?;
+    place_graal_under(engine_bundle.dir.join("runtime"))?;
+    engine_bundle.pack().await?;
+
+    // Project manager bundle.
+    let pm_bundle = ComponentPaths::new(
+        &paths.build_dist_root,
+        "project-manager-bundle",
+        "enso",
+        &paths.triple,
+    );
+    pm_bundle.clear()?;
+    ide_ci::io::copy(&paths.project_manager.root, &pm_bundle.root)?;
+    place_component_at(&paths.engine, &bundled_engine_dir)?;
+    place_graal_under(pm_bundle.dir.join("runtime"))?;
+    ide_ci::io::copy(
+        paths.repo_root.join_many(["distribution", "enso.bundle.template"]),
+        pm_bundle.dir.join(".enso.bundle"),
+    )?;
+    pm_bundle.pack().await?;
+
+    Ok(vec![engine_bundle.artifact_archive, pm_bundle.artifact_archive])
+
+    // TODO similar for the Project Manager
+
+    /*
+      val pm = builtArtifact("project-manager", os, arch)
+      if (pm.exists()) {
+        if (os.isUNIX) {
+          makeExecutable(pm / "enso" / "bin" / "project-manager")
+        }
+
+        copyEngine(os, arch, pm / "enso" / "dist")
+        copyGraal(os, arch, pm / "enso" / "runtime")
+
+        IO.copyFile(
+          file("distribution/enso.bundle.template"),
+          pm / "enso" / ".enso.bundle"
+        )
+
+        val archive = builtArchive("project-manager", os, arch)
+        makeArchive(pm, "enso", archive)
+
+        cleanDirectory(pm / "enso" / "dist")
+        cleanDirectory(pm / "enso" / "runtime")
+
+        log.info(s"Created $archive")
+      }
+    }
+
+      */
+}
+
+pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
     #[cfg(not(target_os = "windows"))]
     {
         let pattern =
@@ -617,7 +740,9 @@ pub async fn package_component(paths: &ComponentPaths) -> Result {
             ide_ci::io::allow_owner_execute(binary?);
         }
     }
-    ide_ci::programs::SevenZip.pack(&paths.artifact_archive, [&paths.root]).await
+
+    ide_ci::programs::SevenZip.pack(&paths.artifact_archive, [&paths.root]).await?;
+    Ok(paths.artifact_archive.clone())
 }
 
 pub async fn extract_release_notes(changelog_file: impl AsRef<Path>) -> Result<String> {
@@ -678,6 +803,8 @@ mod tests {
 
     use enso_build::postgres::process_lines;
     use ide_ci::extensions::path::PathExt;
+    use ide_ci::github::release::upload_asset;
+    use ide_ci::models::config::RepoContext;
     use ide_ci::programs::git::Git;
     use ide_ci::programs::Cmd;
     use std::time::Duration;
@@ -687,28 +814,31 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn just_debugging_things() -> Result {
-        // if config.mode == BuildMode::NightlyRelease {
-        //     sbt.call_arg("makePackages").await?;
-        //     sbt.call_arg("makeBundles").await?;
-        // }
+        let enso_root = r"H:\NBO\enso";
+        let octocrab = setup_octocrab()?;
+        let repo = RepoContext { owner: "enso-org".into(), name: "ci-build".into() };
+        let versions =
+            enso_build::preflight_check::generate_nightly_version(&octocrab, &enso_root, &repo)
+                .await?;
+        let paths = Paths::new_version(&enso_root, versions.engine)?;
+        dbg!(&paths);
 
-        let enso_root = r"H:\NBO\enso2";
-        dbg!(get_fragile_files(enso_root));
+        paths.emit_env_to_actions()?;
 
-        let sbt = WithCwd::new(Sbt, &enso_root);
-        for _ in 0..3 {
-            clear_fragile_files(enso_root)?;
-            sbt.call_arg("compile").await?;
+        // create_packages(&paths).await?;
+
+        // Launcher bundle
+        let bundles = create_bundles(&paths).await?;
+
+        let client = ide_ci::github::create_client(std::env::var("GITHUB_TOKEN").unwrap())?;
+        let repo = RepoContext { owner: "enso-org".into(), name: "ci-build".into() };
+        let release =
+            repo.repos(&octocrab).releases().create(&Uuid::new_v4().to_string()).send().await?;
+
+        for bundle in bundles {
+            upload_asset(&repo, &client, release.id, bundle).await?;
         }
 
-        Ok(())
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn download_stuff() -> Result {
-        let enso_root = r"H:\NBO\enso";
-        clear_fragile_files(enso_root)?;
         Ok(())
     }
 
@@ -719,7 +849,7 @@ mod tests {
         let mut output_archive = paths.engine.dir.join(&paths.engine.name);
         // The artifacts are compressed before upload to work around an error with long path
         // handling in the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
-        output_archive = output_archive.append_extension("zip");
+        output_archive = output_archive.with_appended_extension("zip");
         println!("{}", output_archive.display());
         Ok(())
     }

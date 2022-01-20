@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use std::fmt::Formatter;
 
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
@@ -10,18 +11,28 @@ const ARCHIVE_EXTENSION: &str = match TARGET_OS {
 
 #[derive(Clone, Debug)]
 pub struct ComponentPaths {
+    // e.g. `enso-engine-0.0.0-SNAPSHOT.2022-01-19-windows-amd64`
     pub name:             PathBuf,
+    // e.g. H:\NBO\enso\built-distribution\enso-engine-0.0.0-SNAPSHOT.2022-01-19-windows-amd64
     pub root:             PathBuf,
+    // e.g. H:\NBO\enso\built-distribution\enso-engine-0.0.0-SNAPSHOT.2022-01-19-windows-amd64\
+    // enso-0.0.0-SNAPSHOT.2022-01-19
     pub dir:              PathBuf,
+    // e.g. H:\NBO\enso\built-distribution\enso-engine-0.0.0-SNAPSHOT.2022-01-19-windows-amd64.zip
     pub artifact_archive: PathBuf,
 }
 
 impl ComponentPaths {
-    pub fn new(build_root: &Path, name_prefix: &str, dirname: &str, triple: &str) -> Self {
+    pub fn new(
+        build_root: &Path, // e.g. H:\NBO\enso\built-distribution
+        name_prefix: &str,
+        dirname: &str,
+        triple: &TargetTriple,
+    ) -> Self {
         let name = PathBuf::from(iformat!("{name_prefix}-{triple}"));
         let root = build_root.join(&name);
         let dir = root.join(dirname);
-        let artifact_archive = root.with_extension(ARCHIVE_EXTENSION);
+        let artifact_archive = root.with_appended_extension(ARCHIVE_EXTENSION);
         Self { name, root, dir, artifact_archive }
     }
 
@@ -38,6 +49,39 @@ impl ComponentPaths {
 }
 
 #[derive(Clone, Debug)]
+pub struct TargetTriple {
+    pub os:      OS,
+    pub arch:    Arch,
+    pub version: Version,
+}
+
+impl TargetTriple {
+    pub fn new(version: Version) -> Self {
+        Self { os: TARGET_OS, arch: TARGET_ARCH, version }
+    }
+
+
+    /// Pretty prints architecture for our packages. Conform to GraalVM scheme as well.
+    pub fn arch(&self) -> &'static str {
+        match self.arch {
+            Arch::X86_64 => "amd64",
+            Arch::AArch64 if self.os == OS::MacOS => {
+                // No Graal packages for Apple Silicon.
+                "amd64"
+            }
+            Arch::AArch64 => "aarch64",
+            _ => panic!("Unrecognized architecture {}", self.arch),
+        }
+    }
+}
+
+impl Display for TargetTriple {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}-{}", self.version, self.os, self.arch())
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Paths {
     pub repo_root:       PathBuf,
     pub build_dist_root: PathBuf,
@@ -45,7 +89,7 @@ pub struct Paths {
     pub launcher:        ComponentPaths,
     pub engine:          ComponentPaths,
     pub project_manager: ComponentPaths,
-    pub version:         Version,
+    pub triple:          TargetTriple,
     /* graal_dist_name: PathBuf,
      * graal_dist_root: PathBuf, */
 }
@@ -56,25 +100,16 @@ impl Paths {
         let build_sbt = repo_root.join("build.sbt");
         let build_sbt_contents = std::fs::read_to_string(build_sbt)?;
         let version = crate::get_enso_version(&build_sbt_contents)
-            .unwrap_or(Version::parse("0.2.32-SNAPSHOT").unwrap());
+            .unwrap_or(Version::parse("0.0.0-LOCAL").unwrap());
         Self::new_version(repo_root, version)
     }
 
     pub fn new_version(repo_root: impl Into<PathBuf>, version: Version) -> Result<Self> {
         let repo_root: PathBuf = repo_root.into().absolutize()?.into();
-        // let build_sbt = repo_root.join("build.sbt");
-        // let build_sbt_contents = std::fs::read_to_string(build_sbt)?;
-        // let version = crate::get_enso_version(&build_sbt_contents)?;
         let build_dist_root = repo_root.join("built-distribution");
         let target = repo_root.join("target");
-        let arch = match TARGET_ARCH {
-            Arch::X86_64 => "amd64",
-            Arch::AArch64 if TARGET_OS == OS::MacOS => "amd64", /* No Graal packages for Apple */
-            // Silicon.
-            Arch::AArch64 => "aarch64",
-            _ => panic!("Unrecognized architecture {}", TARGET_ARCH),
-        };
-        let triple = format!("{}-{}-{}", version, TARGET_OS, arch);
+
+        let triple = TargetTriple::new(version.clone());
         let launcher = ComponentPaths::new(&build_dist_root, "enso-launcher", "enso", &triple);
         let engine = ComponentPaths::new(
             &build_dist_root,
@@ -84,10 +119,12 @@ impl Paths {
         );
         let project_manager =
             ComponentPaths::new(&build_dist_root, "enso-project-manager", "enso", &triple);
-        Ok(Paths { repo_root, build_dist_root, target, launcher, engine, project_manager, version })
+        Ok(Paths { repo_root, build_dist_root, target, launcher, engine, project_manager, triple })
     }
 
-    pub fn emit_to_actions(&self) -> Result {
+    /// Sets the environment variables in the current process and in GitHub Actions Runner (if being
+    /// run in its environment), so future steps of the job also have access to them.
+    pub fn emit_env_to_actions(&self) -> Result {
         let components = [
             ("ENGINE", &self.engine),
             ("LAUNCHER", &self.launcher),

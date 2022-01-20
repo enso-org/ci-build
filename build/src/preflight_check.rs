@@ -6,8 +6,8 @@ use octocrab::models::repos::Release;
 use semver::Prerelease;
 use std::collections::BTreeSet;
 
-const OWNER: &str = "enso-org";
-const REPO: &str = "enso"; // FIXME
+// const OWNER: &str = "enso-org";
+// const REPO: &str = "enso"; // FIXME
 const MAX_PER_PAGE: u8 = 100;
 const NIGHTLY_RELEASE_TITLE_INFIX: &str = "Nightly";
 
@@ -22,8 +22,11 @@ pub fn is_nightly(release: &Release) -> bool {
         && release.name.as_ref().map_or(false, |name| name.contains(NIGHTLY_RELEASE_TITLE_INFIX))
 }
 
-pub async fn nightly_releases(octocrab: &Octocrab) -> Result<Vec<Release>> {
-    let repo = octocrab.repos(OWNER, REPO);
+pub async fn nightly_releases(
+    octocrab: &Octocrab,
+    repo: &impl RepoPointer,
+) -> Result<Vec<Release>> {
+    let repo = repo.repos(octocrab);
     let page = repo.releases().list().per_page(MAX_PER_PAGE).send().await?;
     // TODO: rate limit?
     let releases = octocrab.all_pages(page).await?.into_iter().filter(is_nightly);
@@ -108,14 +111,20 @@ pub fn prepare_version(
     unreachable!()
 }
 
-pub async fn prepare_nightly(octocrab: &Octocrab, repo_path: impl AsRef<Path>) -> Result<Versions> {
+pub async fn generate_nightly_version(
+    octocrab: &Octocrab,
+    repo_path: &impl AsRef<Path>,
+    repo: &impl RepoPointer,
+) -> Result<Versions> {
     let repo_path = repo_path.as_ref();
     let git = Git::new(&repo_path);
-    let nightlies = nightly_releases(&octocrab).await?;
+    let nightlies = nightly_releases(&octocrab, repo).await?;
 
     let proceed = check_proceed(&git.head_hash().await?, &nightlies);
     ide_ci::actions::workflow::set_output("proceed", proceed);
-    if proceed {
+
+    if true {
+        // FIXME
         let date = chrono::Utc::now();
         let versions = prepare_version(date, &repo_path, &nightlies)?;
         ide_ci::actions::workflow::set_output("nightly-version", &versions.engine);
@@ -129,22 +138,6 @@ pub async fn prepare_nightly(octocrab: &Octocrab, repo_path: impl AsRef<Path>) -
         bail!("Decided not to proceed with the build.")
     }
 }
-// async function main() {
-//     const nightlies = await github.fetchNightlies()
-//     const shouldProceed = checkProceed(nightlies)
-//     setProceed(shouldProceed)
-//     if (shouldProceed) {
-//         const versions = prepareVersions(nightlies)
-//         setVersionString(versions.version)
-//         setEditionName(versions.edition)
-//     }
-// }
-//
-// main().catch(err => {
-//     console.error(err)
-//     process.exit(1)
-// })
-
 
 #[cfg(test)]
 mod tests {

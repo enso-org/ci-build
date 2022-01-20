@@ -5,6 +5,7 @@ use octocrab::models::repos::Release;
 const MAX_PER_PAGE: u8 = 100;
 
 pub mod model;
+pub mod release;
 
 /// Entity that uniquely identifies a GitHub-hosted repository.
 #[async_trait]
@@ -120,4 +121,17 @@ pub async fn latest_runner_url(octocrab: &Octocrab, os: OS) -> anyhow::Result<Ur
 pub async fn fetch_runner(octocrab: &Octocrab, os: OS, output_dir: impl AsRef<Path>) -> Result {
     let url = latest_runner_url(octocrab, os).await?;
     crate::io::download_and_extract(url, output_dir).await
+}
+
+/// Sometimes octocrab is just not enough.
+///
+/// Client has set the authorization header.
+pub fn create_client(pat: impl AsRef<str>) -> Result<reqwest::Client> {
+    let mut header_map = reqwest::header::HeaderMap::new();
+    header_map.append(reqwest::header::AUTHORIZATION, format!("Bearer {}", pat.as_ref()).parse()?);
+    reqwest::Client::builder()
+        .user_agent("enso-build")
+        .default_headers(header_map)
+        .build()
+        .anyhow_err()
 }

@@ -66,7 +66,7 @@ impl ExecutionError {
 }
 
 impl SevenZip {
-    pub fn pack_cmd<P: AsRef<OsStr>>(
+    pub fn add_cmd<P: AsRef<OsStr>>(
         &self,
         output_archive: impl AsRef<OsStr>,
         paths_to_pack: impl IntoIterator<Item = P>,
@@ -80,13 +80,22 @@ impl SevenZip {
         Ok(cmd)
     }
 
+    /// Removes the old archive under output path if it was present.
     pub async fn pack<P: AsRef<OsStr>>(
         &self,
         output_archive: impl AsRef<OsStr>,
         paths_to_pack: impl IntoIterator<Item = P>,
     ) -> Result {
         crate::io::remove_if_exists(output_archive.as_ref())?;
-        self.pack_cmd(output_archive, paths_to_pack)?.run_ok().await
+        self.add(output_archive, paths_to_pack).await
+    }
+
+    pub async fn add<P: AsRef<OsStr>>(
+        &self,
+        output_archive: impl AsRef<OsStr>,
+        paths_to_pack: impl IntoIterator<Item = P>,
+    ) -> Result {
+        self.add_cmd(output_archive, paths_to_pack)?.run_ok().await
     }
 
     pub fn unpack_cmd(
