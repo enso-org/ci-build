@@ -29,6 +29,11 @@ jobs:
     runs-on: ${{ github.event.inputs.target }}
 
     steps:
+      - run: echo "foo content" > foo.txt
+      - uses: actions/upload-artifact@v2
+        with:
+          name: foo-artifact
+          path: foo.txt
       - uses: jannekem/run-python-script-action@v1
         with:
           script: |
