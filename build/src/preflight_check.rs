@@ -8,8 +8,8 @@ use std::collections::BTreeSet;
 
 // const OWNER: &str = "enso-org";
 // const REPO: &str = "enso"; // FIXME
-const MAX_PER_PAGE: u8 = 100;
-const NIGHTLY_RELEASE_TITLE_INFIX: &str = "Nightly";
+pub const MAX_PER_PAGE: u8 = 100;
+pub const NIGHTLY_RELEASE_TITLE_INFIX: &str = "Nightly";
 
 pub struct PreflightCheckOutput {
     pub proceed:         bool,
@@ -98,7 +98,7 @@ pub fn prepare_version(
 
     for index in 0.. {
         let nightly = generate_nightly_identifier(index);
-        let prerelease_text = format!("SNAPSHOT.{}", nightly);
+        let prerelease_text = format!("nightly.{}", nightly);
         let pre = Prerelease::new(&prerelease_text)?;
         if !relevant_nightly_versions.contains(&pre) {
             let edition = format!("nightly-{}", nightly);

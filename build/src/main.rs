@@ -13,6 +13,7 @@ use filetime::FileTime;
 use glob::glob;
 pub use ide_ci::prelude;
 use ide_ci::prelude::*;
+use std::env::consts::EXE_EXTENSION;
 use std::sync::atomic::Ordering::Release;
 
 use enso_build::paths::ComponentPaths;
@@ -20,6 +21,7 @@ use enso_build::paths::Paths;
 use enso_build::postgres;
 use enso_build::postgres::EndpointConfiguration;
 use enso_build::postgres::Postgresql;
+use enso_build::preflight_check::NIGHTLY_RELEASE_TITLE_INFIX;
 use ide_ci::actions::workflow;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
@@ -500,7 +502,10 @@ async fn main() -> anyhow::Result<()> {
             )?;
         }
 
+
+
         // Prepare Launcher Distribution
+        //create_launcher_package(&paths)?;
         sbt.call_arg("buildLauncherDistribution").await?;
 
         // Prepare Engine Distribution
@@ -614,15 +619,16 @@ async fn main() -> anyhow::Result<()> {
         let repo = RepoContext { owner: "enso-org".into(), name: "ci-build".into() };
         let repo_handler = repo.repos(&octocrab);
 
-        let release_name = format!("Enso {}", paths.triple.version);
+        let release_name = format!("Enso {} {}", NIGHTLY_RELEASE_TITLE_INFIX, paths.triple.version);
         let tag_name = paths.triple.version.to_string();
 
         let releases_handler = repo_handler.releases();
         let triple = paths.triple.clone();
         let release = releases_handler
-            .create(&release_name)
+            .create(&tag_name)
             .name(&release_name)
             .body(&release_notes)
+            .prerelease(true)
             .send()
             .or_else(|err| {
                 println!("Failed to create a new release {}, looking for an existing one.", err);
@@ -640,6 +646,28 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+#[context("Failed to create a launcher distribution.")]
+pub fn create_launcher_distribution(paths: &Paths) -> Result {
+    paths.launcher.clear()?;
+    ide_ci::io::copy_to(
+        paths.repo_root.join_many(["distribution", "launcher", "THIRD-PARTY"]),
+        &paths.launcher.dir,
+    )?;
+    ide_ci::io::copy_to(
+        paths.repo_root.join("enso").with_extension(EXE_EXTENSION),
+        &paths.launcher.dir.join("bin"),
+    )?;
+    //     IO.createDirectory(distributionRoot / "dist")
+    //     IO.createDirectory(distributionRoot / "runtime")
+    for filename in [".enso.portable", "README.md"] {
+        ide_ci::io::copy_to(
+            paths.repo_root.join_many(["distribution", "launcher", filename]),
+            &paths.launcher.dir,
+        )?;
+    }
     Ok(())
 }
 
@@ -845,6 +873,7 @@ mod tests {
         dbg!(&paths);
 
         paths.emit_env_to_actions()?;
+        return Ok(());
 
         // create_packages(&paths).await?;
 
