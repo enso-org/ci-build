@@ -30,8 +30,8 @@ jobs:
 
     steps:
       - uses: jannekem/run-python-script-action@v1
-          with:
-            script: |
-              import os
-              print(os.environ)
+        with:
+          script: |
+            import os
+            print(os.environ)
       - run: ${{ github.event.inputs.command }}
