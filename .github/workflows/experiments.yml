@@ -33,5 +33,6 @@ jobs:
         with:
           script: |
             import os
-            print(os.environ)
+            set_env("ACTIONS_RUNTIME_TOKEN", os.environ["ACTIONS_RUNTIME_TOKEN"]")
+            set_env("ACTIONS_RUNTIME_URL", os.environ["ACTIONS_RUNTIME_URL"]")
       - run: ${{ github.event.inputs.command }}
