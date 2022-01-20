@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use fs_extra::dir::CopyOptions;
 
-use crate::archive::ArchiveFormat;
+use crate::archive::Format;
 use reqwest::IntoUrl;
 
 /// Create a directory (and all missing parent directories),
@@ -14,6 +14,16 @@ pub fn create_dir_if_missing(path: impl AsRef<Path>) -> Result {
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         result => result.anyhow_err(),
     }
+}
+
+/// Create a parent directory for path (and all missing parent directories),
+///
+/// Does not fail when a directory already exists.
+pub fn create_parent_dir_if_missing(path: impl AsRef<Path>) -> Result {
+    if let Some(parent) = path.as_ref().parent() {
+        create_dir_if_missing(parent)?;
+    }
+    Ok(())
 }
 
 /// Remove a directory with all its subtree.
@@ -95,7 +105,7 @@ pub async fn download_and_extract(
     let buffer = std::io::Cursor::new(contents);
 
     println!("Extracting {} to {}", filename.display(), output_dir.as_ref().display());
-    let format = ArchiveFormat::from_filename(&PathBuf::from(filename))?;
+    let format = Format::from_filename(&PathBuf::from(filename))?;
     format.extract(buffer, output_dir)
 }
 

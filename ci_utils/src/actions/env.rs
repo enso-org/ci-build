@@ -10,6 +10,14 @@ pub fn runner_name() -> Result<String> {
     crate::env::expect_var(RUNNER_NAME_VAR)
 }
 
+pub fn is_self_hosted() -> bool {
+    if let Ok(name) = runner_name() {
+        name.starts_with("GitHub Actions")
+    } else {
+        false
+    }
+}
+
 pub fn repository() -> Result<RepoContext> {
     let var_name = "GITHUB_REPOSITORY";
     let repo = crate::env::expect_var(var_name)?; // e.g. "octocat/Hello-World"

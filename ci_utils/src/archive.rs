@@ -1,34 +1,44 @@
 use crate::prelude::*;
+use std::process::Stdio;
 
 use crate::io::create_dir_if_missing;
+use crate::programs;
+use crate::programs::tar::Compression;
+use crate::programs::tar::Tar;
+use crate::programs::SevenZip;
 
 /// Archive formats that we handle.
 #[derive(Copy, Clone, Debug)]
-pub enum ArchiveFormat {
-    TarGz,
+pub enum Format {
     Zip,
+    SevenZip,
+    Tar(Option<programs::tar::Compression>),
 }
 
-impl ArchiveFormat {
+impl Format {
     /// Deduce the archive format from a given filename.
-    pub fn from_filename(filename: &Path) -> anyhow::Result<Self> {
-        let extension = filename
-            .extension()
-            .ok_or_else(|| anyhow!("Cannot get extension of file {}", filename.display()))?;
-        if extension == "zip" {
-            Ok(ArchiveFormat::Zip)
-        } else if extension == "gz" {
-            let pre_extension =
-                filename.file_stem().map(Path::new).and_then(|stem| stem.extension());
-            if pre_extension.contains(&"tar") {
-                Ok(ArchiveFormat::TarGz)
-            } else {
-                Err(anyhow!("Expecting tar archive to be compressed with GZ!"))
+    pub fn from_filename(filename: impl AsRef<Path>) -> Result<Self> {
+        let filename = filename.as_ref();
+        let extension =
+            filename.extension().ok_or_else(|| anyhow!("The path had no extension."))?;
+        match extension.to_str().unwrap() {
+            "zip" => Ok(Format::Zip),
+            "7z" => Ok(Format::SevenZip),
+            "tgz" => Ok(Format::Tar(Some(programs::tar::Compression::Gzip))),
+            "txz" => Ok(Format::Tar(Some(programs::tar::Compression::Xz))),
+            other => {
+                if let Ok(compression) = programs::tar::Compression::deduce_from_extension(other) {
+                    let secondary_extension =
+                        filename.file_stem().map(Path::new).and_then(Path::extension);
+                    if secondary_extension == Some(OsStr::new("tar")) {
+                        Ok(Format::Tar(Some(compression)))
+                    } else {
+                        bail!("Extension `.{}` looks like a tar compression, but there is no `.tar.` component in the name", other)
+                    }
+                } else {
+                    bail!("Unrecognized archive extension `{}`.", other)
+                }
             }
-        } else if extension == "tgz" {
-            Ok(ArchiveFormat::TarGz)
-        } else {
-            Err(anyhow!("Cannot deduce archive format for file {}", filename.display()))
         }
     }
 
@@ -40,16 +50,40 @@ impl ArchiveFormat {
     ) -> anyhow::Result<()> {
         create_dir_if_missing(&output_dir)?;
         match self {
-            ArchiveFormat::Zip => {
+            Format::Zip => {
                 let mut archive = zip::ZipArchive::new(compressed_data)?;
                 archive.extract(output_dir)?;
             }
-            ArchiveFormat::TarGz => {
+            Format::Tar(Some(Compression::Gzip)) => {
                 let tar_stream = flate2::read::GzDecoder::new(compressed_data);
                 let mut archive = tar::Archive::new(tar_stream);
                 archive.unpack(output_dir)?;
             }
+            // Format::SevenZip => {
+            //     let mut cmd = SevenZip.unpack_from_stdin_cmd(output_dir)?;
+            //     cmd.stdin(Stdio::piped());
+            //     let mut child = cmd.as_std().clone().spawn()?;
+            //     //let child = cmd.spawn_nicer()?;
+            //     let mut stdin =
+            //         child.stdin.ok_or_else(|| anyhow!("Failed to get 7z stdin handle"))?;
+            //     std::io::copy(&mut compressed_data, &mut stdin)?;
+            //     drop(stdin);
+            //     child.wait()?.exit_ok()?;
+            // }
+            _ => todo!("Not supported!"),
         }
         Ok(())
+    }
+}
+
+
+pub async fn create(
+    output_archive: impl AsRef<Path>,
+    paths_to_pack: impl IntoIterator<Item: AsRef<Path>>,
+) -> Result {
+    let format = Format::from_filename(&output_archive)?;
+    match format {
+        Format::Zip | Format::SevenZip => SevenZip.pack(output_archive, paths_to_pack).await,
+        Format::Tar(_) => Tar.pack(output_archive, paths_to_pack).await,
     }
 }

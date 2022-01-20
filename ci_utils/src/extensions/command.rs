@@ -15,7 +15,7 @@ pub trait CommandExt {
     fn describe(&self) -> String;
 }
 
-impl CommandExt for Command {
+impl CommandExt for tokio::process::Command {
     fn run_ok(&mut self) -> BoxFuture<'static, Result<()>> {
         let pretty = self.describe();
         println!("Will run: {}", pretty);

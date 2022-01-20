@@ -14,7 +14,6 @@ use glob::glob;
 pub use ide_ci::prelude;
 use ide_ci::prelude::*;
 use std::env::consts::EXE_EXTENSION;
-use std::sync::atomic::Ordering::Release;
 
 use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
@@ -471,7 +470,7 @@ async fn main() -> anyhow::Result<()> {
             sbt.call_arg("runtime/clean; language-server/Benchmark/compile").await?;
 
             // Check Searcher Benchmark Compilation
-            sbt.call_arg("searcher/Benchmark/compile").await?;
+            sbt.call_arg("searcher/ /compile").await?;
         }
 
         // === Build Distribution ===
@@ -479,9 +478,6 @@ async fn main() -> anyhow::Result<()> {
         // FIXME looks like a copy-paste error
 
         if config.mode == BuildMode::Development {
-            sbt.call_arg("project-manager/assembly").await?;
-            sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
-
             // docs-generator fails on Windows because it can't understand non-Unix-style paths.
             if TARGET_OS != OS::Windows {
                 // Build the docs from standard library sources.
@@ -600,10 +596,12 @@ async fn main() -> anyhow::Result<()> {
 
     let schema_dir =
         paths.repo_root.join_many(["engine", "language-server", "src", "main", "schema"]);
-    ide_ci::io::copy_to(&schema_dir, paths.target.join("fbs-upload"))?;
-    ide_ci::programs::SevenZip
-        .pack(paths.target.join("fbs-upload/fbs-schema.zip"), once(schema_dir.join("*")))
-        .await?;
+    let schema_files = schema_dir.read_dir()?.map(|e| e.map(|e| e.path())).collect_result()?;
+    ide_ci::archive::create(paths.target.join("fbs-upload/fbs-schema.zip"), schema_files).await?;
+    // ide_ci::io::copy_to(&schema_dir, paths.target.join("fbs-upload"))?;
+    // ide_ci::programs::SevenZip
+    //     .pack(paths.target.join("fbs-upload/fbs-schema.zip"), once(schema_dir.join("*")))
+    //     .await?;
 
     use octocrab::models::repos::Release;
     if config.mode == BuildMode::NightlyRelease {
@@ -711,7 +709,7 @@ trait ComponentPathExt {
 #[async_trait]
 impl ComponentPathExt for ComponentPaths {
     async fn pack(&self) -> Result {
-        SevenZip.pack(&self.artifact_archive, [&self.dir]).await
+        ide_ci::archive::create(&self.artifact_archive, [&self.dir]).await
     }
     fn clear(&self) -> Result {
         ide_ci::io::remove_dir_if_exists(&self.root)?;
@@ -790,7 +788,7 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
         }
     }
 
-    ide_ci::programs::SevenZip.pack(&paths.artifact_archive, [&paths.root]).await?;
+    ide_ci::archive::create(&paths.artifact_archive, [&paths.root]).await?;
     Ok(paths.artifact_archive.clone())
 }
 
