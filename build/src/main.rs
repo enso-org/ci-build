@@ -1,3 +1,4 @@
+#![feature(async_closure)]
 #![feature(result_cloned)]
 #![feature(exit_status_error)]
 #![feature(generic_associated_types)]
@@ -12,6 +13,7 @@ use filetime::FileTime;
 use glob::glob;
 pub use ide_ci::prelude;
 use ide_ci::prelude::*;
+use std::sync::atomic::Ordering::Release;
 
 use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
@@ -201,7 +203,9 @@ pub async fn run_tests(paths: &Paths, ir_caches: IrCaches, async_policy: AsyncPo
         OS::Linux => {
             let runner_context_string =
                 ide_ci::actions::env::runner_name().unwrap_or_else(|_| Uuid::new_v4().to_string());
-            let container_name = format!("postgres-for-{}", runner_context_string);
+            // GH-hosted runners are named like "GitHub Actions 10". Spaces are not allowed in the
+            // container name.
+            let container_name = iformat!("postgres-for-{runner_context_string}").replace(' ', "_");
             let config = postgres::Configuration {
                 postgres_container: ContainerId(container_name),
                 database_name:      "enso_test_db".to_string(),
@@ -580,10 +584,14 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Compress the built artifacts for upload
-    let output_archive = paths.engine.root.join(&paths.engine.name).with_appended_extension("zip");
     // The artifacts are compressed before upload to work around an error with long path handling in
     // the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
-    SevenZip.add_cmd(&output_archive, once("*"))?.current_dir(&paths.engine.root).run_ok().await?;
+    paths.engine.pack().await?;
+    // let output_archive =
+    // paths.engine.root.join(&paths.engine.name).with_appended_extension("zip"); // The artifacts
+    // are compressed before upload to work around an error with long path handling in // the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
+    // SevenZip.add_cmd(&output_archive,
+    // once("*"))?.current_dir(&paths.engine.root).run_ok().await?;
 
     let schema_dir =
         paths.repo_root.join_many(["engine", "language-server", "src", "main", "schema"]);
@@ -592,6 +600,7 @@ async fn main() -> anyhow::Result<()> {
         .pack(paths.target.join("fbs-upload/fbs-schema.zip"), once(schema_dir.join("*")))
         .await?;
 
+    use octocrab::models::repos::Release;
     if config.mode == BuildMode::NightlyRelease {
         // Make packages.
         let packages = create_packages(&paths).await?;
@@ -602,17 +611,25 @@ async fn main() -> anyhow::Result<()> {
         let changelog_path = enso_root.join_many(["app", "gui", "CHANGELOG.md"]);
         let release_notes = extract_release_notes(changelog_path).await?;
 
-        let client = ide_ci::github::create_client(std::env::var("GITHUB_TOKEN").unwrap())?;
         let repo = RepoContext { owner: "enso-org".into(), name: "ci-build".into() };
+        let repo_handler = repo.repos(&octocrab);
 
         let release_name = format!("Enso {}", paths.triple.version);
-        let release = repo
-            .repos(&octocrab)
-            .releases()
+        let tag_name = paths.triple.version.to_string();
+
+        let releases_handler = repo_handler.releases();
+        let triple = paths.triple.clone();
+        let release = releases_handler
             .create(&release_name)
+            .name(&release_name)
             .body(&release_notes)
             .send()
+            .or_else(|err| {
+                println!("Failed to create a new release {}, looking for an existing one.", err);
+                releases_handler.get_by_tag(&tag_name)
+            })
             .await?;
+
 
         let client = ide_ci::github::create_client(retrieve_pat()?)?;
         for package in packages {
