@@ -615,6 +615,9 @@ async fn main() -> anyhow::Result<()> {
             .await?;
 
         let client = ide_ci::github::create_client(retrieve_pat()?)?;
+        for package in packages {
+            ide_ci::github::release::upload_asset(&repo, &client, release.id, package).await?;
+        }
         for bundle in bundles {
             ide_ci::github::release::upload_asset(&repo, &client, release.id, bundle).await?;
         }
