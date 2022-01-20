@@ -737,6 +737,7 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
 pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
     #[cfg(not(target_os = "windows"))]
     {
+        use std::env::consts::EXE_EXTENSION;
         let pattern =
             paths.dir.join_many(["bin", "*"]).with_extension(EXE_EXTENSION).display().to_string();
         for binary in glob::glob(&pattern)? {
