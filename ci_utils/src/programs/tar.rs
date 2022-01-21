@@ -1,3 +1,5 @@
+use std::vec::IntoIter;
+// use std::vec::IntoIter;
 use crate::prelude::*;
 
 use crate::archive::Format;
@@ -40,8 +42,8 @@ impl Display for Compression {
     }
 }
 
-impl Compression {
-    pub fn format_argument(&self) -> &str {
+impl AsRef<str> for Compression {
+    fn as_ref(&self) -> &str {
         match self {
             Compression::Bzip2 => "-j",
             Compression::Gzip => "-z",
@@ -51,20 +53,33 @@ impl Compression {
     }
 }
 
+impl AsRef<OsStr> for Compression {
+    fn as_ref(&self) -> &OsStr {
+        let str: &str = self.as_ref();
+        str.as_ref()
+    }
+}
+
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Switch {
     TargetFile(PathBuf),
     Verbose,
     UseFormat(Compression),
+    WorkingDir(PathBuf),
 }
 
-impl Switch {
-    fn format_arguments(&self) -> Vec<String> {
+impl<'a> IntoIterator for &'a Switch {
+    type Item = &'a OsStr;
+    type IntoIter = IntoIter<&'a OsStr>;
+
+    fn into_iter(self) -> Self::IntoIter {
         match self {
-            Switch::TargetFile(tgt) => vec!["-f".into(), tgt.to_string_lossy().into()],
-            Switch::Verbose => vec!["--verbose".into()],
-            Switch::UseFormat(compression) => vec![compression.format_argument().into()],
+            Switch::TargetFile(tgt) => vec!["-f".as_ref(), tgt.as_ref()],
+            Switch::Verbose => vec!["--verbose".as_ref()],
+            Switch::UseFormat(compression) => vec![compression.as_ref()],
+            Switch::WorkingDir(dir) => vec!["--directory".as_ref(), dir.as_ref()],
         }
+        .into_iter()
     }
 }
 
@@ -76,14 +91,21 @@ pub enum Command {
     List,
 }
 
-impl Command {
-    fn format_argument(&self) -> &str {
+impl AsRef<str> for Command {
+    fn as_ref(&self) -> &str {
         match self {
             Command::Append => "-r",
             Command::Create => "-c",
             Command::Extract => "-x",
             Command::List => "-t",
         }
+    }
+}
+
+impl AsRef<OsStr> for Command {
+    fn as_ref(&self) -> &OsStr {
+        let str: &str = self.as_ref();
+        str.as_ref()
     }
 }
 
@@ -102,16 +124,39 @@ impl Tar {
         paths_to_pack: impl IntoIterator<Item = P>,
     ) -> Result<crate::prelude::Command> {
         let mut cmd = self.cmd()?;
-        cmd.arg(Command::Create.format_argument());
+        cmd.arg(Command::Create);
 
         if let Ok(Format::Tar(Some(compression))) = Format::from_filename(&output_archive) {
-            cmd.args(Switch::UseFormat(compression).format_arguments());
+            cmd.args(&Switch::UseFormat(compression));
         }
 
-        cmd.args(Switch::TargetFile(output_archive.as_ref().into()).format_arguments());
-        for path_to_pack in paths_to_pack {
-            cmd.arg(path_to_pack.as_ref());
+        cmd.args(&Switch::TargetFile(output_archive.as_ref().into()));
+
+        let mut paths: Vec<PathBuf> =
+            paths_to_pack.into_iter().map(|path| path.as_ref().to_owned()).collect();
+
+        match paths.as_slice() {
+            [dir] if dir.is_dir() => {
+                cmd.args(&Switch::WorkingDir(dir.to_owned()));
+                cmd.arg(".");
+            }
+            _ => {
+                todo!("")
+            } /* paths => {
+               *     if let Some(parent) = output_archive.as_ref().parent() {
+               *         cmd.arg(Switch::WorkingDir(parent.to_owned()).format_arguments());
+               *         for path_to_pack in paths {
+               *             if path_to_pack.is_absolute() {
+               *                 pathdiff::diff_paths(parent, path_to_pack).ok_or_else(||
+               * anyhow!("failed to relativize paths {} {}", parent, path_to_pack))
+               *             }
+               *             cmd.arg(&path_to_pack);
+               *         },
+               *     }
+               * } */
         }
+
+
         Ok(cmd)
         // cmd_from_args![Command::Create, val [switches], output_archive.as_ref(), ref
         // [paths_to_pack]]

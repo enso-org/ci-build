@@ -19,11 +19,13 @@ pub fn create_dir_if_missing(path: impl AsRef<Path>) -> Result {
 /// Create a parent directory for path (and all missing parent directories),
 ///
 /// Does not fail when a directory already exists.
-pub fn create_parent_dir_if_missing(path: impl AsRef<Path>) -> Result {
+pub fn create_parent_dir_if_missing(path: impl AsRef<Path>) -> Result<PathBuf> {
     if let Some(parent) = path.as_ref().parent() {
         create_dir_if_missing(parent)?;
+        Ok(parent.into())
+    } else {
+        bail!("No parent directory for path {}", path.as_ref().display())
     }
-    Ok(())
 }
 
 /// Remove a directory with all its subtree.
