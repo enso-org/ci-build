@@ -458,8 +458,6 @@ pub struct ContainerId(pub String);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::program::shell::Recognized::Command;
-    use std::process::Stdio;
 
     #[tokio::test]
     #[ignore]
