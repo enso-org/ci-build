@@ -108,7 +108,7 @@ impl Tar {
             cmd.args(Switch::UseFormat(compression).format_arguments());
         }
 
-        cmd.arg(output_archive.as_ref());
+        cmd.args(Switch::TargetFile(output_archive.as_ref().into()).format_arguments());
         for path_to_pack in paths_to_pack {
             cmd.arg(path_to_pack.as_ref());
         }

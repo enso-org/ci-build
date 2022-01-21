@@ -32,7 +32,6 @@ use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::docker::ContainerId;
 use ide_ci::programs::git::Git;
 use ide_ci::programs::Sbt;
-use ide_ci::programs::SevenZip;
 use octocrab::OctocrabBuilder;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
@@ -594,7 +593,6 @@ async fn main() -> anyhow::Result<()> {
     //     .pack(paths.target.join("fbs-upload/fbs-schema.zip"), once(schema_dir.join("*")))
     //     .await?;
 
-    use octocrab::models::repos::Release;
     if config.mode == BuildMode::NightlyRelease {
         if ide_ci::actions::env::is_self_hosted() {
         } else {

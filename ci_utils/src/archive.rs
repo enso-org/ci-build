@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use std::process::Stdio;
 
 use crate::io::create_dir_if_missing;
 use crate::programs;
