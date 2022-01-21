@@ -138,7 +138,7 @@ impl Tar {
         match paths.as_slice() {
             [item] =>
                 if let Some(parent) = item.canonicalize()?.parent() {
-                    cmd.args(&Switch::WorkingDir(dir.to_owned()));
+                    cmd.args(&Switch::WorkingDir(parent.to_owned()));
                     cmd.arg(item.file_name().unwrap()); // None can happen only when path ends with
                                                         // ".." - that's why we canonicalize
                 },

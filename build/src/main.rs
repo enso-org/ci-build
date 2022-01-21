@@ -431,20 +431,24 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         };
-        // Compile
-        sbt.call_arg("compile").await?;
 
-        // Build the Runner & Runtime Uberjars
-        sbt.call_arg("runtime/clean; engine-runner/assembly").await?;
+        if ide_ci::actions::env::is_self_hosted() {
+            sbt.call_arg("runtime/clean; all buildLauncherDistribution buildEngineDistribution buildProjectManagerDistribution");
+        } else {
+            // Compile
+            sbt.call_arg("compile").await?;
 
-        // Build the Launcher Native Image
-        sbt.call_arg("launcher/assembly").await?;
-        sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
+            // Build the Runner & Runtime Uberjars
+            sbt.call_arg("runtime/clean; engine-runner/assembly").await?;
 
-        // Build the PM Native Image
-        sbt.call_arg("project-manager/assembly").await?;
-        sbt.call_args(["--mem", "1536", "project-manager/buildNativeImage"]).await?;
+            // Build the Launcher Native Image
+            sbt.call_arg("launcher/assembly").await?;
+            sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
 
+            // Build the PM Native Image
+            sbt.call_arg("project-manager/assembly").await?;
+            sbt.call_args(["--mem", "1536", "project-manager/buildNativeImage"]).await?;
+        }
         if config.test_scala {
             // Test Enso
             let test_result = sbt
