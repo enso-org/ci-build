@@ -414,113 +414,111 @@ async fn main() -> anyhow::Result<()> {
     dbg!(system.total_memory());
 
     // Build packages.
-    if true {
-        println!("Bootstrapping Enso project.");
-        sbt.call_arg("bootstrap").await?;
+    println!("Bootstrapping Enso project.");
+    sbt.call_arg("bootstrap").await?;
 
-        println!("Verifying the Stdlib Version.");
-        match config.mode {
-            BuildMode::Development => {
-                sbt.call_arg("stdlib-version-updater/run check").await?;
-            }
-            BuildMode::NightlyRelease => {
-                sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
-                if TARGET_OS != OS::Windows {
-                    // FIXME debug what is going on here
-                    sbt.call_arg("verifyLicensePackages").await?;
-                }
-            }
-        };
-
-        if system.total_memory() > 10_000_000 {
-            let build_stuff = Sbt::concurrent_tasks([
-                "engine-runner/assembly",
-                "launcher/buildNativeImage",
-                "project-manager/buildNativeImage",
-                "buildLauncherDistribution",
-                "buildEngineDistribution",
-                "buildProjectManagerDistribution",
-            ]);
-            sbt.call_arg(format!("runtime/clean; {}", build_stuff));
-        } else {
-            // Compile
-            sbt.call_arg("compile").await?;
-
-            // Build the Runner & Runtime Uberjars
-            sbt.call_arg("runtime/clean; engine-runner/assembly").await?;
-
-            // Build the Launcher Native Image
-            sbt.call_arg("launcher/assembly").await?;
-            sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
-
-            // Build the PM Native Image
-            sbt.call_arg("project-manager/assembly").await?;
-            sbt.call_args(["--mem", "1536", "project-manager/buildNativeImage"]).await?;
-
-            // Prepare Launcher Distribution
-            //create_launcher_package(&paths)?;
-            sbt.call_arg("buildLauncherDistribution").await?;
-
-            // Prepare Engine Distribution
-            sbt.call_arg("runtime/clean; buildEngineDistribution").await?;
-
-            // Prepare Project Manager Distribution
-            sbt.call_arg("buildProjectManagerDistribution").await?;
+    println!("Verifying the Stdlib Version.");
+    match config.mode {
+        BuildMode::Development => {
+            sbt.call_arg("stdlib-version-updater/run check").await?;
         }
-        if config.test_scala {
-            // Test Enso
-            let test_result = sbt
-                .call_arg("set Global / parallelExecution := false; runtime/clean; compile; test")
-                .await;
-            if let Err(err) = test_result {
-                workflow::Message {
-                    level: workflow::MessageLevel::Error,
-                    text:  iformat!("Tests failed: {err}"),
-                }
-            } else {
-                workflow::Message {
-                    level: workflow::MessageLevel::Notice,
-                    text:  iformat!("Tests were completed successfully."),
-                }
-            }
-            .send();
-        }
-
-        if config.benchmark_compilation {
-            // Check Runtime Benchmark Compilation
-            sbt.call_arg("runtime/clean; runtime/Benchmark/compile").await?;
-
-            // Check Language Server Benchmark Compilation
-            sbt.call_arg("runtime/clean; language-server/Benchmark/compile").await?;
-
-            // Check Searcher Benchmark Compilation
-            sbt.call_arg("searcher/Benchmark/compile").await?;
-        }
-
-        // === Build Distribution ===
-        // Build the Project Manager Native Image
-        // FIXME looks like a copy-paste error
-
-        if config.mode == BuildMode::Development {
-            // docs-generator fails on Windows because it can't understand non-Unix-style paths.
+        BuildMode::NightlyRelease => {
+            sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
             if TARGET_OS != OS::Windows {
-                // Build the docs from standard library sources.
-                sbt.call_arg("docs-generator/run").await?;
+                // FIXME debug what is going on here
+                sbt.call_arg("verifyLicensePackages").await?;
             }
         }
+    };
 
-        if config.build_js_parser {
-            // Build the Parser JS Bundle
-            // TODO do once across the build
-            // The builds are run on 3 platforms, but
-            // Flatbuffer schemas are platform agnostic, so they just need to be
-            // uploaded from one of the runners.
-            sbt.call_arg("syntaxJS/fullOptJS").await?;
-            ide_ci::io::copy_to(
-                paths.target.join("scala-parser.js"),
-                paths.target.join("parser-upload"),
-            )?;
+    if system.total_memory() > 10_000_000 {
+        let build_stuff = Sbt::concurrent_tasks([
+            "engine-runner/assembly",
+            "launcher/buildNativeImage",
+            "project-manager/buildNativeImage",
+            "buildLauncherDistribution",
+            "buildEngineDistribution",
+            "buildProjectManagerDistribution",
+        ]);
+        sbt.call_arg(format!("runtime/clean; {}", build_stuff)).await?;
+    } else {
+        // Compile
+        sbt.call_arg("compile").await?;
+
+        // Build the Runner & Runtime Uberjars
+        sbt.call_arg("runtime/clean; engine-runner/assembly").await?;
+
+        // Build the Launcher Native Image
+        sbt.call_arg("launcher/assembly").await?;
+        sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
+
+        // Build the PM Native Image
+        sbt.call_arg("project-manager/assembly").await?;
+        sbt.call_args(["--mem", "1536", "project-manager/buildNativeImage"]).await?;
+
+        // Prepare Launcher Distribution
+        //create_launcher_package(&paths)?;
+        sbt.call_arg("buildLauncherDistribution").await?;
+
+        // Prepare Engine Distribution
+        sbt.call_arg("runtime/clean; buildEngineDistribution").await?;
+
+        // Prepare Project Manager Distribution
+        sbt.call_arg("buildProjectManagerDistribution").await?;
+    }
+    if config.test_scala {
+        // Test Enso
+        let test_result = sbt
+            .call_arg("set Global / parallelExecution := false; runtime/clean; compile; test")
+            .await;
+        if let Err(err) = test_result {
+            workflow::Message {
+                level: workflow::MessageLevel::Error,
+                text:  iformat!("Tests failed: {err}"),
+            }
+        } else {
+            workflow::Message {
+                level: workflow::MessageLevel::Notice,
+                text:  iformat!("Tests were completed successfully."),
+            }
         }
+        .send();
+    }
+
+    if config.benchmark_compilation {
+        // Check Runtime Benchmark Compilation
+        sbt.call_arg("runtime/clean; runtime/Benchmark/compile").await?;
+
+        // Check Language Server Benchmark Compilation
+        sbt.call_arg("runtime/clean; language-server/Benchmark/compile").await?;
+
+        // Check Searcher Benchmark Compilation
+        sbt.call_arg("searcher/Benchmark/compile").await?;
+    }
+
+    // === Build Distribution ===
+    // Build the Project Manager Native Image
+    // FIXME looks like a copy-paste error
+
+    if config.mode == BuildMode::Development {
+        // docs-generator fails on Windows because it can't understand non-Unix-style paths.
+        if TARGET_OS != OS::Windows {
+            // Build the docs from standard library sources.
+            sbt.call_arg("docs-generator/run").await?;
+        }
+    }
+
+    if config.build_js_parser {
+        // Build the Parser JS Bundle
+        // TODO do once across the build
+        // The builds are run on 3 platforms, but
+        // Flatbuffer schemas are platform agnostic, so they just need to be
+        // uploaded from one of the runners.
+        sbt.call_arg("syntaxJS/fullOptJS").await?;
+        ide_ci::io::copy_to(
+            paths.target.join("scala-parser.js"),
+            paths.target.join("parser-upload"),
+        )?;
     }
 
 
