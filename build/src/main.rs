@@ -418,18 +418,23 @@ async fn main() -> anyhow::Result<()> {
     sbt.call_arg("bootstrap").await?;
 
     println!("Verifying the Stdlib Version.");
-    match config.mode {
-        BuildMode::Development => {
-            sbt.call_arg("stdlib-version-updater/run check").await?;
-        }
-        BuildMode::NightlyRelease => {
-            sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
-            if TARGET_OS != OS::Windows {
-                // FIXME debug what is going on here
-                sbt.call_arg("verifyLicensePackages").await?;
-            }
-        }
-    };
+    sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
+    if TARGET_OS != OS::Windows {
+        // FIXME debug what is going on here
+        sbt.call_arg("verifyLicensePackages").await?;
+    }
+    // match config.mode {
+    //     BuildMode::Development => {
+    //         sbt.call_arg("stdlib-version-updater/run check").await?;
+    //     }
+    //     BuildMode::NightlyRelease => {
+    //         sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
+    //         if TARGET_OS != OS::Windows {
+    //             // FIXME debug what is going on here
+    //             sbt.call_arg("verifyLicensePackages").await?;
+    //         }
+    //     }
+    // };
 
     if system.total_memory() > 10_000_000 {
         let build_stuff = Sbt::concurrent_tasks([
