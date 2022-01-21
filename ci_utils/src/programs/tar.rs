@@ -132,7 +132,7 @@ impl Tar {
 
         cmd.args(&Switch::TargetFile(output_archive.as_ref().into()));
 
-        let mut paths: Vec<PathBuf> =
+        let paths: Vec<PathBuf> =
             paths_to_pack.into_iter().map(|path| path.as_ref().to_owned()).collect();
 
         match paths.as_slice() {

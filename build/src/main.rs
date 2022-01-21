@@ -432,8 +432,16 @@ async fn main() -> anyhow::Result<()> {
             }
         };
 
-        if ide_ci::actions::env::is_self_hosted() {
-            sbt.call_arg("runtime/clean; all buildLauncherDistribution buildEngineDistribution buildProjectManagerDistribution");
+        if system.total_memory() > 10_000_000 {
+            let build_stuff = Sbt::concurrent_tasks([
+                "engine-runner/assembly",
+                "launcher/buildNativeImage",
+                "project-manager/buildNativeImage",
+                "buildLauncherDistribution",
+                "buildEngineDistribution",
+                "buildProjectManagerDistribution",
+            ]);
+            sbt.call_arg(format!("runtime/clean; {}", build_stuff));
         } else {
             // Compile
             sbt.call_arg("compile").await?;
@@ -448,6 +456,16 @@ async fn main() -> anyhow::Result<()> {
             // Build the PM Native Image
             sbt.call_arg("project-manager/assembly").await?;
             sbt.call_args(["--mem", "1536", "project-manager/buildNativeImage"]).await?;
+
+            // Prepare Launcher Distribution
+            //create_launcher_package(&paths)?;
+            sbt.call_arg("buildLauncherDistribution").await?;
+
+            // Prepare Engine Distribution
+            sbt.call_arg("runtime/clean; buildEngineDistribution").await?;
+
+            // Prepare Project Manager Distribution
+            sbt.call_arg("buildProjectManagerDistribution").await?;
         }
         if config.test_scala {
             // Test Enso
@@ -503,18 +521,6 @@ async fn main() -> anyhow::Result<()> {
                 paths.target.join("parser-upload"),
             )?;
         }
-
-
-
-        // Prepare Launcher Distribution
-        //create_launcher_package(&paths)?;
-        sbt.call_arg("buildLauncherDistribution").await?;
-
-        // Prepare Engine Distribution
-        sbt.call_arg("runtime/clean; buildEngineDistribution").await?;
-
-        // Prepare Project Manager Distribution
-        sbt.call_arg("buildProjectManagerDistribution").await?;
     }
 
 

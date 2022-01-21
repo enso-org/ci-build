@@ -12,7 +12,7 @@ pub fn runner_name() -> Result<String> {
 
 pub fn is_self_hosted() -> bool {
     if let Ok(name) = runner_name() {
-        name.starts_with("GitHub Actions")
+        !name.starts_with("GitHub Actions")
     } else {
         false
     }
