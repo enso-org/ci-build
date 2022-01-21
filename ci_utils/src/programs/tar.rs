@@ -136,10 +136,16 @@ impl Tar {
             paths_to_pack.into_iter().map(|path| path.as_ref().to_owned()).collect();
 
         match paths.as_slice() {
-            [dir] if dir.is_dir() => {
-                cmd.args(&Switch::WorkingDir(dir.to_owned()));
-                cmd.arg(".");
-            }
+            [item] =>
+                if let Some(parent) = item.canonicalize()?.parent() {
+                    cmd.args(&Switch::WorkingDir(dir.to_owned()));
+                    cmd.arg(item.file_name().unwrap()); // None can happen only when path ends with
+                                                        // ".." - that's why we canonicalize
+                },
+            // [dir] if dir.is_dir() => {
+            //     cmd.args(&Switch::WorkingDir(dir.to_owned()));
+            //     cmd.arg(".");
+            // }
             _ => {
                 todo!("")
             } /* paths => {
