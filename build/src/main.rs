@@ -602,18 +602,13 @@ async fn main() -> anyhow::Result<()> {
     //     .await?;
 
     if config.mode == BuildMode::NightlyRelease {
-        if ide_ci::actions::env::is_self_hosted() {
-        } else {
-            if config.mode == BuildMode::NightlyRelease {
-                // Prepare GraalVM Distribution
-                sbt.call_arg("buildGraalDistribution").await?;
-            }
-            // Install Graalpython & FastR
-            if TARGET_OS != OS::Windows {
-                // Windows does not support sulong.
-                graalvm::Gu.call_args(["install", "python", "r"]).await?;
-            }
-        }
+        // if ide_ci::actions::env::is_self_hosted() {
+        // } else {
+        //     if config.mode == BuildMode::NightlyRelease {
+        //         // Prepare GraalVM Distribution
+        //         sbt.call_arg("buildGraalDistribution").await?;
+        //     }
+        // }
 
         // Make packages.
         let packages = create_packages(&paths).await?;
@@ -732,6 +727,13 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
         ComponentPaths::new(&paths.build_dist_root, "enso-bundle", "enso", &paths.triple);
     engine_bundle.clear()?;
     ide_ci::io::copy(&paths.launcher.root, &engine_bundle.root)?;
+
+    // Install Graalpython & FastR
+    if TARGET_OS != OS::Windows {
+        // Windows does not support sulong.
+        graalvm::Gu.call_args(["install", "python", "r"]).await?;
+    }
+
     // Copy engine into the bundle.
     let bundled_engine_dir = engine_bundle.dir.join("dist").join(paths.triple.version.to_string());
     place_component_at(&paths.engine, &bundled_engine_dir)?;
@@ -754,7 +756,6 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
         pm_bundle.dir.join(".enso.bundle"),
     )?;
     pm_bundle.pack().await?;
-
     Ok(vec![engine_bundle.artifact_archive, pm_bundle.artifact_archive])
 
     // TODO similar for the Project Manager
