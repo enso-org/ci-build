@@ -37,7 +37,12 @@ impl ComponentPaths {
     }
 
     pub fn emit_to_actions(&self, prefix: &str) -> Result {
-        let paths = [("NAME", &self.name), ("ROOT", &self.root), ("DIR", &self.dir)];
+        let paths = [
+            ("NAME", &self.name),
+            ("ROOT", &self.root),
+            ("DIR", &self.dir),
+            ("ARCHIVE", &self.artifact_archive),
+        ];
         for (what, path) in paths {
             ide_ci::actions::workflow::set_env(
                 &iformat!("{prefix}_DIST_{what}"),
@@ -103,6 +108,7 @@ impl Paths {
             .unwrap_or(Version::parse("0.0.0-LOCAL").unwrap());
         Self::new_version(repo_root, version)
     }
+
 
     pub fn new_version(repo_root: impl Into<PathBuf>, version: Version) -> Result<Self> {
         let repo_root: PathBuf = repo_root.into().absolutize()?.into();
