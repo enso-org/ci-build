@@ -17,10 +17,10 @@ jobs:
         with:
           clean: false
      - name: Run a multi-line script
-     run: cargo run --bin enso-build -- ../enso --nightly true --prepare-release true
-     working-directory: ${{ github.workspace }}/ci-build
-     env:
-       GITHUB_TOKEN: ${{ github.token }}
+       run: cargo run --bin enso-build -- ../enso --nightly true --prepare-release true
+       working-directory: ${{ github.workspace }}/ci-build
+       env:
+         GITHUB_TOKEN: ${{ github.token }}
 
       # This workflow contains a single job called "build"
   build:
