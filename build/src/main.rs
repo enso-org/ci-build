@@ -20,7 +20,10 @@ use enso_build::paths::Paths;
 use enso_build::postgres;
 use enso_build::postgres::EndpointConfiguration;
 use enso_build::postgres::Postgresql;
-use enso_build::preflight_check::NIGHTLY_RELEASE_TITLE_INFIX;
+use enso_build::retrieve_github_access_token;
+use enso_build::setup_octocrab;
+// use enso_build::preflight_check::NIGHTLY_RELEASE_TITLE_INFIX;
+use enso_build::version::Versions;
 use ide_ci::actions::workflow;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
@@ -31,6 +34,7 @@ use ide_ci::models::config::RepoContext;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::docker::ContainerId;
 use ide_ci::programs::git::Git;
+use ide_ci::programs::Flatc;
 use ide_ci::programs::Sbt;
 use octocrab::OctocrabBuilder;
 use platforms::TARGET_ARCH;
@@ -141,15 +145,38 @@ impl Program for BuiltEnso {
     }
 }
 
+#[derive(FromArgs, Clone, PartialEq, Debug)]
+#[argh(subcommand)]
+pub enum Task {
+    Bump(Bump),
+    Publish(Publish),
+}
+
+/// Generate a new version number, prepare release and emit relevant environment variables.
+#[derive(FromArgs, Clone, PartialEq, Debug)]
+#[argh(subcommand, name = "bump")]
+pub struct Bump {}
+
+/// Publish the release assets on GitHub.
+#[derive(FromArgs, Clone, PartialEq, Debug)]
+#[argh(subcommand, name = "publish")]
+pub struct Publish {}
+
+
 /// Build, test and packave Enso Engine.
 #[derive(Clone, Debug, FromArgs)]
 pub struct Args {
+    /// bump version, emit it to env, create release on GH
+    #[argh(option, default = "false")]
+    pub prepare_release: bool,
     /// build a nightly release
     #[argh(option, default = "false")]
-    pub nightly:    bool,
+    pub nightly:         bool,
     /// path to the Enso Engine repository
     #[argh(positional)]
-    pub repository: PathBuf,
+    pub repository:      PathBuf,
+    /* #[argh(subcommand)]
+     * pub task:       Vec<Task>, */
 }
 
 pub async fn download_project_templates(client: reqwest::Client, enso_root: PathBuf) -> Result {
@@ -233,27 +260,6 @@ pub async fn run_tests(paths: &Paths, ir_caches: IrCaches, async_policy: AsyncPo
     Ok(())
 }
 
-async fn expect_flatc(version: &Version) -> Result {
-    let found_version = ide_ci::programs::Flatc.version().await?;
-    if &found_version == version {
-        Ok(())
-    } else {
-        bail!("Failed to find flatc {}. Found version: {}", version, found_version)
-    }
-}
-
-pub fn retrieve_pat() -> Result<String> {
-    ide_ci::env::expect_var("GITHUB_TOKEN")
-}
-
-pub fn setup_octocrab() -> Result<Octocrab> {
-    let builder = match (OctocrabBuilder::new(), retrieve_pat()) {
-        (builder, Ok(github_token)) => builder.personal_token(github_token),
-        (builder, _) => builder,
-    };
-    builder.build().anyhow_err()
-}
-
 #[derive(Clone, Copy, Debug, Display, PartialEq)]
 pub enum BuildMode {
     Development,
@@ -306,25 +312,49 @@ async fn main() -> anyhow::Result<()> {
     let enso_root = args.repository.clone();
     println!("Repository location: {}", enso_root.display());
 
-    let git = Git::new(&enso_root);
 
+    let repo = ide_ci::actions::env::repository()
+        .unwrap_or(RepoContext { owner: "enso-org".into(), name: "ci-build".into() });
+
+    let versions = {
+        let from_env = Versions::from_env();
+        if let Ok(env_version) = from_env {
+            // TODO reconsider
+            env_version
+            // ensure!(env_version.is_nightly() == args.nightly, "Inconsistent environment.");
+            // env_version
+        } else {
+            if args.nightly {
+                let mut v = Versions::default();
+                v.version.pre = Versions::new_nightly(&octocrab, &repo).await?;
+                v.release_mode = true;
+                v
+            } else {
+                Versions::default()
+            }
+        }
+    };
+
+    if args.prepare_release {
+        versions.publish()?;
+        println!("Preparing release {}", versions.version);
+        repo.repos(&octocrab)
+            .releases()
+            .create(&versions.version.to_string())
+            .prerelease(true)
+            .send()
+            .await?;
+
+        return Ok(());
+    }
+
+    let git = Git::new(&enso_root);
     if config.clean_repo {
         git.clean_xfd().await?;
         git.args(["checkout", "."])?.run_ok().await?;
     }
 
-    let repo = ide_ci::actions::env::repository()
-        .unwrap_or(RepoContext { owner: "enso-org".into(), name: "ci-build".into() });
-
-    let paths = if args.nightly {
-        let versions =
-            enso_build::preflight_check::generate_nightly_version(&octocrab, &enso_root, &repo)
-                .await?;
-        Paths::new_version(&enso_root, versions.engine)?
-    } else {
-        Paths::new(&enso_root)?
-    };
-
+    let paths = Paths::new_version(&enso_root, versions.version)?;
     let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
     println!("Build configuration: {:#?}", config);
 
@@ -358,7 +388,7 @@ async fn main() -> anyhow::Result<()> {
     // scenarios.
     // TODO: After flatc version is bumped, it should be possible to get it without `conda`.
     //       See: https://www.pivotaltracker.com/story/show/180303547
-    if let Err(e) = expect_flatc(&FLATC_VERSION).await {
+    if let Err(e) = Flatc.require_present_at(&FLATC_VERSION).await {
         println!("Cannot find expected flatc: {}", e);
         // GitHub-hosted runner has `conda` on PATH but not things installed by it.
         // It provides `CONDA` variable pointing to the relevant location.
@@ -624,10 +654,9 @@ async fn main() -> anyhow::Result<()> {
         let changelog_path = enso_root.join_many(["app", "gui", "CHANGELOG.md"]);
         let release_notes = extract_release_notes(changelog_path).await?;
 
-        let repo = RepoContext { owner: "enso-org".into(), name: "ci-build".into() };
         let repo_handler = repo.repos(&octocrab);
 
-        let release_name = format!("Enso {} {}", NIGHTLY_RELEASE_TITLE_INFIX, paths.triple.version);
+        let release_name = format!("Enso {}", paths.triple.version);
         let tag_name = paths.triple.version.to_string();
 
         let releases_handler = repo_handler.releases();
@@ -645,7 +674,7 @@ async fn main() -> anyhow::Result<()> {
             .await?;
 
 
-        let client = ide_ci::github::create_client(retrieve_pat()?)?;
+        let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
         for package in packages {
             ide_ci::github::release::upload_asset(&repo, &client, release.id, package).await?;
         }

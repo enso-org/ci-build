@@ -34,6 +34,16 @@ pub trait RepoPointer {
         client.repos(self.owner(), self.name())
     }
 
+    async fn all_releases(
+        &self,
+        client: &Octocrab,
+    ) -> octocrab::Result<Vec<octocrab::models::repos::Release>> {
+        let repo = self.repos(client);
+        let page = repo.releases().list().per_page(MAX_PER_PAGE).send().await?;
+        // TODO: rate limit?
+        client.all_pages(page).await
+    }
+
     async fn latest_release(
         &self,
         client: &Octocrab,

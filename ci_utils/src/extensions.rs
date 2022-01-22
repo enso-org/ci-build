@@ -5,3 +5,4 @@ pub mod maps;
 pub mod octocrab;
 pub mod output;
 pub mod path;
+pub mod version;

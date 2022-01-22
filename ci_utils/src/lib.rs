@@ -59,6 +59,7 @@ pub mod prelude {
     pub use semver::Version;
     pub use serde::Deserialize;
     pub use serde::Serialize;
+    pub use shrinkwraprs::Shrinkwrap;
     pub use snafu::Snafu;
     pub use std::borrow::Borrow;
     pub use std::borrow::Cow;

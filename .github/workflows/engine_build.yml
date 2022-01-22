@@ -10,8 +10,23 @@ on:
 
       # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
+  prepare:
+    runs-on: [self-hosted]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          clean: false
+       - name: Run a multi-line script
+       run: cargo run --bin enso-build -- ../enso --nightly true --prepare-release true
+       working-directory: ${{ github.workspace }}/ci-build
+       env:
+         GITHUB_TOKEN: ${{ github.token }}
+
+      # This workflow contains a single job called "build"
   build:
+    needs: prepare
+    env:
+      ENSO_VERSION: echo ${{needs.prepare.outputs.ENSO_VERSION}}
     # The type of runner that the job will run on
     runs-on: ${{ matrix.os }}
     strategy:
