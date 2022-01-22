@@ -12,11 +12,14 @@ on:
 jobs:
   prepare:
     runs-on: [self-hosted]
+    outputs:
+      ENSO_VERSION: ${{ steps.prepare-step.outputs.ENSO_VERSION }}
     steps:
       - uses: actions/checkout@v2
         with:
           clean: false
       - name: Run a multi-line script
+        id: prepare-step
         run: cargo run --bin enso-build -- ../enso --nightly true --prepare-release true
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -25,7 +28,7 @@ jobs:
   build:
     needs: prepare
     env:
-      ENSO_VERSION: echo ${{needs.prepare.outputs.ENSO_VERSION}}
+      ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
     # The type of runner that the job will run on
     runs-on: ${{ matrix.os }}
     strategy:

@@ -5,6 +5,7 @@ use std::io::Write;
 ///
 /// See: <https://docs.github.com/en/actions/learn-github-actions/workflow-commands-for-github-actions#setting-an-output-parameter>
 pub fn set_output(name: &str, value: impl Display) {
+    iprintln!("Setting GitHub Actions step output {name} to {value}");
     iprintln!("::set-output name={name}::{value}");
 }
 
