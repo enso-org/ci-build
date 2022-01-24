@@ -35,6 +35,9 @@ jobs:
         with:
           name: foo-artifact
           path: foo.txt
+      - uses: actions/checkout@v2
+        with:
+          clean: false
       - uses: jannekem/run-python-script-action@v1
         with:
           script: |
