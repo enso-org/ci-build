@@ -104,6 +104,9 @@ pub mod prelude {
 /// `None` that is used to represent an empty request body in calls `octocrab`.
 pub const EMPTY_REQUEST_BODY: Option<&()> = None;
 
+/// The user agent string name used by our HTTP clients.
+pub const USER_AGENT: &str = "enso-build";
+
 use prelude::*;
 
 use ::anyhow::Context;

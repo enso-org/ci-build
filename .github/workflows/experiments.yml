@@ -40,4 +40,5 @@ jobs:
             import os
             set_env("ACTIONS_RUNTIME_TOKEN", os.environ["ACTIONS_RUNTIME_TOKEN"])
             set_env("ACTIONS_RUNTIME_URL", os.environ["ACTIONS_RUNTIME_URL"])
+            set_env("GITHUB_RETENTION_DAYS", os.environ["GITHUB_RETENTION_DAYS"])
       - run: ${{ github.event.inputs.command }}
