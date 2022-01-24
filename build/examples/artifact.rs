@@ -56,7 +56,7 @@ impl CreateArtifactRequest {
         CreateArtifactRequest {
             r#type: "actions_storage".to_string(),
             name: name.into(),
-            retention_days: None,
+            retention_days: Some(3),
         }
     }
 }
@@ -85,7 +85,9 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
 
     let query = CreateArtifactRequest::new(artifact_name);
 
-    let request = client.post(context.artifact_url()?).json(&query).build()?;
+    let body = serde_json::to_string(&query)?;
+    dbg!(&body);
+    let request = client.post(context.artifact_url()?).body(body).build()?;
     dbg!(&request);
     let response = client.execute(request).await?;
     dbg!(&response);
