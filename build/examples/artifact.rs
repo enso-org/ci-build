@@ -89,7 +89,10 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
     dbg!(&request);
     let response = client.execute(request).await?;
     dbg!(&response);
-    let response = response.json::<CreateArtifactResponse>().await?;
+    let text = response.text().await?;
+    dbg!(&response);
+    //let response = response.json::<CreateArtifactResponse>().await?;
+    let response = serde_json::from_str::<CreateArtifactResponse>(&text).await?;
     dbg!(&response);
 
 
