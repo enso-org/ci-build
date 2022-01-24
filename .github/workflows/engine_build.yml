@@ -37,11 +37,6 @@ jobs:
         nightly: [true, false]
       fail-fast: false
 
-    if: >
-      !matrix.nightly 
-      || (matrix.nightly && contains(matrix.os, 'self-hosted') && (runner.os == 'Windows' || runner.os == 'Linux')) 
-      || (matrix.nightly && !contains(matrix.os, 'self-hosted') && runner.os == 'macOS')
-
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -69,6 +64,7 @@ jobs:
           minimum-size: 16GB
           maximum-size: 16GB
           disk-root: "C:"
+      ###################################################################################
 
       # Runs a set of commands using the runners shell
       - name: Run a multi-line script
@@ -76,6 +72,11 @@ jobs:
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        if: >
+          !matrix.nightly 
+          || (matrix.nightly && contains(matrix.os, 'self-hosted') && (runner.os == 'Windows' || runner.os == 'Linux')) 
+          || (matrix.nightly && !contains(matrix.os, 'self-hosted') && runner.os == 'macOS')
+
 
       ###################################################################################
       - name: Publish the Engine Distribution Artifact
