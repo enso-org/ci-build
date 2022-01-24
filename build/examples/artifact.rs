@@ -85,7 +85,7 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
 
     let query = CreateArtifactRequest::new(artifact_name);
 
-    let request = client.post(&context.artifact_url()).body(query).build()?;
+    let request = client.post(context.artifact_url()?).json(&query).build()?;
     dbg!(&request);
     let response = client.execute(request).await?;
     dbg!(&response);
@@ -114,9 +114,7 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
 
 #[tokio::main]
 async fn main() -> Result {
-    let context = Context::new()?;
-    // see https://github.com/check-spelling/check-spelling/wiki/%40actions-upload-artifactinsert()
-
+    upload_file("Cargo.toml", "SomeFile").await?;
     Ok(())
     //let client = reqwest::Client::builder().default_headers().
 }
