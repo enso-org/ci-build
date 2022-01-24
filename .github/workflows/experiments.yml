@@ -9,7 +9,7 @@ on:
         description: "Command to be run."
         required: true
         type: string
-        default: "cargo.exe run --example artifact"
+        default: "cargo run --example artifact"
       target:
         description: "What runner should be used."
         required: true
