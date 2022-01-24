@@ -4,7 +4,6 @@
 #![feature(associated_type_bounds)]
 #![feature(generic_associated_types)]
 #![feature(exact_size_is_empty)]
-#![feature(result_cloned)]
 #![feature(async_closure)]
 #![feature(async_stream)]
 #![feature(type_alias_impl_trait)]

@@ -112,11 +112,11 @@ impl Versions {
     }
 }
 
-#[tokio::test]
-#[ignore]
-async fn aaaa() -> Result {
-    let octocrab = crate::setup_octocrab()?;
-    let releases = octocrab.repos("enso-org", "ci-build").releases();
-    dbg!(Versions::new_nightly(&releases).await?);
-    Ok(())
-}
+// #[tokio::test]
+// #[ignore]
+// async fn aaaa() -> Result {
+//     let octocrab = crate::setup_octocrab()?;
+//     let releases = octocrab.repos("enso-org", "ci-build").releases();
+//     dbg!(Versions::new_nightly(&releases).await?);
+//     Ok(())
+// }

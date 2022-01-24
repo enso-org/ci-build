@@ -1,3 +1,5 @@
+#![feature(bool_to_option)]
+
 use crate::prelude::*;
 
 use regex::Regex;
@@ -7,6 +9,7 @@ pub mod prelude {
 }
 
 pub mod bump_version;
+pub mod changelog;
 pub mod httpbin;
 pub mod paths;
 pub mod postgres;
@@ -32,11 +35,9 @@ pub fn retrieve_github_access_token() -> Result<String> {
 pub fn setup_octocrab() -> Result<Octocrab> {
     let mut builder = octocrab::OctocrabBuilder::new();
     if let Ok(access_token) = retrieve_github_access_token() {
-        builder.personal_token(access_token).build()
-    } else {
-        builder.build()
+        builder = builder.personal_token(access_token)
     }
-    .anyhow_err()
+    builder.build().anyhow_err()
 }
 
 #[cfg(test)]

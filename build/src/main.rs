@@ -1,5 +1,4 @@
 #![feature(async_closure)]
-#![feature(result_cloned)]
 #![feature(exit_status_error)]
 #![feature(generic_associated_types)]
 #![feature(associated_type_bounds)]

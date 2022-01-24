@@ -33,6 +33,7 @@ path-absolutize = "3.0.11"
 platforms = "2.0.0"
 pin-project = "1.0.8"
 port_check = "0.1.5"
+pulldown-cmark = "0.9.1"
 rand = "0.8.4"
 regex = "1.5.4"
 reqwest = { version = "0.11.5", features = ["stream"] }

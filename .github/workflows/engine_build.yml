@@ -37,6 +37,11 @@ jobs:
         nightly: [true, false]
       fail-fast: false
 
+    if: |
+      !matrix.nightly 
+      || (matrix.nightly && contains(matrix.os, 'self-hosted') && (runner.os == 'Windows' || runner.os == 'Linux')) 
+      || (matrix.nightly && !contains(matrix.os, 'self-hosted') && runner.os == 'macOS')
+
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -101,3 +106,17 @@ jobs:
         with:
           name: Parser JS Bundle
           path: ${{ env.TARGET_DIR }}/scala-parser.js
+
+#  finish:
+#    runs-on: [self-hosted]
+#    outputs:
+#      ENSO_VERSION: ${{ steps.prepare-step.outputs.ENSO_VERSION }}
+#    steps:
+#      - uses: actions/checkout@v2
+#        with:
+#          clean: false
+#      - name: Run a multi-line script
+#        id: prepare-step
+#        run: cargo run --bin enso-build -- ../enso --nightly true --prepare-release true
+#        env:
+#          GITHUB_TOKEN: ${{ github.token }}
