@@ -37,7 +37,7 @@ jobs:
         nightly: [true, false]
       fail-fast: false
 
-    if: |
+    if: >
       !matrix.nightly 
       || (matrix.nightly && contains(matrix.os, 'self-hosted') && (runner.os == 'Windows' || runner.os == 'Linux')) 
       || (matrix.nightly && !contains(matrix.os, 'self-hosted') && runner.os == 'macOS')
