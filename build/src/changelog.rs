@@ -24,7 +24,7 @@ pub fn next_header_pos<'a>(
 
 pub fn retrieve_latest_release_notes(changelog: impl AsRef<Path>) -> Result<Entry> {
     let text = std::fs::read_to_string(changelog)?;
-    let mut parser = pulldown_cmark::Parser::new_ext(&text, Options::all()).into_offset_iter();
+    let mut parser = Parser::new_ext(&text, Options::all()).into_offset_iter();
 
     let first_header_pos = next_header_pos(&mut parser)
         .ok_or_else(|| anyhow!("Failed to find first level one header."))?;
@@ -42,7 +42,7 @@ fn aaaa() -> Result {
 
     let path = r"H:\NBO\enso\app\gui\CHANGELOG.md";
     let text = std::fs::read_to_string(path)?;
-    let mut parser = pulldown_cmark::Parser::new_ext(&text, opts).into_offset_iter();
+    let mut parser = Parser::new_ext(&text, opts).into_offset_iter();
 
     let mut next_header_pos =
         || parser.find(|(e, _)| is_release_notes_header(e)).map(|(_, pos)| pos);
