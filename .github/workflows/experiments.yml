@@ -15,19 +15,18 @@ on:
         required: true
         type: choice
         options:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
-          - "[self-hosted, Windows]"
           - "[self-hosted, Linux]"
+          - "[ubuntu-latest]"
+          - "[self-hosted, Windows]"
+          - "[windows-latest]"
           - "[self-hosted, macOS]"
+          - "[macos-latest]"
 
-
-          # A workflow run is made up of one or more jobs that can run sequentially or in parallel
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
   build:
-    runs-on: ${{ github.event.inputs.target }}
+    runs-on: ${{ fromJSON(github.event.inputs.target) }}
 
     steps:
       - run: echo "foo content" > foo.txt
