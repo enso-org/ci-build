@@ -5,7 +5,7 @@ use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
 
 #[cfg(target_os = "linux")]
-const LIBRARIES_TO_TEST: [&str; 6] =
+pub const LIBRARIES_TO_TEST: [&str; 6] =
     ["Tests", "Table_Tests", "Database_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
 
 // Test postgres only on Linux
