@@ -106,7 +106,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         # Same condition as above but wrapped with !()
-        if: !matrix.nightly
+        if: "!matrix.nightly"
 
 
       ###################################################################################
