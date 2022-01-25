@@ -89,7 +89,8 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         if: >
           matrix.nightly
-            &&
+            && (contains(matrix.os, 'self-hosted') && (runner.os == 'Windows' || runner.os == 'Linux') 
+                || (!contains(matrix.os, 'self-hosted') && runner.os == 'macOS'))
       - name: Run a multi-line script
         run: cargo run --bin enso-build -- ../enso build --kind nightly
         working-directory: ${{ github.workspace }}/ci-build
