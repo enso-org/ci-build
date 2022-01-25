@@ -10,10 +10,10 @@ const LIBRARIES_TO_TEST: [&str; 6] =
 
 // Test postgres only on Linux
 #[cfg(not(target_os = "linux"))]
-pub(crate) const LIBRARIES_TO_TEST: [&str; 5] =
+pub const LIBRARIES_TO_TEST: [&str; 5] =
     ["Tests", "Table_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
 
-const ARCHIVE_EXTENSION: &str = match TARGET_OS {
+pub const ARCHIVE_EXTENSION: &str = match TARGET_OS {
     OS::Windows => "zip",
     _ => "tar.gz",
 };
