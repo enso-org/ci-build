@@ -13,6 +13,7 @@ pub mod args;
 pub mod bump_version;
 pub mod changelog;
 pub mod enso;
+pub mod env;
 pub mod httpbin;
 pub mod paths;
 pub mod postgres;

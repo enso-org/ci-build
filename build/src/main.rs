@@ -172,13 +172,15 @@ async fn main() -> anyhow::Result<()> {
     match args.command {
         WhatToDo::Prepare => {
             versions.publish()?;
-            println!("Preparing release {}", versions.version);
 
             let commit = ide_ci::actions::env::commit()?;
             let latest_changelog_body =
                 enso_build::changelog::retrieve_unreleased_release_notes(paths.changelog())?;
 
-            repo.repos(&octocrab)
+            println!("Preparing release {} for commit {}", versions.version, commit);
+
+            let release = repo
+                .repos(&octocrab)
                 .releases()
                 .create(&versions.tag())
                 .target_commitish(&commit)
@@ -189,13 +191,14 @@ async fn main() -> anyhow::Result<()> {
                 .send()
                 .await?;
 
+            enso_build::env::emit_release_id(release.id);
 
             return Ok(());
         }
         WhatToDo::Finish => {
-            let tag = versions.tag();
-            println!("Looking for {tag} release on github.");
-            let release = repo.repos(&octocrab).releases().get_by_tag(&tag).await?;
+            let release_id = enso_build::env::release_id()?;
+            println!("Looking for release with id {release_id} on github.");
+            let release = repo.repos(&octocrab).releases().get_by_id(release_id).await?;
             println!("Found the target release, will publish it.");
             repo.repos(&octocrab).releases().update(release.id.0).draft(false).send().await?;
             iprintln!("Done. Release URL: {release.url}");
@@ -490,6 +493,8 @@ async fn main() -> anyhow::Result<()> {
     //     .await?;
 
     if args.command == WhatToDo::Upload {
+        let release_id = enso_build::env::release_id()?;
+
         // Make packages.
         let packages = create_packages(&paths).await?;
 
@@ -504,9 +509,9 @@ async fn main() -> anyhow::Result<()> {
         let releases_handler = repo_handler.releases();
         // let triple = paths.triple.clone();
         let release = releases_handler
-            .get_by_tag(&tag_name)
+            .get_by_id(release_id)
             .await
-            .context(anyhow!("Failed to find release by tag {tag_name}."))?;
+            .context(format!("Failed to find release by tag {tag_name}."))?;
 
         let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
         for package in packages {

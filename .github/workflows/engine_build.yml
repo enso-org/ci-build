@@ -14,6 +14,7 @@ jobs:
     runs-on: [self-hosted]
     outputs:
       ENSO_VERSION: ${{ steps.prepare-step.outputs.ENSO_VERSION }}
+      ENSO_RELEASE_ID: ${{ steps.prepare-step.outputs.ENSO_RELEASE_ID }}
     steps:
       - uses: actions/checkout@v2
         with:
@@ -34,8 +35,9 @@ jobs:
   finish:
     runs-on: [self-hosted]
     needs: [prepare, build]
-    outputs:
-      ENSO_VERSION: ${{ steps.prepare-step.outputs.ENSO_VERSION }}
+    env:
+      ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
+      ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
     steps:
       - uses: actions/checkout@v2
         with:
@@ -58,6 +60,7 @@ jobs:
     needs: prepare
     env:
       ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
+      ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
     # The type of runner that the job will run on
     runs-on: ${{ matrix.os }}
     strategy:

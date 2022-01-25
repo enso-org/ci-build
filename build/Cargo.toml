@@ -28,7 +28,7 @@ indexmap = "1.7.0"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
 nix = "0.23.0"
-octocrab = "0.15.1"
+octocrab = { git = "https://github.com/enso-org/octocrab" }
 path-absolutize = "3.0.11"
 platforms = "2.0.0"
 pin-project = "1.0.8"
