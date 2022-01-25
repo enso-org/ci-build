@@ -17,10 +17,17 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
+          repository: enso-org/enso
+          path: enso
+          ref: wip/mwu/engine-version-from-env
+      - uses: actions/checkout@v2
+        with:
+          path: ci-build
           clean: false
       - name: Run a multi-line script
         id: prepare-step
         run: cargo run --bin enso-build -- ../enso prepare --kind nightly
+        working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
@@ -32,10 +39,17 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
+          repository: enso-org/enso
+          path: enso
+          ref: wip/mwu/engine-version-from-env
+      - uses: actions/checkout@v2
+        with:
+          path: ci-build
           clean: false
       - name: Run a multi-line script
         id: prepare-step
         run: cargo run --bin enso-build -- ../enso finish --kind nightly
+        working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
