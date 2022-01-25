@@ -174,12 +174,14 @@ async fn main() -> anyhow::Result<()> {
             versions.publish()?;
             println!("Preparing release {}", versions.version);
 
+            let commit = ide_ci::actions::env::commit()?;
             let latest_changelog_body =
                 enso_build::changelog::retrieve_unreleased_release_notes(paths.changelog())?;
 
             repo.repos(&octocrab)
                 .releases()
                 .create(&versions.tag())
+                .target_commitish(&commit)
                 .name(&versions.to_string())
                 .body(&latest_changelog_body.contents)
                 .prerelease(true)
