@@ -8,20 +8,22 @@
 #![feature(default_free_fn)]
 #![feature(map_first_last)]
 
+use anyhow::Context;
 use filetime::FileTime;
 use glob::glob;
 pub use ide_ci::prelude;
 use ide_ci::prelude::*;
 use std::env::consts::EXE_EXTENSION;
 
+use enso_build::args::Args;
+use enso_build::args::BuildKind;
+use enso_build::args::WhatToDo;
+use enso_build::enso::BuiltEnso;
+use enso_build::enso::IrCaches;
 use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
-use enso_build::postgres;
-use enso_build::postgres::EndpointConfiguration;
-use enso_build::postgres::Postgresql;
 use enso_build::retrieve_github_access_token;
 use enso_build::setup_octocrab;
-// use enso_build::preflight_check::NIGHTLY_RELEASE_TITLE_INFIX;
 use enso_build::version::Versions;
 use ide_ci::actions::workflow;
 use ide_ci::extensions::path::PathExt;
@@ -31,11 +33,9 @@ use ide_ci::goodies::graalvm;
 use ide_ci::goodies::sbt;
 use ide_ci::models::config::RepoContext;
 use ide_ci::program::with_cwd::WithCwd;
-use ide_ci::programs::docker::ContainerId;
 use ide_ci::programs::git::Git;
 use ide_ci::programs::Flatc;
 use ide_ci::programs::Sbt;
-use octocrab::OctocrabBuilder;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
 use sysinfo::SystemExt;
@@ -43,140 +43,7 @@ use sysinfo::SystemExt;
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
 const GRAAL_VERSION: Version = Version::new(21, 1, 0);
 const GRAAL_JAVA_VERSION: graalvm::JavaVersion = graalvm::JavaVersion::Java11;
-
 const PARALLEL_ENSO_TESTS: AsyncPolicy = AsyncPolicy::Sequential;
-
-
-#[cfg(target_os = "linux")]
-const LIBRARIES_TO_TEST: [&str; 6] =
-    ["Tests", "Table_Tests", "Database_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
-
-// Test postgres only on Linux
-#[cfg(not(target_os = "linux"))]
-const LIBRARIES_TO_TEST: [&str; 5] =
-    ["Tests", "Table_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
-
-#[derive(Clone, Debug)]
-pub struct BootstrapParameters {
-    pub repo_root: PathBuf,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum IrCaches {
-    Yes,
-    No,
-}
-
-impl IrCaches {
-    pub fn flag(self) -> &'static str {
-        match self {
-            IrCaches::Yes => "--ir-caches",
-            IrCaches::No => "--no-ir-caches",
-        }
-    }
-}
-
-impl AsRef<OsStr> for IrCaches {
-    fn as_ref(&self) -> &OsStr {
-        self.flag().as_ref()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct BuiltEnso {
-    paths: Paths,
-}
-
-impl BuiltEnso {
-    pub fn wrapper_script_path(&self) -> PathBuf {
-        self.paths.engine.dir.join("bin").join("enso")
-    }
-
-    pub fn run_test(&self, test: impl AsRef<Path>, ir_caches: IrCaches) -> Result<Command> {
-        let test_path = self.paths.stdlib_test(test);
-        let mut command = self.cmd()?;
-        command.arg(ir_caches).arg("--run").arg(test_path);
-        Ok(command)
-    }
-
-    pub fn compile_lib(&self, target: impl AsRef<Path>) -> Result<Command> {
-        let mut command = self.cmd()?;
-        command
-            .arg(IrCaches::Yes)
-            .args(["--no-compile-dependencies", "--no-global-cache", "--compile"])
-            .arg(target.as_ref());
-        Ok(command)
-    }
-}
-
-#[async_trait]
-impl Program for BuiltEnso {
-    fn executable_name() -> &'static str {
-        ide_ci::platform::DefaultShell::executable_name()
-    }
-
-    fn cmd(&self) -> Result<Command> {
-        ide_ci::platform::default_shell().run_script(self.wrapper_script_path())
-    }
-
-    async fn version_string(&self) -> Result<String> {
-        let output = self.cmd()?.args(["version", "--json", "--only-launcher"]).output().await?;
-        output.status.exit_ok().map_err(|e| {
-            anyhow!(
-                "Failed to get version: {}. \nStdout: {}\nStderr: {}",
-                e,
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            )
-        })?;
-        String::from_utf8(output.stdout).anyhow_err()
-    }
-
-    async fn version(&self) -> Result<Version> {
-        #[derive(Clone, Debug, Deserialize)]
-        struct VersionInfo {
-            version: Version,
-        }
-
-        let stdout = self.version_string().await?;
-        let version = serde_json::from_str::<VersionInfo>(&stdout)?;
-        Ok(version.version)
-    }
-}
-
-#[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand)]
-pub enum Task {
-    Bump(Bump),
-    Publish(Publish),
-}
-
-/// Generate a new version number, prepare release and emit relevant environment variables.
-#[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "bump")]
-pub struct Bump {}
-
-/// Publish the release assets on GitHub.
-#[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "publish")]
-pub struct Publish {}
-
-
-/// Build, test and packave Enso Engine.
-#[derive(Clone, Debug, FromArgs)]
-pub struct Args {
-    /// bump version, emit it to env, create release on GH
-    #[argh(option, default = "false")]
-    pub prepare_release: bool,
-    /// build a nightly release
-    #[argh(option, default = "false")]
-    pub nightly:         bool,
-    /// path to the Enso Engine repository
-    #[argh(positional)]
-    pub repository:      PathBuf,
-    /* #[argh(subcommand)]
-     * pub task:       Vec<Task>, */
-}
 
 pub async fn download_project_templates(client: reqwest::Client, enso_root: PathBuf) -> Result {
     // Download Project Template Files
@@ -210,52 +77,6 @@ pub async fn download_project_templates(client: reqwest::Client, enso_root: Path
 
     let _result = ide_ci::future::try_join_all(futures, AsyncPolicy::FutureParallelism).await?;
     println!("Completed downloading templates");
-    Ok(())
-}
-
-pub async fn run_tests(paths: &Paths, ir_caches: IrCaches, async_policy: AsyncPolicy) -> Result {
-    let built_enso = BuiltEnso { paths: paths.clone() };
-
-    // Prepare Engine Test Environment
-    if let Ok(gdoc_key) = std::env::var("GDOC_KEY") {
-        let google_api_test_data_dir =
-            paths.repo_root.join("test").join("Google_Api_Test").join("data");
-        ide_ci::io::create_dir_if_missing(&google_api_test_data_dir)?;
-        std::fs::write(google_api_test_data_dir.join("secret.json"), &gdoc_key)?;
-    }
-
-    let _httpbin = enso_build::httpbin::get_and_spawn_httpbin_on_free_port().await?;
-    let _postgres = match TARGET_OS {
-        OS::Linux => {
-            let runner_context_string =
-                ide_ci::actions::env::runner_name().unwrap_or_else(|_| Uuid::new_v4().to_string());
-            // GH-hosted runners are named like "GitHub Actions 10". Spaces are not allowed in the
-            // container name.
-            let container_name = iformat!("postgres-for-{runner_context_string}").replace(' ', "_");
-            let config = postgres::Configuration {
-                postgres_container: ContainerId(container_name),
-                database_name:      "enso_test_db".to_string(),
-                user:               "enso_test_user".to_string(),
-                password:           "enso_test_password".to_string(),
-                endpoint:           EndpointConfiguration::deduce()?,
-                version:            "latest".to_string(),
-            };
-            let postgres = Postgresql::start(config).await?;
-            Some(postgres)
-        }
-        _ => None,
-    };
-
-    let futures = LIBRARIES_TO_TEST.map(ToString::to_string).map(|test| {
-        let command = built_enso.run_test(test, ir_caches);
-        async move { command?.run_ok().await }
-    });
-
-    let _result = ide_ci::future::try_join_all(futures, async_policy).await?;
-
-    // We need to join all the test tasks here, as they require postgres and httpbin alive.
-    // Could share them with Arc but then scenario of multiple test runs being run in parallel
-    // should be handled, e.g. avoiding port collisions.
     Ok(())
 }
 
@@ -305,7 +126,10 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let args: Args = argh::from_env();
-    let config = if args.nightly { NIGHTLY } else { LOCAL };
+    let config = match args.kind {
+        BuildKind::Dev => LOCAL,
+        BuildKind::Nightly => NIGHTLY,
+    };
 
     let octocrab = setup_octocrab()?;
     let enso_root = args.repository.clone();
@@ -315,36 +139,67 @@ async fn main() -> anyhow::Result<()> {
     let repo = ide_ci::actions::env::repository()
         .unwrap_or(RepoContext { owner: "enso-org".into(), name: "ci-build".into() });
 
-    let versions = {
-        let from_env = Versions::from_env();
-        if let Ok(env_version) = from_env {
-            // TODO reconsider
-            env_version
-            // ensure!(env_version.is_nightly() == args.nightly, "Inconsistent environment.");
-            // env_version
-        } else {
-            if args.nightly {
-                let mut v = Versions::default();
-                v.version.pre = Versions::new_nightly(&octocrab, &repo).await?;
-                v.release_mode = true;
-                v
-            } else {
-                Versions::default()
-            }
-        }
+    println!("Deciding on version to target.");
+    let changelog_path = enso_build::paths::root_to_changelog(&enso_root);
+    let mut version = enso_build::version::base_version(&changelog_path)?;
+    version.pre = match args.kind {
+        BuildKind::Dev => Versions::local_prerelease()?,
+        BuildKind::Nightly => Versions::nightly_prerelease(&octocrab, &repo).await?,
     };
+    let versions = Versions::new(version);
+    println!("Target version: {versions}.");
+    let paths = Paths::new_version(&enso_root, versions.version.clone())?;
 
-    if args.prepare_release {
-        versions.publish()?;
-        println!("Preparing release {}", versions.version);
-        repo.repos(&octocrab)
-            .releases()
-            .create(&versions.version.to_string())
-            .prerelease(true)
-            .send()
-            .await?;
+    // let versions = {
+    //     let from_env = Versions::from_env();
+    //     if let Ok(env_version) = from_env {
+    //         // TODO reconsider
+    //         env_version
+    //         // ensure!(env_version.is_nightly() == args.nightly, "Inconsistent environment.");
+    //         // env_version
+    //     } else {
+    //         if args.nightly {
+    //             let mut v = Versions::default();
+    //             v.version.pre = Versions::new_nightly(&octocrab, &repo).await?;
+    //             v.release_mode = true;
+    //             v
+    //         } else {
+    //             Versions::default()
+    //         }
+    //     }
+    // };
 
-        return Ok(());
+    match args.command {
+        WhatToDo::Prepare => {
+            versions.publish()?;
+            println!("Preparing release {}", versions.version);
+
+            let latest_changelog_body =
+                enso_build::changelog::retrieve_unreleased_release_notes(paths.changelog())?;
+
+            repo.repos(&octocrab)
+                .releases()
+                .create(&versions.tag())
+                .name(&versions.to_string())
+                .body(&latest_changelog_body.contents)
+                .prerelease(true)
+                .draft(true)
+                .send()
+                .await?;
+
+
+            return Ok(());
+        }
+        WhatToDo::Finish => {
+            let tag = versions.tag();
+            println!("Looking for {tag} release on github.");
+            let release = repo.repos(&octocrab).releases().get_by_tag(&tag).await?;
+            println!("Found the target release, will publish it.");
+            repo.repos(&octocrab).releases().update(release.id.0).draft(false).send().await?;
+            iprintln!("Done. Release URL: {release.url}");
+            return Ok(());
+        }
+        WhatToDo::Build | WhatToDo::Upload => {}
     }
 
     let git = Git::new(&enso_root);
@@ -353,7 +208,6 @@ async fn main() -> anyhow::Result<()> {
         git.args(["checkout", "."])?.run_ok().await?;
     }
 
-    let paths = Paths::new_version(&enso_root, versions.version)?;
     let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
     println!("Build configuration: {:#?}", config);
 
@@ -565,8 +419,7 @@ async fn main() -> anyhow::Result<()> {
             ide_ci::io::create_dir_if_missing(&google_api_test_data_dir)?;
             std::fs::write(google_api_test_data_dir.join("secret.json"), &gdoc_key)?;
         }
-
-        run_tests(&paths, IrCaches::No, PARALLEL_ENSO_TESTS).await?;
+        enso.run_tests(IrCaches::No, PARALLEL_ENSO_TESTS).await?;
 
         let std_libs = paths.engine.dir.join("lib").join("Standard");
         // Compile the Standard Libraries (Unix)
@@ -575,8 +428,7 @@ async fn main() -> anyhow::Result<()> {
             let target = entry.path().join(paths.triple.version.to_string());
             enso.compile_lib(target)?.run_ok().await?;
         }
-
-        run_tests(&paths, IrCaches::Yes, PARALLEL_ENSO_TESTS).await?;
+        enso.run_tests(IrCaches::Yes, PARALLEL_ENSO_TESTS).await?;
     }
 
     if config.mode == BuildMode::NightlyRelease {
@@ -635,43 +487,24 @@ async fn main() -> anyhow::Result<()> {
     //     .pack(paths.target.join("fbs-upload/fbs-schema.zip"), once(schema_dir.join("*")))
     //     .await?;
 
-    if config.mode == BuildMode::NightlyRelease {
-        // if ide_ci::actions::env::is_self_hosted() {
-        // } else {
-        //     if config.mode == BuildMode::NightlyRelease {
-        //         // Prepare GraalVM Distribution
-        //         sbt.call_arg("buildGraalDistribution").await?;
-        //     }
-        // }
-
+    if args.command == WhatToDo::Upload {
         // Make packages.
         let packages = create_packages(&paths).await?;
 
         // Launcher bundle
         let bundles = create_bundles(&paths).await?;
 
-        let changelog_path = enso_root.join_many(["app", "gui", "CHANGELOG.md"]);
-        let release_notes = extract_release_notes(changelog_path).await?;
-
         let repo_handler = repo.repos(&octocrab);
 
-        let release_name = format!("Enso {}", paths.triple.version);
+        // let release_name = format!("Enso {}", paths.triple.version);
         let tag_name = paths.triple.version.to_string();
 
         let releases_handler = repo_handler.releases();
-        let triple = paths.triple.clone();
+        // let triple = paths.triple.clone();
         let release = releases_handler
-            .create(&tag_name)
-            .name(&release_name)
-            .body(&release_notes)
-            .prerelease(true)
-            .send()
-            .or_else(|err| {
-                println!("Failed to create a new release {}, looking for an existing one.", err);
-                releases_handler.get_by_tag(&tag_name)
-            })
-            .await?;
-
+            .get_by_tag(&tag_name)
+            .await
+            .context(anyhow!("Failed to find release by tag {tag_name}."))?;
 
         let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
         for package in packages {
@@ -834,10 +667,6 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
 
     ide_ci::archive::create(&paths.artifact_archive, [&paths.root]).await?;
     Ok(paths.artifact_archive.clone())
-}
-
-pub async fn extract_release_notes(changelog_file: impl AsRef<Path>) -> Result<String> {
-    Ok("Release notes placeholder".into())
 }
 
 #[derive(Clone, Debug)]

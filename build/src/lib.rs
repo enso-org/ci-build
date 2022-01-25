@@ -1,4 +1,5 @@
 #![feature(bool_to_option)]
+#![feature(exit_status_error)]
 
 use crate::prelude::*;
 
@@ -8,8 +9,10 @@ pub mod prelude {
     pub use ide_ci::prelude::*;
 }
 
+pub mod args;
 pub mod bump_version;
 pub mod changelog;
+pub mod enso;
 pub mod httpbin;
 pub mod paths;
 pub mod postgres;

@@ -10,6 +10,7 @@ pub mod go;
 pub mod java;
 pub mod node;
 pub mod pwsh;
+pub mod robocopy;
 pub mod sbt;
 pub mod seven_zip;
 pub mod sh;

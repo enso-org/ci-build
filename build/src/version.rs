@@ -1,9 +1,11 @@
 // use crate::preflight_check::NIGHTLY_RELEASE_TITLE_INFIX;
 use crate::prelude::*;
+use chrono::Datelike;
 use ide_ci::models::config::RepoContext;
 use octocrab::models::repos::Release;
 use semver::Prerelease;
 use std::collections::BTreeSet;
+use std::fmt::Formatter;
 use std::str::FromStr;
 
 /// Variable that stores Enso Engine version.
@@ -11,7 +13,7 @@ const VERSION_VAR_NAME: &str = "ENSO_VERSION";
 const EDITION_VAR_NAME: &str = "ENSO_EDITION";
 const RELEASE_MODE_VAR_NAME: &str = "ENSO_RELEASE_MODE";
 
-const DEV_BUILD_PREFIX: &str = "dev";
+const LOCAL_BUILD_PREFIX: &str = "dev";
 const NIGHTLY_BUILD_PREFIX: &str = "nightly";
 // pub enum Kind {
 //     Local,
@@ -22,7 +24,7 @@ const NIGHTLY_BUILD_PREFIX: &str = "nightly";
 
 pub fn default_engine_version() -> Version {
     let mut ret = Version::new(0, 0, 0);
-    ret.pre = Prerelease::new(DEV_BUILD_PREFIX).unwrap();
+    ret.pre = Prerelease::new(LOCAL_BUILD_PREFIX).unwrap();
     ret
 }
 
@@ -45,11 +47,15 @@ impl Default for Versions {
 
 impl Versions {
     pub fn new(version: Version) -> Self {
-        let release_mode = version.pre.as_str().contains(DEV_BUILD_PREFIX);
+        let release_mode = version.pre.as_str().contains(LOCAL_BUILD_PREFIX);
         Versions { version, release_mode }
     }
 
-    pub async fn new_nightly(octocrab: &Octocrab, repo: &RepoContext) -> Result<Prerelease> {
+    pub fn local_prerelease() -> Result<Prerelease> {
+        Prerelease::new(LOCAL_BUILD_PREFIX).anyhow_err()
+    }
+
+    pub async fn nightly_prerelease(octocrab: &Octocrab, repo: &RepoContext) -> Result<Prerelease> {
         let date = chrono::Utc::now();
         let date = date.format("%F").to_string();
 
@@ -91,6 +97,10 @@ impl Versions {
         unreachable!("After infinite loop.")
     }
 
+    pub fn tag(&self) -> String {
+        self.version.to_string()
+    }
+
     pub fn publish(&self) -> Result {
         let name = format!("{}", self.version);
         ide_ci::actions::workflow::set_output(VERSION_VAR_NAME, &name);
@@ -102,21 +112,74 @@ impl Versions {
         Ok(())
     }
 
-    pub fn from_env() -> Result<Self> {
-        let version = ide_ci::env::expect_var(VERSION_VAR_NAME)?.parse()?;
-        Ok(Versions::new(version))
-    }
+    // pub fn from_env() -> Result<Self> {
+    //     let version = ide_ci::env::expect_var(VERSION_VAR_NAME)?.parse()?;
+    //     Ok(Versions::new(version))
+    // }
 
     pub fn is_nightly(&self) -> bool {
         self.version.pre.as_str().starts_with(NIGHTLY_BUILD_PREFIX)
     }
 }
 
-// #[tokio::test]
-// #[ignore]
-// async fn aaaa() -> Result {
-//     let octocrab = crate::setup_octocrab()?;
-//     let releases = octocrab.repos("enso-org", "ci-build").releases();
-//     dbg!(Versions::new_nightly(&releases).await?);
-//     Ok(())
-// }
+pub fn version_from_env() -> Result<Version> {
+    let version = ide_ci::env::expect_var(VERSION_VAR_NAME)?.parse()?;
+    Ok(version)
+}
+
+pub fn base_version(changelog_path: impl AsRef<Path>) -> Result<Version> {
+    if let Ok(from_env) = version_from_env() {
+        return Ok(from_env);
+    }
+
+    let changelog_contents = std::fs::read_to_string(changelog_path.as_ref())?;
+    let mut headers = crate::changelog::iterate_headers_text(&changelog_contents)
+        .map(ide_ci::program::version::find_in_text);
+
+    let version = match headers.next() {
+        Some(Ok(version)) => version,
+        None => suggest_new_version(),
+        Some(Err(_)) => match headers.next() {
+            Some(Ok(version)) => suggest_next_version(&version),
+            None => suggest_new_version(),
+            Some(Err(_)) => bail!("Two leading release headers have no version number in them."),
+        },
+    };
+    Ok(version)
+}
+
+impl Display for Versions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Enso {}", self.version)
+    }
+}
+
+pub fn current_year() -> u64 {
+    chrono::Utc::today().year() as u64
+}
+
+pub fn suggest_new_version() -> Version {
+    Version::new(current_year(), 1, 1)
+}
+
+pub fn suggest_next_version(previous: &Version) -> Version {
+    let year = current_year();
+    if previous.major == year {
+        Version::new(year, previous.minor + 1, 1)
+    } else {
+        suggest_new_version()
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn iii() -> Result {
+        dbg!(base_version(r"H:\nbo\enso\app\gui\changelog.md")?);
+        Ok(())
+    }
+}

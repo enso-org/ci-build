@@ -4,6 +4,15 @@ use std::fmt::Formatter;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
 
+#[cfg(target_os = "linux")]
+const LIBRARIES_TO_TEST: [&str; 6] =
+    ["Tests", "Table_Tests", "Database_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
+
+// Test postgres only on Linux
+#[cfg(not(target_os = "linux"))]
+pub(crate) const LIBRARIES_TO_TEST: [&str; 5] =
+    ["Tests", "Table_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
+
 const ARCHIVE_EXTENSION: &str = match TARGET_OS {
     OS::Windows => "zip",
     _ => "tar.gz",
@@ -152,4 +161,12 @@ impl Paths {
     pub fn stdlib_test(&self, test_name: impl AsRef<Path>) -> PathBuf {
         self.stdlib_tests().join(test_name)
     }
+
+    pub fn changelog(&self) -> PathBuf {
+        root_to_changelog(&self.repo_root)
+    }
+}
+
+pub fn root_to_changelog(root: impl AsRef<Path>) -> PathBuf {
+    root.as_ref().join_many(["app", "gui", "CHANGELOG.md"])
 }

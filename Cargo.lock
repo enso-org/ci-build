@@ -472,6 +472,7 @@ dependencies = [
  "serde_yaml",
  "shrinkwraprs",
  "snafu",
+ "strum",
  "sysinfo",
  "tar",
  "tempfile",
