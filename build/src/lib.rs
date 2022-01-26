@@ -10,6 +10,7 @@ pub mod prelude {
 }
 
 pub mod args;
+pub mod aws;
 pub mod bump_version;
 pub mod changelog;
 pub mod enso;
@@ -17,7 +18,6 @@ pub mod env;
 pub mod httpbin;
 pub mod paths;
 pub mod postgres;
-pub mod preflight_check;
 pub mod version;
 
 /// Get version of Enso from the `build.sbt` file contents.
