@@ -1,4 +1,5 @@
 use chrono::Duration;
+use octocrab::models::events::payload::IssuesEventChanges::Body;
 use reqwest::{Client, ClientBuilder};
 use reqwest::header::HeaderMap;
 use serde::de::DeserializeOwned;
@@ -166,8 +167,8 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
     let upload_request = client.put(upload_url)
         .query(&[("itemPath", artifact_path.to_str().unwrap())])
         .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
-        .header(reqwest::header::CONTENT_LENGTH, file.len());
-
+        .header(reqwest::header::CONTENT_LENGTH, file.len())
+        .body(file.as_bytes());
     let upload_response:serde_json::Value = execute_dbg(&client, upload_request).await?;
 
     let patch_request = client.patch(artifact_url.clone())
