@@ -83,7 +83,7 @@ impl CreateArtifactRequest {
 pub struct CreateArtifactResponse {
     pub container_id: u64,
     pub size: i64,
-    pub signed_content: String,
+    pub signed_content: Option<String>,
     pub file_container_resource_url: String,
     pub r#type: String,
     pub name: String,
@@ -196,4 +196,17 @@ async fn main() -> Result {
     upload_file("Cargo.toml", "SomeFile").await?;
     Ok(())
     //let client = reqwest::Client::builder().default_headers().
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserialize_response() -> Result {
+        let text = r#"{"containerId":11099678,"size":-1,"signedContent":null,"fileContainerResourceUrl":"https://pipelines.actions.githubusercontent.com/VYS7uSE1JB12MkavBOHvD6nounefzg1s5vHmQvfbiLmuvFuM6c/_apis/resources/Containers/11099678","type":"actions_storage","name":"SomeFile","url":"https://pipelines.actions.githubusercontent.com/VYS7uSE1JB12MkavBOHvD6nounefzg1s5vHmQvfbiLmuvFuM6c/_apis/pipelines/1/runs/75/artifacts?artifactName=SomeFile","expiresOn":"2022-01-29T04:07:24.5807079Z","items":null}"#;
+        serde_json::from_str::<CreateArtifactResponse>(text)?;
+        Ok(())
+    }
 }
