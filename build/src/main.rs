@@ -122,7 +122,7 @@ const NIGHTLY: BuildConfiguration = BuildConfiguration {
 async fn main() -> anyhow::Result<()> {
     println!("Initial environment:");
     for (key, value) in std::env::vars() {
-        if key.contains("SECRET") || key.contains("TOKEN") || key.contains("SBT") {
+        if key.contains("SECRET") || key.contains("TOKEN") || key.contains("TOOL") {
             ide_ci::actions::workflow::mask_environment_variable(&key);
         }
 
