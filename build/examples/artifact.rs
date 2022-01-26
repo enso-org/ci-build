@@ -167,6 +167,7 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
         .query(&[("itemPath", artifact_path.to_str().unwrap())])
         .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
         .header(reqwest::header::CONTENT_LENGTH, file.len())
+        .header(reqwest::header::CONTENT_RANGE, iformat!("bytes-{file.len() - 1}/{file.len()}"))
         .body(file.clone());
     let upload_response:serde_json::Value = execute_dbg(&client, upload_request).await?;
 
