@@ -171,7 +171,7 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
     let upload_response:serde_json::Value = execute_dbg(&client, upload_request).await?;
 
     let patch_request = client.patch(artifact_url.clone())
-        .query(&[("artifactName", artifact_name)])
+        .query(&[("artifactName", artifact_path.to_str().unwrap())]) // OsStr can be passed here, fails runtime
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .json(&PatchArtifactSize {size: file.len()});
 
@@ -211,13 +211,19 @@ mod tests {
     #[test]
     fn deserialize_response() -> Result {
         let text = r#"{"containerId":11099678,"size":-1,"signedContent":null,"fileContainerResourceUrl":"https://pipelines.actions.githubusercontent.com/VYS7uSE1JB12MkavBOHvD6nounefzg1s5vHmQvfbiLmuvFuM6c/_apis/resources/Containers/11099678","type":"actions_storage","name":"SomeFile","url":"https://pipelines.actions.githubusercontent.com/VYS7uSE1JB12MkavBOHvD6nounefzg1s5vHmQvfbiLmuvFuM6c/_apis/pipelines/1/runs/75/artifacts?artifactName=SomeFile","expiresOn":"2022-01-29T04:07:24.5807079Z","items":null}"#;
-        // let response = serde_json::from_str::<CreateArtifactResponse>(text)?;
+        let response = serde_json::from_str::<CreateArtifactResponse>(text)?;
         //
         // let patch_request = client.patch(artifact_url.clone())
         //     .query(&[("artifactName", artifact_name)])
         //     .header(reqwest::header::CONTENT_TYPE, "application/json")
         //     .json(&PatchArtifactSize {size: file.len()});
 
+        let path = PathBuf::from("Cargo.toml");
+        let artifact_path =path.file_name().unwrap(); // FIXME
+
+        let client = reqwest::ClientBuilder::new().build()?;
+        dbg!(artifact_path);
+        client.patch(response.url).query(&[("itemPath", artifact_path.to_str().unwrap())]).build()?;
 
         Ok(())
     }
