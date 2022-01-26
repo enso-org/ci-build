@@ -158,7 +158,7 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
     let created_artifact: CreateArtifactResponse = execute_dbg(&client, create_request).await?;
 
     // Upload file to container.
-    let upload_url = created_artifact.url.clone();
+    let upload_url = created_artifact.file_container_resource_url.clone();
 
 
     let artifact_path = path.as_ref().file_name().unwrap(); // FIXME
