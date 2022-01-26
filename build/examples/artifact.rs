@@ -1,5 +1,4 @@
 use chrono::Duration;
-use octocrab::models::events::payload::IssuesEventChanges::Body;
 use reqwest::{Client, ClientBuilder};
 use reqwest::header::HeaderMap;
 use serde::de::DeserializeOwned;
@@ -40,7 +39,7 @@ impl Context {
             headers.insert("Keep-Alive", keep_alive.num_seconds().into());
         }
 
-        ClientBuilder::new().default_headers(headers).user_agent(ide_ci::USER_AGENT).build().anyhow_err()
+        dbg!(ClientBuilder::new().default_headers(headers).user_agent(ide_ci::USER_AGENT)).build().anyhow_err()
     }
 
     // pub fn prepare_bin_client(&self, keep_alive: Option<Duration>) -> Result<Client> {
