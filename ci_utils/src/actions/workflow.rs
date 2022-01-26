@@ -46,10 +46,15 @@ pub fn mask_text(text: impl AsRef<str>) {
     }
 }
 
-pub fn mask_environment_variable(variable_name: impl AsRef<str>) {
+pub fn mask_value(value: impl Display) {
     if std::env::var("GITHUB_ACTIONS").is_ok() {
-        iprintln!("::add-mask::${variable_name.as_ref()}")
+        iprintln!("::add-mask::{value}")
     }
+}
+
+pub fn mask_environment_variable(variable_name: impl AsRef<OsStr>) -> Result {
+    mask_value(std::env::var(variable_name)?);
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, strum::Display)]
