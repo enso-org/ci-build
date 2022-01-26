@@ -1,7 +1,7 @@
-use s3::creds::Credentials;
 use crate::prelude::*;
+use s3::creds::Credentials;
 
 #[test]
 fn aaaa() {
-    let aws = Credentials::new()
+    let aws = Credentials::default();
 }
