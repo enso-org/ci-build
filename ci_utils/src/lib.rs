@@ -78,11 +78,11 @@ pub mod prelude {
     pub use std::stream::Stream;
     pub use std::sync::Arc;
     pub use tokio::io::AsyncWriteExt;
-    pub use tokio::process::Command;
     pub use url::Url;
     pub use uuid::Uuid;
 
     pub use crate::EMPTY_REQUEST_BODY;
+
 
     pub use crate::anyhow::ResultExt;
     pub use crate::extensions::command::CommandExt;
@@ -91,6 +91,7 @@ pub mod prelude {
     pub use crate::extensions::path::PathExt;
     pub use crate::github::RepoPointer;
     pub use crate::goodie::Goodie;
+    pub use crate::program::command::Command;
     pub use crate::program::Program;
     pub use crate::program::ProgramExt;
     pub use crate::program::Shell;

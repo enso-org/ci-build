@@ -549,9 +549,12 @@ pub async fn create_packages(paths: &Paths) -> Result<Vec<PathBuf>> {
 }
 
 #[context("Placing a GraalVM package under {}", target_directory.as_ref().display())]
-pub fn place_graal_under(target_directory: impl AsRef<Path>) -> Result {
+pub async fn place_graal_under(target_directory: impl AsRef<Path>) -> Result {
     let graal_path = PathBuf::from(ide_ci::env::expect_var_os("JAVA_HOME")?);
-    ide_ci::io::copy_to(&graal_path, target_directory.as_ref())
+    let graal_dirname = graal_path
+        .file_name()
+        .context(anyhow!("Invalid Graal Path deduced from JAVA_HOME: {}", graal_path.display()))?;
+    ide_ci::io::mirror_directory(&graal_path, target_directory.as_ref().join(graal_dirname)).await
 }
 
 #[context("Placing a Enso Engine package in {}", target_engine_dir.as_ref().display())]
@@ -594,7 +597,7 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
     // Copy engine into the bundle.
     let bundled_engine_dir = engine_bundle.dir.join("dist").join(paths.triple.version.to_string());
     place_component_at(&paths.engine, &bundled_engine_dir)?;
-    place_graal_under(engine_bundle.dir.join("runtime"))?;
+    place_graal_under(engine_bundle.dir.join("runtime")).await?;
     engine_bundle.pack().await?;
 
     // Project manager bundle.
@@ -607,7 +610,7 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
     pm_bundle.clear()?;
     ide_ci::io::copy(&paths.project_manager.root, &pm_bundle.root)?;
     place_component_at(&paths.engine, &bundled_engine_dir)?;
-    place_graal_under(pm_bundle.dir.join("runtime"))?;
+    place_graal_under(pm_bundle.dir.join("runtime")).await?;
     ide_ci::io::copy(
         paths.repo_root.join_many(["distribution", "enso.bundle.template"]),
         pm_bundle.dir.join(".enso.bundle"),

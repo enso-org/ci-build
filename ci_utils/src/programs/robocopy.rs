@@ -9,25 +9,25 @@ impl Program for Robocopy {
     fn executable_name() -> &'static str {
         "robocopy"
     }
+
+    fn handle_exit_status(status: std::process::ExitStatus) -> Result {
+        match status.code() {
+            None => status.exit_ok().anyhow_err(),
+            Some(code) if code > 1 => bail!("Exit with code {}.", code),
+            Some(_) => Ok(()),
+        }
+    }
 }
 
-impl Robocopy {
-    // pub fn mirror_dir(
-    //     source: impl AsRef<Path>,
-    //     destination: impl AsRef<Path>,
-    // ) -> anyhow::Result<()> {
-    //     let mut cmd: Command = cmd_from_args![source.as_ref(), destination.as_ref(), "/mir"]?;
-    //     let code = cmd.spawn()?.wait()?.code();
-    //     if code == Some(1) {
-    //         Ok(())
-    //     } else {
-    //         Err(Error::Blah.into())
-    //     }
-    // }
+impl Robocopy {}
+
+pub async fn mirror_dir(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
+    Robocopy
+        .cmd()?
+        .arg(source.as_ref())
+        .arg(destination.as_ref())
+        .arg("/mir")
+        .arg("/sl")
+        .run_ok()
+        .await
 }
-//
-// #[derive(Clone, Copy, Debug, Error)]
-// pub enum Error {
-//     #[error("ROBOCOPY failed")]
-//     Blah,
-// }

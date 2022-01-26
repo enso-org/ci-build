@@ -65,7 +65,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest, [self-hosted, Windows], [self-hosted, Linux], [self-hosted, macOS]]
+        os:
+        - ubuntu-latest
+        - windows-latest
+        - macos-latest
+        - [self-hosted, Windows]
+        - [self-hosted, Linux]
+        - [self-hosted, macOS]]
         nightly: [true, false]
       fail-fast: false
 

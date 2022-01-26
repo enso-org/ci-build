@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+pub mod command;
 pub mod resolver;
 pub mod shell;
 pub mod version;
@@ -11,8 +12,9 @@ pub use shell::Shell;
 /// A set of utilities for using a known external program.
 ///
 /// The trait covers program lookup and process management.
+// `Sized + 'static` bounds are due to using `Self` as type parameter for `Command` constructor.
 #[async_trait]
-pub trait Program {
+pub trait Program: Sized + 'static {
     /// The name used to find and invoke the program.
     ///
     /// This should just the stem name, not a full path. The os-specific executable extension should
@@ -75,7 +77,8 @@ pub trait Program {
     }
 
     fn cmd(&self) -> Result<Command> {
-        let mut command = self.lookup().map(Command::new)?;
+        let tokio_command = self.lookup().map(tokio::process::Command::new)?;
+        let mut command = Command::new::<Self>(tokio_command);
         if let Some(current_dir) = self.current_directory() {
             command.current_dir(current_dir);
         }
@@ -91,7 +94,7 @@ pub trait Program {
         Self::handle_exit_status(status)
     }
 
-    fn handle_exit_status(status: std::process::ExitStatus) -> anyhow::Result<()> {
+    fn handle_exit_status(status: std::process::ExitStatus) -> Result {
         status.exit_ok().anyhow_err()
     }
 

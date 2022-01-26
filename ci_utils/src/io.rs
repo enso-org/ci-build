@@ -4,7 +4,6 @@ use platforms::TARGET_OS;
 
 use crate::archive::Format;
 use reqwest::IntoUrl;
-use crate::programs;
 
 /// Create a directory (and all missing parent directories),
 ///
@@ -173,7 +172,7 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
 
 pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
     if TARGET_OS == OS::Windows {
-        todo!()
+        crate::programs::robocopy::mirror_dir(source, destination).await
     } else {
         crate::programs::rsync::mirror_directory(source, destination).await
     }
@@ -196,27 +195,36 @@ pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
 
 #[cfg(test)]
 mod tests {
-    use tempfile::tempdir;
     use super::*;
+    use tempfile::tempdir;
 
     #[tokio::test]
+    #[ignore]
     async fn copy_dir_with_symlink() -> Result {
         let dir = tempdir()?;
         let foo = dir.join_many(["src", "foo.txt"]);
         std::env::set_current_dir(&dir)?;
-        create_parent_dir_if_missing(&foo);
+        create_parent_dir_if_missing(&foo)?;
         std::fs::write(&foo, "foo")?;
 
         let bar = foo.with_file_name("bar");
 
         // Command::new("ls").arg("-laR").run_ok().await?;
+        #[cfg(not(target_os = "windows"))]
         std::os::unix::fs::symlink(foo.file_name().unwrap(), &bar)?;
+        #[cfg(target_os = "windows")]
+        std::os::windows::fs::symlink_file(foo.file_name().unwrap(), &bar)?;
 
         copy(foo.parent().unwrap(), foo.parent().unwrap().with_file_name("dest"))?;
 
-        mirror_directory(foo.parent().unwrap(), foo.parent().unwrap().with_file_name("dest2")).await?;
+        mirror_directory(foo.parent().unwrap(), foo.parent().unwrap().with_file_name("dest2"))
+            .await?;
 
-        Command::new("ls").arg("-laR").run_ok().await?;
+        tokio::process::Command::new(r"C:\msys64\usr\bin\ls.exe")
+            .arg("-laR")
+            .status()
+            .await?
+            .exit_ok()?;
 
         Ok(())
     }

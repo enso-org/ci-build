@@ -1,41 +1,15 @@
 use crate::prelude::*;
 
-use anyhow::Context;
 use std::fmt::Write;
-use std::process::Output;
-use tokio::process::Child;
 
 pub trait CommandExt {
-    fn run_ok(&mut self) -> BoxFuture<'static, Result<()>>;
+    // fn run_ok(&mut self, program: &impl Program) -> BoxFuture<'static, Result<()>>;
+    //
+    // fn output_ok(&mut self) -> BoxFuture<'static, Result<Output>>;
+    // // TODO: `spawn` but does logs like some other methods. They all need a naming unification
+    // pass. fn spawn_nicer(&mut self) -> Result<Child>;
 
-    fn output_ok(&mut self) -> BoxFuture<'static, Result<Output>>;
-    // TODO: `spawn` but does logs like some other methods. They all need a naming unification pass.
-    fn spawn_nicer(&mut self) -> Result<Child>;
-
-    fn describe(&self) -> String;
-}
-
-impl CommandExt for tokio::process::Command {
-    fn run_ok(&mut self) -> BoxFuture<'static, Result<()>> {
-        let pretty = self.describe();
-        println!("Will run: {}", pretty);
-        let status = self.status();
-        async move { status.await?.exit_ok().context(format!("Command failed: {}", pretty)) }
-            .boxed()
-    }
-
-    fn output_ok(&mut self) -> BoxFuture<'static, Result<Output>> {
-        let pretty = self.describe();
-        println!("Will run: {}", pretty);
-        let output = self.output();
-        async move { output.await.context(format!("Command failed: {}", pretty)) }.boxed()
-    }
-
-    fn spawn_nicer(&mut self) -> Result<Child> {
-        let pretty = self.describe();
-        println!("Spawning {}", pretty);
-        self.spawn().context(format!("Failed to spawn: {}", pretty))
-    }
+    fn as_std(&self) -> &std::process::Command;
 
     fn describe(&self) -> String {
         let mut ret = String::new();
@@ -59,4 +33,44 @@ impl CommandExt for tokio::process::Command {
         ret
         // ?self.as_std().get_program()
     }
+}
+
+
+impl CommandExt for crate::program::command::Command {
+    fn as_std(&self) -> &std::process::Command {
+        self.inner.as_std()
+    }
+}
+
+
+impl CommandExt for std::process::Command {
+    fn as_std(&self) -> &std::process::Command {
+        self
+    }
+}
+
+impl CommandExt for tokio::process::Command {
+    fn as_std(&self) -> &std::process::Command {
+        self.as_std()
+    }
+    // fn run_ok(&mut self) -> BoxFuture<'static, Result<()>> {
+    //     let pretty = self.describe();
+    //     println!("Will run: {}", pretty);
+    //     let status = self.status();
+    //     async move { status.await?.exit_ok().context(format!("Command failed: {}", pretty)) }
+    //         .boxed()
+    // }
+    //
+    // fn output_ok(&mut self) -> BoxFuture<'static, Result<Output>> {
+    //     let pretty = self.describe();
+    //     println!("Will run: {}", pretty);
+    //     let output = self.output();
+    //     async move { output.await.context(format!("Command failed: {}", pretty)) }.boxed()
+    // }
+    //
+    // fn spawn_nicer(&mut self) -> Result<Child> {
+    //     let pretty = self.describe();
+    //     println!("Spawning {}", pretty);
+    //     self.spawn().context(format!("Failed to spawn: {}", pretty))
+    // }
 }
