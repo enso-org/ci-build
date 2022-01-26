@@ -164,14 +164,14 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
     let file = std::fs::read_to_string(&path)?;
 
     let upload_request = client.put(upload_url)
-        .query(&[("itemPath", artifact_path)])
+        .query(&[("itemPath", artifact_path.to_str().unwrap())])
         .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
         .header(reqwest::header::CONTENT_LENGTH, file.len());
 
     let upload_response:serde_json::Value = execute_dbg(&client, upload_request).await?;
 
     let patch_request = client.patch(artifact_url.clone())
-        .query(&[("artifactName", artifact_path.to_str().unwrap())]) // OsStr can be passed here, fails runtime
+        .query(&[("artifactName", artifact_name)]) // OsStr can be passed here, fails runtime
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .json(&PatchArtifactSize {size: file.len()});
 
