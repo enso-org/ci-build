@@ -17,6 +17,7 @@ pub mod sh;
 pub mod tar;
 pub mod vs;
 pub mod vswhere;
+pub mod rsync;
 
 pub use cargo::Cargo;
 pub use cmd::Cmd;
