@@ -123,7 +123,7 @@ pub struct PatchArtifactSizeResponse {
     pub r#type: String,
     pub name: String,
     pub url: Url,
-    upload_url: Url,
+    pub upload_url: Url,
 }
 
 pub async fn execute_dbg<T: DeserializeOwned + std::fmt::Debug>(client: &reqwest::Client, reqeust: reqwest::RequestBuilder) -> Result<T> {
@@ -164,7 +164,7 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
     let artifact_path = path.as_ref().file_name().unwrap(); // FIXME
     let file = Bytes::from(std::fs::read(&path)?);
     let upload_request = client.put(upload_url)
-        .query(&[("itemPath", artifact_path.to_str().unwrap())])
+        .query(&[("itemPath", PathBuf::from(artifact_name).join(artifact_path.to_str().unwrap()))])
         .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
         .header(reqwest::header::CONTENT_LENGTH, file.len())
         .header(reqwest::header::CONTENT_RANGE, iformat!("bytes 0-{file.len() - 1}/{file.len()}"))
