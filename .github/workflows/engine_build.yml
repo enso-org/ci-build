@@ -71,7 +71,7 @@ jobs:
         - macos-latest
         - [self-hosted, Windows]
         - [self-hosted, Linux]
-        - [self-hosted, macOS]]
+#        - [self-hosted, macOS]]
         nightly: [true, false]
       fail-fast: false
 
