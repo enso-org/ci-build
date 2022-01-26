@@ -8,13 +8,10 @@
 #![feature(default_free_fn)]
 #![feature(map_first_last)]
 
-use anyhow::Context;
-use filetime::FileTime;
-use glob::glob;
 pub use ide_ci::prelude;
 use ide_ci::prelude::*;
-use std::env::consts::EXE_EXTENSION;
 
+use anyhow::Context;
 use enso_build::args::Args;
 use enso_build::args::BuildKind;
 use enso_build::args::WhatToDo;
@@ -25,6 +22,8 @@ use enso_build::paths::Paths;
 use enso_build::retrieve_github_access_token;
 use enso_build::setup_octocrab;
 use enso_build::version::Versions;
+use filetime::FileTime;
+use glob::glob;
 use ide_ci::actions::workflow;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
@@ -38,6 +37,7 @@ use ide_ci::programs::Flatc;
 use ide_ci::programs::Sbt;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
+use std::env::consts::EXE_EXTENSION;
 use sysinfo::SystemExt;
 
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
@@ -147,32 +147,12 @@ async fn main() -> anyhow::Result<()> {
         BuildKind::Nightly => Versions::nightly_prerelease(&octocrab, &repo).await?,
     };
     let versions = Versions::new(version);
+    versions.publish()?;
     println!("Target version: {versions}.");
     let paths = Paths::new_version(&enso_root, versions.version.clone())?;
 
-    // let versions = {
-    //     let from_env = Versions::from_env();
-    //     if let Ok(env_version) = from_env {
-    //         // TODO reconsider
-    //         env_version
-    //         // ensure!(env_version.is_nightly() == args.nightly, "Inconsistent environment.");
-    //         // env_version
-    //     } else {
-    //         if args.nightly {
-    //             let mut v = Versions::default();
-    //             v.version.pre = Versions::new_nightly(&octocrab, &repo).await?;
-    //             v.release_mode = true;
-    //             v
-    //         } else {
-    //             Versions::default()
-    //         }
-    //     }
-    // };
-
     match args.command {
         WhatToDo::Prepare => {
-            versions.publish()?;
-
             let commit = ide_ci::actions::env::commit()?;
             let latest_changelog_body =
                 enso_build::changelog::retrieve_unreleased_release_notes(paths.changelog())?;
@@ -425,14 +405,18 @@ async fn main() -> anyhow::Result<()> {
             std::fs::write(google_api_test_data_dir.join("secret.json"), &gdoc_key)?;
         }
         enso.run_tests(IrCaches::No, PARALLEL_ENSO_TESTS).await?;
+    }
 
-        let std_libs = paths.engine.dir.join("lib").join("Standard");
-        // Compile the Standard Libraries (Unix)
-        for entry in std_libs.read_dir()? {
-            let entry = entry?;
-            let target = entry.path().join(paths.triple.version.to_string());
-            enso.compile_lib(target)?.run_ok().await?;
-        }
+    let std_libs = paths.engine.dir.join("lib").join("Standard");
+    // Compile the Standard Libraries (Unix)
+    println!("Compiling standard libraries under {}", std_libs.display());
+    for entry in std_libs.read_dir()? {
+        let entry = entry?;
+        let target = entry.path().join(paths.triple.version.to_string());
+        enso.compile_lib(target)?.run_ok().await?;
+    }
+
+    if config.test_standard_library {
         enso.run_tests(IrCaches::Yes, PARALLEL_ENSO_TESTS).await?;
     }
 

@@ -19,9 +19,7 @@ pub enum BuildKind {
 }
 
 pub fn default_kind() -> BuildKind {
-    ide_ci::env::expect_var("ENSO_BUILD_KIND")
-        .and_then(|kind_text| kind_text.parse().anyhow_err())
-        .unwrap_or(BuildKind::Dev)
+    crate::env::build_kind().unwrap_or(BuildKind::Dev)
 }
 
 /// Build, test and packave Enso Engine.
