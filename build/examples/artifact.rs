@@ -88,6 +88,7 @@ pub struct CreateArtifactResponse {
     pub r#type: String,
     pub name: String,
     pub url: String,
+    pub expires_on: String,
 }
 
 #[derive(Clone,Debug, Serialize, Deserialize)]
@@ -118,7 +119,7 @@ pub struct PatchArtifactSize {
 pub struct PatchArtifactSizeResponse {
     pub container_id: u64,
     pub size: i64,
-    pub signed_content: String,
+    pub signed_content: Option<String>,
     pub r#type: String,
     pub name: String,
     pub url: Url,
@@ -131,7 +132,7 @@ pub async fn execute_dbg<T: DeserializeOwned + std::fmt::Debug>(client: &reqwest
     let response = client.execute(request).await?;
     dbg!(&response);
     let text = response.text().await?;
-    dbg!(&text);
+    println!("{}", &text);
     let deserialized = serde_json::from_str(&text)?;
     dbg!(&deserialized);
     Ok(deserialized)
