@@ -32,7 +32,6 @@ impl Context {
         headers.insert(reqwest::header::ACCEPT, iformat!("application/json;api-version={self.api_version}").parse()?);
         // headers.insert(reqwest::header::ACCEPT_ENCODING, "gzip".into());
         // headers.insert(reqwest::header::ACCEPT, iformat!("application/octet-stream;api-version={api_version}").into());
-        headers.insert(reqwest::header::CONTENT_TYPE, "application/json".parse()?);
         headers.insert(reqwest::header::AUTHORIZATION, format!("Bearer {}", self.runtime_token).parse()?);
 
         if let Some(keep_alive) = keep_alive {
@@ -82,12 +81,12 @@ impl CreateArtifactRequest {
 #[serde(rename_all = "camelCase")] // Sic!
 pub struct CreateArtifactResponse {
     pub container_id: u64,
-    pub size: i64,
+    pub size: i64, // must be signed, as -1 is used as a placeholder
     pub signed_content: Option<String>,
-    pub file_container_resource_url: String,
+    pub file_container_resource_url: Url,
     pub r#type: String,
     pub name: String,
-    pub url: String,
+    pub url: Url,
     pub expires_on: String,
 }
 
@@ -152,7 +151,10 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
 
 
     let query = CreateArtifactRequest::new(artifact_name);
-    let created_artifact: CreateArtifactResponse = execute_dbg(&client, client.post(artifact_url.clone()).json(&query)).await?;
+    let create_request = client.post(artifact_url.clone())
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .json(&query);
+    let created_artifact: CreateArtifactResponse = execute_dbg(&client, create_request).await?;
 
     // Upload file to container.
     let upload_url = created_artifact.url.clone();
@@ -168,7 +170,10 @@ pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result 
 
     let upload_response:serde_json::Value = execute_dbg(&client, upload_request).await?;
 
-    let patch_request = client.patch(artifact_url.clone()).query(&[("artifactName", artifact_name)]).json(&PatchArtifactSize {size: file.len()});
+    let patch_request = client.patch(artifact_url.clone())
+        .query(&[("artifactName", artifact_name)])
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .json(&PatchArtifactSize {size: file.len()});
 
     let patch_response:serde_json::Value = execute_dbg(&client, patch_request).await?;
 
@@ -206,7 +211,14 @@ mod tests {
     #[test]
     fn deserialize_response() -> Result {
         let text = r#"{"containerId":11099678,"size":-1,"signedContent":null,"fileContainerResourceUrl":"https://pipelines.actions.githubusercontent.com/VYS7uSE1JB12MkavBOHvD6nounefzg1s5vHmQvfbiLmuvFuM6c/_apis/resources/Containers/11099678","type":"actions_storage","name":"SomeFile","url":"https://pipelines.actions.githubusercontent.com/VYS7uSE1JB12MkavBOHvD6nounefzg1s5vHmQvfbiLmuvFuM6c/_apis/pipelines/1/runs/75/artifacts?artifactName=SomeFile","expiresOn":"2022-01-29T04:07:24.5807079Z","items":null}"#;
-        serde_json::from_str::<CreateArtifactResponse>(text)?;
+        // let response = serde_json::from_str::<CreateArtifactResponse>(text)?;
+        //
+        // let patch_request = client.patch(artifact_url.clone())
+        //     .query(&[("artifactName", artifact_name)])
+        //     .header(reqwest::header::CONTENT_TYPE, "application/json")
+        //     .json(&PatchArtifactSize {size: file.len()});
+
+
         Ok(())
     }
 }
