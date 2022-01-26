@@ -171,6 +171,7 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
 }
 
 pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
+    create_parent_dir_if_missing(destination.as_ref())?;
     if TARGET_OS == OS::Windows {
         crate::programs::robocopy::mirror_dir(source, destination).await
     } else {
