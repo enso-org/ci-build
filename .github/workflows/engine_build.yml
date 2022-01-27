@@ -66,9 +66,9 @@ jobs:
     strategy:
       matrix:
         os:
-        - [ubuntu-latest, engine]
-        - [windows-latest, engine]
-        - [macos-latest, engine]
+        - [ubuntu-latest]
+        - [windows-latest]
+        - [macos-latest]
         - [self-hosted, Windows, engine]
         - [self-hosted, Linux, engine]
 #        - [self-hosted, macOS]]
