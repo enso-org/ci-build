@@ -438,7 +438,10 @@ async fn main() -> anyhow::Result<()> {
         enso.run_tests(IrCaches::Yes, PARALLEL_ENSO_TESTS).await?;
     }
 
-    if config.mode == BuildMode::NightlyRelease {
+
+    // Verify License Packages in Distributions
+    // FIXME apparently this does not work on Windows due to some CRLF issues?
+    if config.mode == BuildMode::NightlyRelease && TARGET_OS != OS::Windows {
         /*  refversion=${{ env.ENSO_VERSION }}
             binversion=${{ env.DIST_VERSION }}
             engineversion=$(${{ env.ENGINE_DIST_DIR }}/bin/enso --version --json | jq -r '.version')
@@ -447,7 +450,6 @@ async fn main() -> anyhow::Result<()> {
         */
 
 
-        // Verify License Packages in Distributions
         async fn verify_generated_package(
             sbt: &impl Program,
             package: &str,

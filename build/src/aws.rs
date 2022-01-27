@@ -9,15 +9,20 @@ pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Resul
     let config = aws_config::load_from_env().await;
     let client = Client::new(&config);
 
-    dbg!(
+    let body = dbg!(
         client
             .get_object()
             .bucket("editions.release.enso.org")
             .key("enso/manifest.yaml")
             .send()
             .await
-    )?;
+    )?
+    .body
+    .collect()
+    .await?
+    .into_bytes();
 
+    println!("{}", std::str::from_utf8(body.as_ref())?);
     // dbg!(client.list_buckets().send().await)?;
 
 
