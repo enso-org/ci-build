@@ -37,11 +37,10 @@ jobs:
       - uses: actions/checkout@v2
         with:
           clean: false
-      - uses: jannekem/run-python-script-action@v1
+      - uses: actions/github-script@v5
         with:
           script: |
-            import os
-            set_env("ACTIONS_RUNTIME_TOKEN", os.environ["ACTIONS_RUNTIME_TOKEN"])
-            set_env("ACTIONS_RUNTIME_URL", os.environ["ACTIONS_RUNTIME_URL"])
-            set_env("GITHUB_RETENTION_DAYS", os.environ["GITHUB_RETENTION_DAYS"])
+            core.setEnvironmentVariable("ACTIONS_RUNTIME_TOKEN", process.env[ACTIONS_RUNTIME_TOKEN])
+            core.setEnvironmentVariable("ACTIONS_RUNTIME_URL", process.env[ACTIONS_RUNTIME_URL])
+            core.setEnvironmentVariable("GITHUB_RETENTION_DAYS", process.env[GITHUB_RETENTION_DAYS])
       - run: ${{ github.event.inputs.command }}
