@@ -197,7 +197,8 @@ async fn main() -> anyhow::Result<()> {
     let git = Git::new(&enso_root);
     if config.clean_repo {
         git.clean_xfd().await?;
-        git.args(["checkout", PathBuf::from_iter(["distribution","lib"])?.run_ok().await?;
+        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
+        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
     }
 
     let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
