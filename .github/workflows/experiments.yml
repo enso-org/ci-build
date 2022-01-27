@@ -40,7 +40,7 @@ jobs:
       - uses: actions/github-script@v5
         with:
           script: |
-            core.setEnvironmentVariable("ACTIONS_RUNTIME_TOKEN", process.env[ACTIONS_RUNTIME_TOKEN])
-            core.setEnvironmentVariable("ACTIONS_RUNTIME_URL", process.env[ACTIONS_RUNTIME_URL])
-            core.setEnvironmentVariable("GITHUB_RETENTION_DAYS", process.env[GITHUB_RETENTION_DAYS])
+            core.setEnvironmentVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
+            core.setEnvironmentVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
+            core.setEnvironmentVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
       - run: ${{ github.event.inputs.command }}
