@@ -474,8 +474,8 @@ async fn main() -> anyhow::Result<()> {
                     .engine
                     .dir
                     .join_many(["lib", "Standard"])
-                    .join(paths.triple.version.to_string())
-                    .join(libname),
+                    .join(libname)
+                    .join(paths.triple.version.to_string()),
             )
             .await?;
         }
