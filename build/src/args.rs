@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use octocrab::models::ReleaseId;
 
 use strum::EnumString;
 
@@ -28,9 +29,12 @@ pub struct Args {
     /// build kind (dev/nightly)
     #[argh(option, default = "default_kind()")]
     pub kind:       BuildKind,
-    /// path to the Enso Engine repository
+    /// path to the local copy of the Enso Engine repository
     #[argh(positional)]
     pub repository: PathBuf,
+    /// identifier of the release to be targeted (necessary for `upload` and `finish` commands)
+    #[argh(option)]
+    pub release_id: Option<u64>,
     /// command to execute (build/prepare/upload/finish)
     #[argh(positional, default = "WhatToDo::Build")]
     pub command:    WhatToDo,

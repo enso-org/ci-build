@@ -75,6 +75,7 @@ pub mod prelude {
     pub use std::iter::FromIterator;
     pub use std::path::Path;
     pub use std::path::PathBuf;
+    pub use std::str::FromStr;
     pub use std::stream::Stream;
     pub use std::sync::Arc;
     pub use tokio::io::AsyncWriteExt;

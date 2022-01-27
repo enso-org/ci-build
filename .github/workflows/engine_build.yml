@@ -66,11 +66,11 @@ jobs:
     strategy:
       matrix:
         os:
-        - ubuntu-latest
-        - windows-latest
-        - macos-latest
-        - [self-hosted, Windows]
-        - [self-hosted, Linux]
+        - [ubuntu-latest, engine]
+        - [windows-latest, engine]
+        - [macos-latest, engine]
+        - [self-hosted, Windows, engine]
+        - [self-hosted, Linux, engine]
 #        - [self-hosted, macOS]]
         nightly: [true, false]
       fail-fast: false

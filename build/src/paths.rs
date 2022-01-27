@@ -118,6 +118,9 @@ impl Paths {
         Self::new_version(repo_root, version)
     }
 
+    pub fn distribution(&self) -> PathBuf {
+        self.repo_root.join("distribution")
+    }
 
     pub fn new_version(repo_root: impl Into<PathBuf>, version: Version) -> Result<Self> {
         let repo_root: PathBuf = repo_root.into().absolutize()?.into();
@@ -164,6 +167,13 @@ impl Paths {
 
     pub fn changelog(&self) -> PathBuf {
         root_to_changelog(&self.repo_root)
+    }
+
+    pub fn edition(&self) -> PathBuf {
+        self.distribution()
+            .join("editions")
+            .join(self.triple.version.to_string())
+            .with_appended_extension("yaml")
     }
 }
 

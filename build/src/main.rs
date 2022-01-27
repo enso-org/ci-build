@@ -122,7 +122,10 @@ const NIGHTLY: BuildConfiguration = BuildConfiguration {
 async fn main() -> anyhow::Result<()> {
     println!("Initial environment:");
     for (key, value) in std::env::vars() {
-        if key.contains("SECRET") || key.contains("TOKEN") || key.contains("TOOL") {
+        // The below should not be needed - any secrets should be passed to us from the GitHub
+        // Actions as secrets already. However, as a failsafe, we'll mask anythinh that looks
+        // secretive.
+        if key.contains("SECRET") || key.contains("TOKEN") || key.contains("KEY") {
             ide_ci::actions::workflow::mask_value(&value);
         }
 
@@ -194,7 +197,7 @@ async fn main() -> anyhow::Result<()> {
     let git = Git::new(&enso_root);
     if config.clean_repo {
         git.clean_xfd().await?;
-        git.args(["checkout", "."])?.run_ok().await?;
+        git.args(["checkout", r"distribution\lib\"])?.run_ok().await?;
     }
 
     let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
@@ -309,14 +312,24 @@ async fn main() -> anyhow::Result<()> {
     // };
 
     if system.total_memory() > 10_000_000 {
-        let build_stuff = Sbt::concurrent_tasks([
+        let mut tasks = vec![
             "engine-runner/assembly",
             "launcher/buildNativeImage",
             "project-manager/buildNativeImage",
             "buildLauncherDistribution",
             "buildEngineDistribution",
             "buildProjectManagerDistribution",
-        ]);
+        ];
+
+        if config.benchmark_compilation {
+            tasks.extend([
+                "runtime/Benchmark/compile",
+                "language-server/Benchmark/compile",
+                "searcher/Benchmark/compile",
+            ]);
+        }
+
+        let build_stuff = Sbt::concurrent_tasks(tasks);
         sbt.call_arg(format!("runtime/clean; {}", build_stuff)).await?;
     } else {
         // Compile
@@ -342,6 +355,17 @@ async fn main() -> anyhow::Result<()> {
 
         // Prepare Project Manager Distribution
         sbt.call_arg("buildProjectManagerDistribution").await?;
+
+        if config.benchmark_compilation {
+            // Check Runtime Benchmark Compilation
+            sbt.call_arg("runtime/clean; runtime/Benchmark/compile").await?;
+
+            // Check Language Server Benchmark Compilation
+            sbt.call_arg("runtime/clean; language-server/Benchmark/compile").await?;
+
+            // Check Searcher Benchmark Compilation
+            sbt.call_arg("searcher/Benchmark/compile").await?;
+        }
     }
     if config.test_scala {
         // Test Enso
@@ -360,17 +384,6 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         .send();
-    }
-
-    if config.benchmark_compilation {
-        // Check Runtime Benchmark Compilation
-        sbt.call_arg("runtime/clean; runtime/Benchmark/compile").await?;
-
-        // Check Language Server Benchmark Compilation
-        sbt.call_arg("runtime/clean; language-server/Benchmark/compile").await?;
-
-        // Check Searcher Benchmark Compilation
-        sbt.call_arg("searcher/Benchmark/compile").await?;
     }
 
     // === Build Distribution ===
@@ -440,24 +453,30 @@ async fn main() -> anyhow::Result<()> {
             path: impl AsRef<Path>,
         ) -> Result {
             sbt.cmd()?
-                .arg("enso/verifyGeneratedPackage")
-                .arg(package)
-                .arg(path.as_ref().join("THIRD-PARTY"))
+                .arg(format!(
+                    "enso/verifyGeneratedPackage {} {}",
+                    package,
+                    path.as_ref().join("THIRD-PARTY").display()
+                ))
                 .run_ok()
                 .await
         }
 
-        verify_generated_package(&sbt, "engine", &paths.engine.dir).await.ok(); // FIXME don't ignore the result
-        verify_generated_package(&sbt, "launcher", &paths.launcher.dir).await.ok(); // FIXME don't ignore the result
-        verify_generated_package(&sbt, "project-manager", &paths.project_manager.dir).await.ok(); // FIXME don't ignore the result
+        verify_generated_package(&sbt, "engine", &paths.engine.dir).await?;
+        verify_generated_package(&sbt, "launcher", &paths.launcher.dir).await?;
+        verify_generated_package(&sbt, "project-manager", &paths.project_manager.dir).await?;
         for libname in ["Base", "Table", "Image", "Database"] {
             verify_generated_package(
                 &sbt,
                 libname,
-                paths.engine.dir.join_many(["lib", "Standard"]).join(libname),
+                paths
+                    .engine
+                    .dir
+                    .join_many(["lib", "Standard"])
+                    .join(paths.triple.version.to_string())
+                    .join(libname),
             )
-            .await
-            .ok(); // FIXME don't ignore the result
+            .await?;
         }
     }
 
@@ -731,45 +750,19 @@ mod tests {
 
     #[tokio::test]
     #[ignore]
-    async fn just_debugging_things() -> Result {
+    async fn fgbhduiydfgiu() -> Result {
         let enso_root = r"H:\NBO\enso";
-        let octocrab = setup_octocrab()?;
-        let repo = RepoContext { owner: "enso-org".into(), name: "ci-build".into() };
-        let versions =
-            enso_build::preflight_check::generate_nightly_version(&octocrab, &enso_root, &repo)
-                .await?;
-        let paths = Paths::new_version(&enso_root, versions.engine)?;
-        dbg!(&paths);
-
-        paths.emit_env_to_actions()?;
-        return Ok(());
-
-        // create_packages(&paths).await?;
-
-        // Launcher bundle
-        let bundles = create_bundles(&paths).await?;
-
-        let client = ide_ci::github::create_client(std::env::var("GITHUB_TOKEN").unwrap())?;
-        let repo = RepoContext { owner: "enso-org".into(), name: "ci-build".into() };
-        let release =
-            repo.repos(&octocrab).releases().create(&Uuid::new_v4().to_string()).send().await?;
-
-        for bundle in bundles {
-            upload_asset(&repo, &client, release.id, bundle).await?;
-        }
-
+        let sbt = WithCwd::new(Sbt, &enso_root);
+        sbt.cmd()?
+            .arg(r"enso/verifyGeneratedPackage engine H:\NBO\enso\built-distribution\enso-engine-2022.1.1-nightly.2022-01-27-windows-amd64\enso-2022.1.1-nightly.2022-01-27\THIRD-PARTY")
+            .run_ok()
+            .await?;
         Ok(())
     }
 
     #[tokio::test]
     #[ignore]
     async fn test_paths() -> Result {
-        let paths = Paths::new(r"H:\NBO\enso")?;
-        let mut output_archive = paths.engine.dir.join(&paths.engine.name);
-        // The artifacts are compressed before upload to work around an error with long path
-        // handling in the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
-        output_archive = output_archive.with_appended_extension("zip");
-        println!("{}", output_archive.display());
         Ok(())
     }
 

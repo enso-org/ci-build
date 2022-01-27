@@ -51,6 +51,10 @@ impl Versions {
         Versions { version, release_mode }
     }
 
+    pub fn edition_name(&self) -> String {
+        self.version.to_string()
+    }
+
     pub fn local_prerelease() -> Result<Prerelease> {
         Prerelease::new(LOCAL_BUILD_PREFIX).anyhow_err()
     }
@@ -103,19 +107,15 @@ impl Versions {
 
     pub fn publish(&self) -> Result {
         let name = format!("{}", self.version);
+        let edition = self.edition_name();
         ide_ci::actions::workflow::set_output(VERSION_VAR_NAME, &name);
-        ide_ci::actions::workflow::set_output(EDITION_VAR_NAME, &name);
+        ide_ci::actions::workflow::set_output(EDITION_VAR_NAME, &edition);
 
         ide_ci::actions::workflow::set_env(VERSION_VAR_NAME, &name)?;
-        ide_ci::actions::workflow::set_env(EDITION_VAR_NAME, &name)?;
+        ide_ci::actions::workflow::set_env(EDITION_VAR_NAME, &edition)?;
         ide_ci::actions::workflow::set_env(RELEASE_MODE_VAR_NAME, self.release_mode)?;
         Ok(())
     }
-
-    // pub fn from_env() -> Result<Self> {
-    //     let version = ide_ci::env::expect_var(VERSION_VAR_NAME)?.parse()?;
-    //     Ok(Versions::new(version))
-    // }
 
     pub fn is_nightly(&self) -> bool {
         self.version.pre.as_str().starts_with(NIGHTLY_BUILD_PREFIX)
