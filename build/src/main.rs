@@ -155,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let versions = Versions::new(version);
     versions.publish()?;
-    println!("Target version: {versions}.");
+    println!("Target version: {versions:?}.");
     let paths = Paths::new_version(&enso_root, versions.version.clone())?;
 
     match args.command {
@@ -430,7 +430,7 @@ async fn main() -> anyhow::Result<()> {
     println!("Compiling standard libraries under {}", std_libs.display());
     for entry in std_libs.read_dir()? {
         let entry = entry?;
-        let target = entry.path().join(paths.triple.version.to_string());
+        let target = entry.path().join(paths.version().to_string());
         enso.compile_lib(target)?.run_ok().await?;
     }
 
@@ -477,7 +477,7 @@ async fn main() -> anyhow::Result<()> {
                     .dir
                     .join_many(["lib", "Standard"])
                     .join(libname)
-                    .join(paths.triple.version.to_string()),
+                    .join(paths.version().to_string()),
             )
             .await?;
         }
@@ -514,7 +514,7 @@ async fn main() -> anyhow::Result<()> {
         let repo_handler = repo.repos(&octocrab);
 
         // let release_name = format!("Enso {}", paths.triple.version);
-        let tag_name = paths.triple.version.to_string();
+        let tag_name = versions.to_string();
 
         let releases_handler = repo_handler.releases();
         // let triple = paths.triple.clone();
@@ -621,7 +621,7 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
     }
 
     // Copy engine into the bundle.
-    let bundled_engine_dir = engine_bundle.dir.join("dist").join(paths.triple.version.to_string());
+    let bundled_engine_dir = engine_bundle.dir.join("dist").join(paths.version().to_string());
     place_component_at(&paths.engine, &bundled_engine_dir)?;
     place_graal_under(engine_bundle.dir.join("runtime")).await?;
     engine_bundle.pack().await?;
@@ -643,35 +643,6 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
     )?;
     pm_bundle.pack().await?;
     Ok(vec![engine_bundle.artifact_archive, pm_bundle.artifact_archive])
-
-    // TODO similar for the Project Manager
-
-    /*
-      val pm = builtArtifact("project-manager", os, arch)
-      if (pm.exists()) {
-        if (os.isUNIX) {
-          makeExecutable(pm / "enso" / "bin" / "project-manager")
-        }
-
-        copyEngine(os, arch, pm / "enso" / "dist")
-        copyGraal(os, arch, pm / "enso" / "runtime")
-
-        IO.copyFile(
-          file("distribution/enso.bundle.template"),
-          pm / "enso" / ".enso.bundle"
-        )
-
-        val archive = builtArchive("project-manager", os, arch)
-        makeArchive(pm, "enso", archive)
-
-        cleanDirectory(pm / "enso" / "dist")
-        cleanDirectory(pm / "enso" / "runtime")
-
-        log.info(s"Created $archive")
-      }
-    }
-
-      */
 }
 
 pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {

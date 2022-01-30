@@ -103,12 +103,15 @@ pub mod prelude {
     }
 }
 
-/// `None` that is used to represent an empty request body in calls `octocrab`.
-pub const EMPTY_REQUEST_BODY: Option<&()> = None;
-
 use prelude::*;
 
 use ::anyhow::Context;
+
+/// `None` that is used to represent an empty request body in calls `octocrab`.
+pub const EMPTY_REQUEST_BODY: Option<&()> = None;
+
+/// The user agent string name used by our HTTP clients.
+pub const USER_AGENT: &str = "enso-build";
 
 /// Looks up a free port in the IANA private or dynamic port range.
 pub fn get_free_port() -> Result<u16> {

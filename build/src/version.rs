@@ -9,12 +9,12 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 
 /// Variable that stores Enso Engine version.
-const VERSION_VAR_NAME: &str = "ENSO_VERSION";
-const EDITION_VAR_NAME: &str = "ENSO_EDITION";
-const RELEASE_MODE_VAR_NAME: &str = "ENSO_RELEASE_MODE";
+pub const VERSION_VAR_NAME: &str = "ENSO_VERSION";
+pub const EDITION_VAR_NAME: &str = "ENSO_EDITION";
+pub const RELEASE_MODE_VAR_NAME: &str = "ENSO_RELEASE_MODE";
 
-const LOCAL_BUILD_PREFIX: &str = "dev";
-const NIGHTLY_BUILD_PREFIX: &str = "nightly";
+pub const LOCAL_BUILD_PREFIX: &str = "dev";
+pub const NIGHTLY_BUILD_PREFIX: &str = "nightly";
 // pub enum Kind {
 //     Local,
 //     Nightly,
@@ -28,9 +28,15 @@ pub fn default_engine_version() -> Version {
     ret
 }
 
-pub fn is_nightly(release: &Release) -> bool {
+pub fn is_nightly(version: &Version) -> bool {
+    version.pre.as_str().starts_with(NIGHTLY_BUILD_PREFIX)
+}
+
+pub fn is_nightly_release(release: &Release) -> bool {
     !release.draft && release.tag_name.contains(NIGHTLY_BUILD_PREFIX)
 }
+
+
 
 #[derive(Clone, Debug, Serialize, Deserialize, Shrinkwrap)]
 pub struct Versions {
@@ -55,6 +61,10 @@ impl Versions {
         self.version.to_string()
     }
 
+    pub fn pretty_name(&self) -> String {
+        format!("Enso {}", self.version)
+    }
+
     pub fn local_prerelease() -> Result<Prerelease> {
         Prerelease::new(LOCAL_BUILD_PREFIX).anyhow_err()
     }
@@ -77,7 +87,7 @@ impl Versions {
             .all_releases(octocrab)
             .await?
             .into_iter()
-            .filter(is_nightly)
+            .filter(is_nightly_release)
             .filter_map(|release| {
                 if release.tag_name.contains(&todays_pre_text) {
                     let version = Version::parse(&release.tag_name).ok()?;
@@ -118,7 +128,7 @@ impl Versions {
     }
 
     pub fn is_nightly(&self) -> bool {
-        self.version.pre.as_str().starts_with(NIGHTLY_BUILD_PREFIX)
+        is_nightly(&self.version)
     }
 }
 
@@ -148,12 +158,6 @@ pub fn base_version(changelog_path: impl AsRef<Path>) -> Result<Version> {
     Ok(version)
 }
 
-impl Display for Versions {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Enso {}", self.version)
-    }
-}
-
 pub fn current_year() -> u64 {
     chrono::Utc::today().year() as u64
 }
@@ -175,6 +179,16 @@ pub fn suggest_next_version(previous: &Version) -> Version {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn is_nightly_test() {
+        let is_nightly = |text: &str| is_nightly(&Version::parse(text).unwrap());
+
+        assert!(is_nightly("2022.01.01-nightly.2022.01.01"));
+        assert!(is_nightly("2022.01.01-nightly"));
+        assert!(is_nightly("2022.01.01-nightly.2022.01.01"));
+        assert!(is_nightly("2022.01.01-nightly.2022.01.01"));
+    }
 
     #[test]
     #[ignore]

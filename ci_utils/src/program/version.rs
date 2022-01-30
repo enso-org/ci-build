@@ -5,6 +5,7 @@ use regex::Regex;
 // https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
 const SEMVER_REGEX_CODE: &str = r"(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(?:-(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?";
 
+/// Regular expression that matches a semver within a text.
 pub fn semver_regex() -> Regex {
     // unwrap safe, as this is covered by test `semver_regex_parses`.
     Regex::new(SEMVER_REGEX_CODE).unwrap()

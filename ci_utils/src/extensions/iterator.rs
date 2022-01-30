@@ -1,4 +1,6 @@
 use crate::prelude::*;
+use std::iter::Rev;
+use std::iter::Take;
 
 pub trait TryIteratorExt: Iterator {
     type Ok;
@@ -15,3 +17,11 @@ where
         self.map(|i| i.anyhow_err()).collect::<Result<Vec<_>>>()
     }
 }
+
+pub trait ExactDoubleEndedIteratorExt: ExactSizeIterator + DoubleEndedIterator + Sized {
+    fn take_last_n(self, n: usize) -> Rev<Take<Rev<Self>>> {
+        self.rev().take(n).rev()
+    }
+}
+
+impl<T> ExactDoubleEndedIteratorExt for T where T: ExactSizeIterator + DoubleEndedIterator {}

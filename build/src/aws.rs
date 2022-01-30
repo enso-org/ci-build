@@ -2,50 +2,157 @@ use crate::paths::Paths;
 use crate::prelude::*;
 use ide_ci::models::config::RepoContext;
 
+use aws_sdk_s3::model::ObjectCannedAcl;
+use aws_sdk_s3::output::PutObjectOutput;
+use aws_sdk_s3::ByteStream;
 use aws_sdk_s3::Client;
+use bytes::Buf;
+use serde::de::DeserializeOwned;
 
-pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Result {
-    println!("Preparing credentials.");
-    let config = aws_config::load_from_env().await;
-    let client = Client::new(&config);
+/// The upper limit on number of nightly editions that are stored in the bucket.
+pub const NIGHTLY_EDITIONS_LIMIT: usize = 20;
 
-    let body = dbg!(
-        client
+pub const EDITIONS_BUCKET_NAME: &str = "editions.release.enso.org";
+
+pub const MANIFEST_FILENAME: &str = "manifest.yaml";
+
+
+
+#[derive(Clone, Debug, Display, Serialize, Deserialize, Shrinkwrap)]
+pub struct Edition(pub String);
+
+impl AsRef<str> for Edition {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl<T: Into<String>> From<T> for Edition {
+    fn from(value: T) -> Self {
+        Edition(value.into())
+    }
+}
+
+impl Edition {
+    pub fn is_nightly(&self) -> bool {
+        ide_ci::program::version::find_in_text(self)
+            .as_ref()
+            .map_or(false, crate::version::is_nightly)
+    }
+}
+
+
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Manifest {
+    /// Sequence of edition names.
+    pub editions: Vec<Edition>,
+}
+
+impl Manifest {
+    pub fn with_new_nightly(
+        &self,
+        new_nightly: Edition,
+        nightlies_count: usize,
+    ) -> (Manifest, Vec<&Edition>) {
+        let (nightly, non_nightly) =
+            self.editions.iter().partition::<Vec<_>, _>(|e| e.is_nightly());
+        let number_of_nightlies_to_remove =
+            1 + nightly.len().saturating_sub(NIGHTLY_EDITIONS_LIMIT);
+        let (nightlies_to_remove, nightlies_to_keep) =
+            nightly.split_at(number_of_nightlies_to_remove);
+
+        let mut new_editions = non_nightly;
+        new_editions.extend(nightlies_to_keep);
+        new_editions.push(&new_nightly);
+
+        let new_manifest = Manifest { editions: new_editions.into_iter().cloned().collect() };
+        (new_manifest, nightlies_to_remove.to_vec())
+    }
+}
+
+
+pub struct BucketContext {
+    pub client:     aws_sdk_s3::Client,
+    pub bucket:     String,
+    pub upload_acl: ObjectCannedAcl,
+    pub key_prefix: String,
+}
+
+impl BucketContext {
+    pub async fn get(&self, path: &str) -> Result<ByteStream> {
+        Ok(self
+            .client
             .get_object()
-            .bucket("editions.release.enso.org")
-            .key("enso/manifest.yaml")
+            .bucket(&self.bucket)
+            .key(format!("{}/{}", self.key_prefix, path))
+            .send()
+            .await?
+            .body)
+    }
+
+    pub async fn put(&self, path: &str, data: ByteStream) -> Result<PutObjectOutput> {
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .acl(self.upload_acl.clone())
+            .key(format!("{}/{}", self.key_prefix, path))
+            .body(data)
             .send()
             .await
-    )?
-    .body
-    .collect()
-    .await?
-    .into_bytes();
+            .anyhow_err()
+    }
 
-    println!("{}", std::str::from_utf8(body.as_ref())?);
-    // dbg!(client.list_buckets().send().await)?;
+    pub async fn get_yaml<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
+        let text = self.get(path).await?.collect().await?;
+        serde_yaml::from_reader(text.reader()).anyhow_err()
+    }
+
+    pub async fn put_yaml(&self, path: &str, data: &impl Serialize) -> Result<PutObjectOutput> {
+        let buf = serde_yaml::to_vec(data)?;
+        self.put(path, ByteStream::from(buf)).await
+    }
+}
+
+pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Result {
+    let bucket_context = BucketContext {
+        client:     Client::new(&aws_config::load_from_env().await),
+        bucket:     EDITIONS_BUCKET_NAME.to_string(),
+        upload_acl: ObjectCannedAcl::PublicRead,
+        key_prefix: repo_context.name.clone(),
+    };
+
+    let new_edition_name = Edition(paths.edition_name());
+    let new_edition_path = paths.edition_file();
+    ensure!(
+        new_edition_path.exists(),
+        "The edition file {} does not exist.",
+        new_edition_path.display()
+    );
+
+    let manifest = bucket_context.get_yaml::<Manifest>(MANIFEST_FILENAME).await?;
 
 
-    // let credentials = Credentials::from_profile(None)?; //Credentials::new(None, None, None,
-    // None, None)?;
-    //
-    // println!("Instantiating the bucket.");
-    // // let bucket = s3::Bucket::new("editions.release.enso.org", Region::UsWest1, credentials)?;
-    // let bucket = s3::Bucket::new("editions.release.enso.org", Region::UsWest1, credentials)?;
-    //
-    // dbg!(bucket.list("".to_string(), None).await)?;
-    // let manifest_filename = PathBuf::from("manifest.yaml");
-    // let edition_filename = PathBuf::from(format!("{}.yaml", paths.triple.version));
+    let (new_manifest, nightlies_to_remove) =
+        manifest.with_new_nightly(new_edition_name, NIGHTLY_EDITIONS_LIMIT);
+    for nightly_to_remove in nightlies_to_remove {
+        println!("Should remove {}", nightly_to_remove);
+    }
 
-    // let manifest_s3_path = "/{}/"
-    // dbg!(bucket.get_object("/enso/manifest.yaml").await);
+    let new_edition_filename = new_edition_path.file_name().unwrap().to_str().unwrap();
+
+    bucket_context
+        .put(new_edition_filename, ByteStream::from_path(&new_edition_path).await?)
+        .await?;
+
+    bucket_context.put_yaml("manifest2.yaml", &manifest).await?;
     Ok(())
 }
 
 #[tokio::test]
 async fn aaa() -> Result {
     let repo = RepoContext::from_str("enso-org/enso")?;
-    let paths = Paths::new(r"H:\NBO\enso")?;
+    let paths = Paths::new_version(r"H:\NBO\enso", Version::parse("2022.1.1-nightly.2022-01-28")?)?;
     update_manifest(&repo, &paths).await?;
     Ok(())
 }
