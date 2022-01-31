@@ -104,7 +104,8 @@ pub mod raw {
         } else {
             let mut current_position = 0;
             loop {
-                let mut buffer = Vec::<u8>::with_capacity(chunk_size);
+                let mut buffer = Vec::new();
+                buffer.resize(chunk_size, 0);
                 let read_bytes = file.read(&mut buffer).await?;
                 if read_bytes == 0 {
                     break;
