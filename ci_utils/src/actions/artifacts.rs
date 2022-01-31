@@ -40,6 +40,7 @@ pub const API_VERSION: &str = "6.0-preview";
 pub mod raw {
     use super::*;
     use path_slash::PathExt;
+    use std::io::ErrorKind;
 
     /// Creates a file container for the new artifact in the remote blob storage/file service.
     ///
@@ -106,10 +107,11 @@ pub mod raw {
             loop {
                 let mut buffer = Vec::new();
                 buffer.resize(chunk_size, 0);
-                let read_bytes = file.read(&mut buffer).await?;
-                if read_bytes == 0 {
-                    break;
-                }
+                let read_bytes = match file.read_exact(&mut buffer).await {
+                    Ok(read_bytes) => read_bytes,
+                    Err(e) if e.kind() == ErrorKind::UnexpectedEof => break,
+                    Err(e) => return Err(e.into()),
+                };
                 println!("Will be uploading a chunk of size {}", read_bytes);
                 let body = Body::from(buffer);
                 let range = ContentRange {
