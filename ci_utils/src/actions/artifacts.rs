@@ -357,6 +357,7 @@ pub struct FileUploader {
 }
 
 impl FileUploader {
+    #[context("Failed to upload the file '{}' to path '{}'.", file_to_upload.local_path.display(), file_to_upload.remote_path.display())]
     pub async fn upload_file(&self, file_to_upload: &FileToUpload) -> Result<usize> {
         let file = tokio::fs::File::open(&file_to_upload.local_path).await?;
         let len = file.metadata().await?.len() as usize;
@@ -410,7 +411,9 @@ pub async fn upload_path(path: impl AsRef<Path>) -> Result {
     let mut handler = ArtifactHandler::new(&context)?;
     let container = handler.create_container(name).await?;
     dbg!(&container);
-    handler.upload_artifact_to_file_container(&container.url, files, &options).await?;
+    handler
+        .upload_artifact_to_file_container(&container.file_container_resource_url, files, &options)
+        .await?;
     handler.patch_artifact_size(name).await?;
     Ok(())
 }
