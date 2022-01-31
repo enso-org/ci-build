@@ -58,5 +58,6 @@ pub struct PatchArtifactSizeResponse {
     pub r#type:         String,
     pub name:           String,
     pub url:            Url,
-    pub upload_url:     Url,
+    // This is not actually present, despite what GH sources say.
+    // pub upload_url:     Url,
 }
