@@ -443,7 +443,7 @@ impl FileUploader {
                 successful_upload_size: len,
             },
             Err(e) => {
-                println!("Failed to upload {}: {}", file_to_upload.local_path.display(), e);
+                println!("Upload failed: {:?}", e);
                 UploadResult {
                     is_success:             false,
                     total_size:             0,
