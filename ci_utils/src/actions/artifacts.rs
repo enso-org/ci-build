@@ -95,7 +95,7 @@ pub mod raw {
             .send()
             .await?;
         dbg!(&response);
-        response.error_for_status()?;
+        check_response(response, |_, e| e).await?;
         Ok(len)
     }
 }
