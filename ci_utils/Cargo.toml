@@ -35,6 +35,7 @@ nix = "0.23.0"
 octocrab = { git = "https://github.com/enso-org/octocrab" }
 path-absolutize = "3.0.11"
 pathdiff = "0.2.1"
+path-slash = "0.1.4"
 platforms = "2.0.0"
 pin-project = "1.0.8"
 port_check = "0.1.5"

@@ -1408,6 +1408,7 @@ dependencies = [
  "nix 0.23.1",
  "octocrab",
  "path-absolutize",
+ "path-slash",
  "pathdiff",
  "pin-project",
  "platforms",
@@ -1931,6 +1932,12 @@ checksum = "4bfa72956f6be8524f7f7e2b07972dda393cb0008a6df4451f658b7e1bd1af80"
 dependencies = [
  "once_cell",
 ]
+
+[[package]]
+name = "path-slash"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cacbb3c4ff353b534a67fb8d7524d00229da4cb1dc8c79f4db96e375ab5b619"
 
 [[package]]
 name = "pathdiff"

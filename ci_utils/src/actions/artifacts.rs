@@ -38,6 +38,7 @@ pub const API_VERSION: &str = "6.0-preview";
 
 pub mod raw {
     use super::*;
+    use path_slash::PathExt;
 
     /// Creates a file container for the new artifact in the remote blob storage/file service.
     ///
@@ -73,19 +74,21 @@ pub mod raw {
         .await
     }
 
-    #[context("Failed to upload the file '{}' to path '{}'.", file_to_upload.local_path.display(), file_to_upload.remote_path.display())]
+    #[context("Failed to upload the file '{}' to path '{}'.", local_path.as_ref().display(), remote_path.as_ref().display())]
     pub async fn upload_file(
         client: &reqwest::Client,
         upload_url: Url,
-        file_to_upload: &FileToUpload,
+        local_path: impl AsRef<Path>,
+        remote_path: impl AsRef<Path>,
     ) -> Result<usize> {
-        let file = tokio::fs::File::open(&file_to_upload.local_path).await?;
+        use path_slash::PathExt;
+        let file = tokio::fs::File::open(local_path.as_ref()).await?;
         // TODO [mwu] note that metadata can lie about file size, e.g. named pipes on Linux
         let len = file.metadata().await?.len() as usize;
         let body = Body::from(file);
         let response = client
             .put(upload_url)
-            .query(&[("itemPath", &file_to_upload.remote_path)])
+            .query(&[("itemPath", remote_path.as_ref().to_slash_lossy())])
             .header(reqwest::header::CONTENT_LENGTH, len)
             .header(reqwest::header::CONTENT_RANGE, ContentRange::whole(len as usize).to_string())
             .body(body)
@@ -250,6 +253,7 @@ pub struct UploadWorker {}
 pub struct ArtifactHandler {
     pub json_client:   Client,
     pub binary_client: Client,
+    pub artifact_name: String,
     pub artifact_url:  Url,
     pub upload_url:    Url,
     pub total_size:    std::sync::atomic::AtomicUsize,
@@ -283,6 +287,7 @@ impl ArtifactHandler {
         Ok(ArtifactHandler {
             json_client,
             binary_client,
+            artifact_name: artifact_name.as_ref().into(),
             artifact_url: context.artifact_url()?,
             upload_url: container.file_container_resource_url,
             total_size: default(),
@@ -290,7 +295,11 @@ impl ArtifactHandler {
     }
 
     pub fn uploader(&self) -> FileUploader {
-        FileUploader { url: self.upload_url.clone(), client: self.binary_client.clone() }
+        FileUploader {
+            url:           self.upload_url.clone(),
+            client:        self.binary_client.clone(),
+            artifact_name: PathBuf::from(&self.artifact_name),
+        }
     }
 
     /// Concurrently upload all of the files in chunks.
@@ -319,7 +328,7 @@ impl ArtifactHandler {
 
         for task_index in 0..options.file_concurrency {
             println!("Preparing file upload worker #{}.", task_index);
-            let continue_on_error = options.continue_on_error;
+            let continue_on_error = options.continue_on_error; // TODO
             let uploader = self.uploader();
             let mut job_receiver = work_rx.clone().into_stream();
             let result_sender = result_tx.clone();
@@ -412,13 +421,21 @@ pub async fn check_response(
 }
 
 pub struct FileUploader {
-    pub url:    Url,
-    pub client: Client,
+    pub url:           Url,
+    pub client:        Client,
+    pub artifact_name: PathBuf,
 }
 
 impl FileUploader {
     pub async fn upload_file(&self, file_to_upload: &FileToUpload) -> UploadResult {
-        match raw::upload_file(&self.client, self.url.clone(), file_to_upload).await {
+        let uploading_res = raw::upload_file(
+            &self.client,
+            self.url.clone(),
+            &file_to_upload.local_path,
+            self.artifact_name.join(&file_to_upload.remote_path),
+        )
+        .await;
+        match uploading_res {
             Ok(len) => UploadResult {
                 is_success:             true,
                 total_size:             len,
