@@ -382,6 +382,11 @@ impl ArtifactHandler {
                         &file_to_upload.remote_path.display()
                     );
                     let result = uploader.upload_file(&file_to_upload).await;
+                    println!(
+                        "Uploading result for {}: {:?}",
+                        &file_to_upload.local_path.display(),
+                        result
+                    );
                     result_sender.send(result).unwrap();
                 }
                 println!("Upload worker #{} finished.", task_index);
@@ -438,7 +443,7 @@ pub async fn check_response(
     response: Response,
     additional_context: impl FnOnce(StatusCode, anyhow::Error) -> anyhow::Error,
 ) -> Result<Bytes> {
-    dbg!(&response);
+    // dbg!(&response);
     let status = response.status();
     if !status.is_success() {
         let mut err = anyhow!("Server replied with status {}.", status);
