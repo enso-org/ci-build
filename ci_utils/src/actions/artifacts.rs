@@ -171,7 +171,7 @@ impl Display for ContentRange {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} - {}/{}",
+            "bytes {}-{}/{}",
             self.range.start(),
             self.range.end(),
             self.total.map_or(String::from("*"), |total| total.to_string())
