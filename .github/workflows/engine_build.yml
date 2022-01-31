@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - *
+      - "*"s
 
 jobs:
   # This workflow contains a single job called "build"
