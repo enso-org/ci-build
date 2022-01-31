@@ -232,6 +232,7 @@ impl ArtifactHandler {
         let body = CreateArtifactRequest::new(artifact_name.as_ref(), None);
         let url = self.context.artifact_url()?;
 
+        dbg!(&self.json_client);
         dbg!(&body);
         let request = self.json_client.post(url).json(&body).build()?;
 
