@@ -235,11 +235,12 @@ impl ArtifactHandler {
             .json_client
             .post(url)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .json(&body);
+            .json(&body)
+            .build()?;
 
         dbg!(&request);
         // TODO retry
-        let response = request.send().await?;
+        let response = self.json_client.execute(request).await?;
         dbg!(&response);
         let status = response.status();
         if !status.is_success() {
