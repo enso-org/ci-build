@@ -24,6 +24,7 @@ use octocrab::models::Status;
 use regex::Error;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
+use reqwest::header::InvalidHeaderValue;
 use reqwest::Body;
 use reqwest::Client;
 use reqwest::ClientBuilder;
@@ -82,20 +83,46 @@ pub mod raw {
         remote_path: impl AsRef<Path>,
     ) -> Result<usize> {
         use path_slash::PathExt;
-        let file = tokio::fs::File::open(local_path.as_ref()).await?;
+        let mut file = tokio::fs::File::open(local_path.as_ref()).await?;
         // TODO [mwu] note that metadata can lie about file size, e.g. named pipes on Linux
+        let chunk_size = 8 * 1024 * 1024;
         let len = file.metadata().await?.len() as usize;
-        let body = Body::from(file);
-        let response = client
-            .put(upload_url)
-            .query(&[("itemPath", remote_path.as_ref().to_slash_lossy())])
-            .header(reqwest::header::CONTENT_LENGTH, len)
-            .header(reqwest::header::CONTENT_RANGE, ContentRange::whole(len as usize).to_string())
-            .body(body)
-            .send()
-            .await?;
-        dbg!(&response);
-        check_response(response, |_, e| e).await?;
+        if len < chunk_size {
+            let body = Body::from(file);
+            let response = client
+                .put(upload_url)
+                .query(&[("itemPath", remote_path.as_ref().to_slash_lossy())])
+                .header(reqwest::header::CONTENT_LENGTH, len)
+                .header(reqwest::header::CONTENT_RANGE, ContentRange::whole(len as usize))
+                .body(body)
+                .send()
+                .await?;
+
+            check_response(response, |_, e| e).await?;
+        } else {
+            let mut current_position = 0;
+            loop {
+                let mut buffer = Vec::<u8>::with_capacity(chunk_size);
+                let read_bytes = file.read(&mut buffer).await?;
+                if read_bytes == 0 {
+                    break;
+                }
+                let body = Body::from(buffer);
+                let response = client
+                    .put(upload_url.clone())
+                    .query(&[("itemPath", remote_path.as_ref().to_slash_lossy())])
+                    .header(reqwest::header::CONTENT_LENGTH, len)
+                    .header(reqwest::header::CONTENT_RANGE, ContentRange {
+                        range: current_position..=read_bytes.saturating_sub(1),
+                        total: Some(len),
+                    })
+                    .body(body)
+                    .send()
+                    .await?;
+                current_position += read_bytes;
+                check_response(response, |_, e| e).await?;
+            }
+        }
         Ok(len)
     }
 }
@@ -232,6 +259,14 @@ pub struct ContentRange {
 impl ContentRange {
     pub fn whole(len: usize) -> Self {
         Self { range: 0..=len.saturating_sub(1), total: Some(len) }
+    }
+}
+
+impl TryFrom<ContentRange> for HeaderValue {
+    type Error = InvalidHeaderValue;
+
+    fn try_from(value: ContentRange) -> std::result::Result<Self, Self::Error> {
+        value.to_string().try_into()
     }
 }
 
