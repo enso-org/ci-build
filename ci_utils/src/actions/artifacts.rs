@@ -13,6 +13,7 @@ use crate::actions::artifacts::models::PatchArtifactSize;
 use crate::actions::artifacts::models::PatchArtifactSizeResponse;
 use crate::env::expect_var;
 use chrono::Duration;
+use futures_util::future::err;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::Body;
@@ -236,19 +237,26 @@ impl ArtifactHandler {
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .json(&body);
 
-        let response = request.send().await?;
-        match response.status() {
-            StatusCode::FORBIDDEN => {
-                bail!("Artifact storage quota has been hit. Unable to upload any new artifacts.")
-            }
-            StatusCode::BAD_REQUEST => {
-                bail!("The artifact name {} is not valid.", artifact_name.as_ref())
-            }
-            _ => {}
-        };
-
+        dbg!(&request);
         // TODO retry
-        response.json().await.anyhow_err()
+        let response = request.send().await?;
+        let status = response.status();
+        if status.is_success() {
+            let err_body = response.text().await?;
+            let err = anyhow!("Server replied with {}. Response body: {}", status, err_body);
+
+            let err = match status {
+                StatusCode::FORBIDDEN => err.context(
+                    "Artifact storage quota has been hit. Unable to upload any new artifacts.",
+                ),
+                StatusCode::BAD_REQUEST => err
+                    .context(format!("The artifact name {} is not valid.", artifact_name.as_ref())),
+                _ => err,
+            };
+            Err(err)
+        } else {
+            response.json().await.anyhow_err()
+        }
     }
 
     /// Concurrently upload all of the files in chunks.
