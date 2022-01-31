@@ -242,7 +242,7 @@ impl ArtifactHandler {
         let response = request.send().await?;
         dbg!(&response);
         let status = response.status();
-        if status.is_success() {
+        if !status.is_success() {
             let err_body = response.text().await?;
             let err = anyhow!("Server replied with {}. Response body: {}", status, err_body);
 
