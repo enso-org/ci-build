@@ -39,6 +39,40 @@ pub const API_VERSION: &str = "6.0-preview";
 pub mod raw {
     use super::*;
 
+    /// Creates a file container for the new artifact in the remote blob storage/file service.
+    ///
+    /// Returns the response from the Artifact Service if the file container was successfully
+    /// create.
+    #[context("Failed to create a file container for the new  artifact `{}`.", artifact_name.as_ref())]
+    pub async fn create_container(
+        json_client: &reqwest::Client,
+        artifact_url: Url,
+        artifact_name: impl AsRef<str>,
+    ) -> Result<CreateArtifactResponse> {
+        let body = CreateArtifactRequest::new(artifact_name.as_ref(), None);
+        //
+        // dbg!(&self.json_client);
+        // dbg!(serde_json::to_string(&body)?);
+        let request = json_client.post(artifact_url).json(&body).build()?;
+
+        // dbg!(&request);
+        // TODO retry
+        let response = json_client.execute(request).await?;
+        // dbg!(&response);
+        // let status = response.status();
+        check_response_json(response, |status, err| match status {
+            StatusCode::FORBIDDEN => err.context(
+                "Artifact storage quota has been hit. Unable to upload any new artifacts.",
+            ),
+            StatusCode::BAD_REQUEST => err.context(format!(
+                "Server rejected the request. Is the artifact name {} valid?",
+                artifact_name.as_ref()
+            )),
+            _ => err,
+        })
+        .await
+    }
+
     #[context("Failed to upload the file '{}' to path '{}'.", file_to_upload.local_path.display(), file_to_upload.remote_path.display())]
     pub async fn upload_file(
         client: &reqwest::Client,
@@ -103,41 +137,6 @@ impl Context {
         let base_builder =
             ClientBuilder::new().default_headers(headers).user_agent(crate::USER_AGENT);
         f(base_builder).build().anyhow_err()
-    }
-
-    /// Creates a file container for the new artifact in the remote blob storage/file service.
-    ///
-    /// Returns the response from the Artifact Service if the file container was successfully
-    /// create.
-    #[context("Failed to create a file container for the new  artifact `{}`.", artifact_name.as_ref())]
-    pub async fn create_container(
-        &self,
-        json_client: &reqwest::Client,
-        artifact_name: impl AsRef<str>,
-    ) -> Result<CreateArtifactResponse> {
-        let body = CreateArtifactRequest::new(artifact_name.as_ref(), None);
-        let url = self.artifact_url()?;
-        //
-        // dbg!(&self.json_client);
-        // dbg!(serde_json::to_string(&body)?);
-        let request = json_client.post(url).json(&body).build()?;
-
-        // dbg!(&request);
-        // TODO retry
-        let response = json_client.execute(request).await?;
-        // dbg!(&response);
-        // let status = response.status();
-        check_response_json(response, |status, err| match status {
-            StatusCode::FORBIDDEN => err.context(
-                "Artifact storage quota has been hit. Unable to upload any new artifacts.",
-            ),
-            StatusCode::BAD_REQUEST => err.context(format!(
-                "Server rejected the request. Is the artifact name {} valid?",
-                artifact_name.as_ref()
-            )),
-            _ => err,
-        })
-        .await
     }
 }
 
@@ -279,7 +278,8 @@ impl ArtifactHandler {
             builder.default_headers(headers)
         })?;
 
-        let container = context.create_container(&json_client, artifact_name.as_ref()).await?;
+        let container =
+            raw::create_container(&json_client, context.artifact_url()?, &artifact_name).await?;
         Ok(ArtifactHandler {
             json_client,
             binary_client,
@@ -328,9 +328,10 @@ impl ArtifactHandler {
                 println!("Upload worker #{} has spawned.", task_index);
                 while let Some(file_to_upload) = job_receiver.next().await {
                     println!(
-                        "#{}: Will upload {}.",
+                        "#{}: Will upload {} to {}.",
                         task_index,
-                        &file_to_upload.local_path.display()
+                        &file_to_upload.local_path.display(),
+                        &file_to_upload.remote_path.display()
                     );
                     let result = uploader.upload_file(&file_to_upload).await;
                     result_sender.send(result).unwrap();
@@ -359,6 +360,7 @@ impl ArtifactHandler {
         &self,
         artifact_name: &str,
     ) -> Result<PatchArtifactSizeResponse> {
+        println!("Patching the artifact `{}` size.", artifact_name);
         let artifact_url = self.artifact_url.clone();
 
         let patch_request = self
