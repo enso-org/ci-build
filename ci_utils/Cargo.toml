@@ -19,6 +19,7 @@ derive_more = "0.99.17"
 dirs = "4.0.0"
 filetime = "0.2.15"
 flate2 = "1.0.22"
+flume = "0.10.10"
 fn-error-context = "0.2.0"
 fs_extra = "1.2.0"
 futures = "0.3.17"
@@ -40,7 +41,7 @@ port_check = "0.1.5"
 rand = "0.8.4"
 regex = "1.5.4"
 reqwest = { version = "0.11.5", features = ["stream"] }
-snafu = "0.6.10"
+snafu = "0.7.0"
 semver = { version = "1.0.4", features=["serde"] }
 serde = { version = "1.0.130", features= ["derive"]}
 serde_json = "1.0.68"

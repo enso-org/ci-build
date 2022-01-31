@@ -1,10 +1,13 @@
 use crate::prelude::*;
+use anyhow::Context as Trait_anyhow_Context;
 use std::collections::VecDeque;
 use std::fmt::Formatter;
 use std::fs::Metadata;
 use std::ops::DerefMut;
 use std::ops::Range;
 use std::ops::RangeInclusive;
+use std::pin::Pin;
+use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 
 use crate::actions::artifacts::models::CreateArtifactRequest;
@@ -13,12 +16,18 @@ use crate::actions::artifacts::models::PatchArtifactSize;
 use crate::actions::artifacts::models::PatchArtifactSizeResponse;
 use crate::env::expect_var;
 use chrono::Duration;
+use flume::Receiver;
+use flume::Sender;
 use futures_util::future::err;
+use futures_util::SinkExt;
+use octocrab::models::Status;
+use regex::Error;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::Body;
 use reqwest::Client;
 use reqwest::ClientBuilder;
+use reqwest::Response;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 use tokio::io::AsyncReadExt;
@@ -26,6 +35,34 @@ use tokio::io::AsyncReadExt;
 pub mod models;
 
 pub const API_VERSION: &str = "6.0-preview";
+
+pub mod raw {
+    use super::*;
+
+    #[context("Failed to upload the file '{}' to path '{}'.", file_to_upload.local_path.display(), file_to_upload.remote_path.display())]
+    pub async fn upload_file(
+        client: &reqwest::Client,
+        upload_url: Url,
+        file_to_upload: &FileToUpload,
+    ) -> Result<usize> {
+        let file = tokio::fs::File::open(&file_to_upload.local_path).await?;
+        // TODO [mwu] note that metadata can lie about file size, e.g. named pipes on Linux
+        let len = file.metadata().await?.len() as usize;
+        let body = Body::from(file);
+        let response = client
+            .put(upload_url)
+            .query(&[("itemPath", &file_to_upload.remote_path)])
+            .header(reqwest::header::CONTENT_LENGTH, len)
+            .header(reqwest::header::CONTENT_RANGE, ContentRange::whole(len as usize).to_string())
+            .body(body)
+            .send()
+            .await?;
+        dbg!(&response);
+        response.error_for_status()?;
+        Ok(len)
+    }
+}
+
 
 #[derive(Clone, Debug)]
 pub struct Context {
@@ -62,16 +99,45 @@ impl Context {
             reqwest::header::AUTHORIZATION,
             format!("Bearer {}", self.runtime_token).parse()?,
         );
-        //
-        // if let Some(keep_alive) = keep_alive {
-        //     headers.insert(reqwest::header::CONNECTION, "Keep-Alive".parse()?);
-        //     headers.insert("Keep-Alive", keep_alive.num_seconds().into());
-        // }
-        //
-        //
+
         let base_builder =
             ClientBuilder::new().default_headers(headers).user_agent(crate::USER_AGENT);
         f(base_builder).build().anyhow_err()
+    }
+
+    /// Creates a file container for the new artifact in the remote blob storage/file service.
+    ///
+    /// Returns the response from the Artifact Service if the file container was successfully
+    /// create.
+    #[context("Failed to create a file container for the new  artifact `{}`.", artifact_name.as_ref())]
+    pub async fn create_container(
+        &self,
+        json_client: &reqwest::Client,
+        artifact_name: impl AsRef<str>,
+    ) -> Result<CreateArtifactResponse> {
+        let body = CreateArtifactRequest::new(artifact_name.as_ref(), None);
+        let url = self.artifact_url()?;
+        //
+        // dbg!(&self.json_client);
+        // dbg!(serde_json::to_string(&body)?);
+        let request = json_client.post(url).json(&body).build()?;
+
+        // dbg!(&request);
+        // TODO retry
+        let response = json_client.execute(request).await?;
+        // dbg!(&response);
+        // let status = response.status();
+        check_response_json(response, |status, err| match status {
+            StatusCode::FORBIDDEN => err.context(
+                "Artifact storage quota has been hit. Unable to upload any new artifacts.",
+            ),
+            StatusCode::BAD_REQUEST => err.context(format!(
+                "Server rejected the request. Is the artifact name {} valid?",
+                artifact_name.as_ref()
+            )),
+            _ => err,
+        })
+        .await
     }
 }
 
@@ -181,16 +247,17 @@ impl Display for ContentRange {
 
 pub struct UploadWorker {}
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ArtifactHandler {
-    pub json_client:      Client,
-    pub binary_client:    Client,
-    pub context:          Context,
-    ongoing_upload_state: StateHandle,
+    pub json_client:   Client,
+    pub binary_client: Client,
+    pub artifact_url:  Url,
+    pub upload_url:    Url,
+    pub total_size:    std::sync::atomic::AtomicUsize,
 }
 
 impl ArtifactHandler {
-    pub fn new(context: &Context) -> Result<Self> {
+    pub async fn new(context: &Context, artifact_name: impl AsRef<str>) -> Result<Self> {
         let keep_alive_seconds = 3;
         let json_client = context.prepare_client(|builder| {
             let mut headers = HeaderMap::new();
@@ -211,142 +278,116 @@ impl ArtifactHandler {
             headers.insert("Keep-Alive", keep_alive_seconds.into());
             builder.default_headers(headers)
         })?;
+
+        let container = context.create_container(&json_client, artifact_name.as_ref()).await?;
         Ok(ArtifactHandler {
             json_client,
             binary_client,
-            context: context.clone(),
-            ongoing_upload_state: default(),
+            artifact_url: context.artifact_url()?,
+            upload_url: container.file_container_resource_url,
+            total_size: default(),
         })
     }
 
-
-    /// Creates a file container for the new artifact in the remote blob storage/file service.
-    ///
-    /// Returns the response from the Artifact Service if the file container was successfully
-    /// create.
-    #[context("Failed to create a file container for the new  artifact `{}`.", artifact_name.as_ref())]
-    pub async fn create_container(
-        &self,
-        artifact_name: impl AsRef<str>,
-    ) -> Result<CreateArtifactResponse> {
-        let body = CreateArtifactRequest::new(artifact_name.as_ref(), None);
-        let url = self.context.artifact_url()?;
-
-        dbg!(&self.json_client);
-        dbg!(serde_json::to_string(&body)?);
-        let request = self.json_client.post(url).json(&body).build()?;
-
-        dbg!(&request);
-        // TODO retry
-        let response = self.json_client.execute(request).await?;
-        dbg!(&response);
-        let status = response.status();
-        if !status.is_success() {
-            let err_body = response.text().await?;
-            let err = anyhow!("Server replied with {}. Response body: {}", status, err_body);
-            let err = match status {
-                StatusCode::FORBIDDEN => err.context(
-                    "Artifact storage quota has been hit. Unable to upload any new artifacts.",
-                ),
-                StatusCode::BAD_REQUEST => err.context(format!(
-                    "Server rejected the request. Is the artifact name {} valid?",
-                    artifact_name.as_ref()
-                )),
-                _ => err,
-            };
-            Err(err)
-        } else {
-            response.json().await.anyhow_err()
-        }
+    pub fn uploader(&self) -> FileUploader {
+        FileUploader { url: self.upload_url.clone(), client: self.binary_client.clone() }
     }
 
     /// Concurrently upload all of the files in chunks.
     pub async fn upload_artifact_to_file_container(
         &self,
-        upload_url: &Url,
-        files_to_upload: Vec<FileToUpload>,
+        files_to_upload: impl futures::Stream<Item = FileToUpload> + Send + 'static,
         options: &UploadOptions,
     ) -> Result {
         println!(
             "File Concurrency: {}, and Chunk Size: {}.  URL: {}",
-            options.file_concurrency, options.chunk_size, upload_url
+            options.file_concurrency, options.chunk_size, self.upload_url
         );
 
-        println!("Will upload {} files.", files_to_upload.len());
-        self.ongoing_upload_state.add_tasks(files_to_upload);
+        let (work_tx, work_rx) = flume::unbounded();
+        let (result_tx, result_rx) = flume::unbounded();
 
-        let mut tasks = Vec::new();
+        tokio::task::spawn_blocking(move || files_to_upload.map(Ok).forward(work_tx.into_sink()));
+
         for task_index in 0..options.file_concurrency {
             let continue_on_error = options.continue_on_error;
-            let uploader =
-                FileUploader { url: upload_url.clone(), client: self.binary_client.clone() };
-            let state = self.ongoing_upload_state.clone();
-            let task = async move {
-                while let Some(file_to_upload) = state.next_job() {
-                    println!("Will upload file {}.", file_to_upload.local_path.display());
-                    let result = match uploader.upload_file(&file_to_upload).await {
-                        Ok(len) => UploadResult {
-                            is_success:             true,
-                            total_size:             len,
-                            successful_upload_size: len,
-                        },
-                        Err(e) => {
-                            println!(
-                                "Failed to upload {}: {}",
-                                file_to_upload.local_path.display(),
-                                e
-                            );
-                            UploadResult {
-                                is_success:             false,
-                                total_size:             0,
-                                successful_upload_size: 0,
-                            }
-                        }
-                    };
+            let uploader = self.uploader();
+            let job_receiver = work_rx.clone();
+            let result_sender = result_tx.clone();
 
-                    println!(
-                        "Finished uploading file {}. Result: {:?}",
-                        file_to_upload.local_path.display(),
-                        result
-                    );
-                    state.process_result(continue_on_error, result);
+            let task = async move {
+                let mut input = job_receiver.clone().into_stream().boxed();
+                while let Some(file_to_upload) = input.next().await {
+                    let result = uploader.upload_file(&file_to_upload).await;
+                    result_sender.send(result).unwrap();
                 }
-                Result::Ok(())
             };
-            tasks.push(task);
+
+            tokio::spawn(task);
         }
 
-        let mut task_handles = tasks.into_iter().map(tokio::task::spawn).collect_vec();
-        let _rets = futures_util::future::join_all(task_handles).await;
+        let collect_results = result_rx
+            .into_stream()
+            .fold(0, |len_so_far, result| ready(len_so_far + result.total_size));
 
+        let uploaded = collect_results.await;
+        println!("Uploaded in total {} bytes.", uploaded);
+        self.total_size.fetch_add(uploaded, Ordering::SeqCst);
         Ok(())
     }
-
-    // pub fn upload_file(
-    //     &self,
-    //     upload_url: &Url,
-    //     file_to_upload: &FileToUpload,
-    // ) -> BoxFuture<UploadResult> {
-    //     async move {}.boxed()
-    // }
-
 
     #[context("Failed to finalize upload of the artifact `{}`.", artifact_name)]
     pub async fn patch_artifact_size(
         &self,
         artifact_name: &str,
     ) -> Result<PatchArtifactSizeResponse> {
-        let artifact_url = self.context.artifact_url()?;
+        let artifact_url = self.artifact_url.clone();
 
         let patch_request = self
             .json_client
             .patch(artifact_url.clone())
             .query(&[("artifactName", artifact_name)]) // OsStr can be passed here, fails runtime
-            .json(&PatchArtifactSize { size: self.ongoing_upload_state.get_total_size() });
+            .json(&PatchArtifactSize { size: self.total_size.load(Ordering::SeqCst) });
 
         // TODO retry
         let response = patch_request.send().await?;
         Ok(response.json().await?)
+    }
+}
+
+pub async fn check_response_json<T: DeserializeOwned>(
+    response: Response,
+    additional_context: impl FnOnce(StatusCode, anyhow::Error) -> anyhow::Error,
+) -> Result<T> {
+    let data = check_response(response, additional_context).await?;
+    serde_json::from_slice(data.as_ref()).context(anyhow!(
+        "Failed to deserialize response body as {}. Body was: {:?}",
+        std::any::type_name::<T>(),
+        data,
+    ))
+}
+pub async fn check_response(
+    response: Response,
+    additional_context: impl FnOnce(StatusCode, anyhow::Error) -> anyhow::Error,
+) -> Result<Bytes> {
+    dbg!(&response);
+    let status = response.status();
+    if !status.is_success() {
+        let mut err = anyhow!("Server replied with status {}.", status);
+
+        let body = response
+            .bytes()
+            .await
+            .map_err(|e| anyhow!("Also failed to obtain the response body: {}", e))?;
+
+        if let Ok(body_text) = std::str::from_utf8(body.as_ref()) {
+            err = err.context(format!("Error response body was: {}", body_text));
+        }
+
+        let err = additional_context(status, err);
+        Err(err)
+    } else {
+        response.bytes().await.context("Failed to read the response body.")
     }
 }
 
@@ -356,23 +397,22 @@ pub struct FileUploader {
 }
 
 impl FileUploader {
-    #[context("Failed to upload the file '{}' to path '{}'.", file_to_upload.local_path.display(), file_to_upload.remote_path.display())]
-    pub async fn upload_file(&self, file_to_upload: &FileToUpload) -> Result<usize> {
-        let file = tokio::fs::File::open(&file_to_upload.local_path).await?;
-        let len = file.metadata().await?.len() as usize;
-        let body = Body::from(file);
-        let response = self
-            .client
-            .put(self.url.clone())
-            .query(&[("itemPath", &file_to_upload.remote_path)])
-            .header(reqwest::header::CONTENT_LENGTH, len)
-            .header(reqwest::header::CONTENT_RANGE, ContentRange::whole(len as usize).to_string())
-            .body(body)
-            .send()
-            .await?;
-        dbg!(&response);
-        response.error_for_status()?;
-        Ok(len)
+    pub async fn upload_file(&self, file_to_upload: &FileToUpload) -> UploadResult {
+        match raw::upload_file(&self.client, self.url.clone(), file_to_upload).await {
+            Ok(len) => UploadResult {
+                is_success:             true,
+                total_size:             len,
+                successful_upload_size: len,
+            },
+            Err(e) => {
+                println!("Failed to upload {}: {}", file_to_upload.local_path.display(), e);
+                UploadResult {
+                    is_success:             false,
+                    total_size:             0,
+                    successful_upload_size: 0,
+                }
+            }
+        }
     }
 }
 
@@ -391,31 +431,75 @@ pub async fn execute_dbg<T: DeserializeOwned + std::fmt::Debug>(
     Ok(deserialized)
 }
 
-pub async fn upload_path(path: impl AsRef<Path>) -> Result {
-    let filename = path.as_ref().file_name().unwrap();
-    let name = filename.to_str().unwrap();
-
-    let options = UploadOptions {
-        chunk_size:        8_000_000,
-        file_concurrency:  10,
-        continue_on_error: true,
-    };
-
-    let files = vec![FileToUpload {
-        local_path:  path.as_ref().to_path_buf(),
-        remote_path: PathBuf::from(filename).join(name),
-    }];
-
+pub async fn upload_artifact(
+    file_provider: impl futures_util::TryStream<Ok = FileToUpload, Error = anyhow::Error>
+        + Send
+        + 'static,
+    artifact_name: impl AsRef<str>,
+) -> Result {
     let context = Context::new()?;
-    let mut handler = ArtifactHandler::new(&context)?;
-    let container = handler.create_container(name).await?;
-    dbg!(&container);
-    handler
-        .upload_artifact_to_file_container(&container.file_container_resource_url, files, &options)
-        .await?;
-    handler.patch_artifact_size(name).await?;
+    let mut handler = ArtifactHandler::new(&context, artifact_name.as_ref()).await?;
+
+    let (tx, rx) = flume::unbounded();
+
+    tokio::task::spawn_blocking(move || {
+        file_provider
+            .inspect_ok(|file| println!("Scheduling for upload {:?}", file))
+            .forward(tx.into_sink().sink_err_into())
+    });
+
+
+    //
+    // let mut task_handles = tasks.into_iter().map(tokio::task::spawn).collect_vec();
+    // let _rets = futures_util::future::join_all(task_handles).await;
+    //
+
+
+    // let filename = path.as_ref().file_name().unwrap();
+    // let name = filename.to_str().unwrap();
+    //
+    // let options = UploadOptions {
+    //     chunk_size:        8_000_000,
+    //     file_concurrency:  10,
+    //     continue_on_error: true,
+    // };
+    //
+    // let files = vec![FileToUpload {
+    //     local_path:  path.as_ref().to_path_buf(),
+    //     remote_path: PathBuf::from(filename).join(name),
+    // }];
+
+    // dbg!(&container);
+    // handler
+    //     .upload_artifact_to_file_container(&container.file_container_resource_url, files,
+    // &options)     .await?;
+    handler.patch_artifact_size(artifact_name.as_ref()).await?;
     Ok(())
 }
+
+// pub async fn upload_path(path: impl AsRef<Path>) -> Result {
+//     let filename = path.as_ref().file_name().unwrap();
+//     let name = filename.to_str().unwrap();
+//
+//     let options = UploadOptions {
+//         chunk_size:        8_000_000,
+//         file_concurrency:  10,
+//         continue_on_error: true,
+//     };
+//
+//     let files = vec![FileToUpload {
+//         local_path:  path.as_ref().to_path_buf(),
+//         remote_path: PathBuf::from(filename).join(name),
+//     }];
+//
+//     let context = Context::new()?;
+//     let mut handler = ArtifactHandler::new(&context, name)?;
+//     handler
+//         .upload_artifact_to_file_container(&container.file_container_resource_url, files,
+// &options)         .await?;
+//     handler.patch_artifact_size(name).await?;
+//     Ok(())
+// }
 
 //
 // pub async fn upload_file(path: impl AsRef<Path>, artifact_name: &str) -> Result {
