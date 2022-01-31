@@ -14,7 +14,8 @@ async fn main() -> Result {
         remote_path: PathBuf::from(path_to_upload),
     };
 
-    let dir = std::env::current_dir()?;
+    let dir = std::env::current_exe()?.parent().unwrap();
+    println!("Will upload {}", dir.display());
     let (tx, rx) = flume::unbounded();
     tokio::task::spawn_blocking(move || {
         for entry in walkdir::WalkDir::new(&dir) {
