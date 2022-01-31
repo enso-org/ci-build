@@ -409,6 +409,7 @@ pub async fn upload_path(path: impl AsRef<Path>) -> Result {
     let context = Context::new()?;
     let mut handler = ArtifactHandler::new(&context)?;
     let container = handler.create_container(name).await?;
+    dbg!(&container);
     handler.upload_artifact_to_file_container(&container.url, files, &options).await?;
     handler.patch_artifact_size(name).await?;
     Ok(())

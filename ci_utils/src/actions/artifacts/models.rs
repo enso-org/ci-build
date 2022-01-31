@@ -5,6 +5,8 @@ use crate::prelude::*;
 pub struct CreateArtifactRequest {
     r#type:         String,
     name:           String,
+    // GH Actions server does not support deserializing optional fields that are described as
+    // `null`.
     #[serde(skip_serializing_if = "Option::is_none")]
     retention_days: Option<u32>,
 }
