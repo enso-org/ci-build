@@ -112,7 +112,7 @@ pub mod raw {
                 }
                 let body = Body::from(buffer);
                 let range = ContentRange {
-                    range: current_position..=read_bytes.saturating_sub(1),
+                    range: current_position..=current_position + read_bytes.saturating_sub(1),
                     total: Some(len),
                 };
                 let response = client
