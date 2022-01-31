@@ -58,5 +58,6 @@ unicase = "2.6.0"
 url = "2.2.2"
 uuid = { version = "0.8.2", features= ["v4"] }
 which = "4.2.2"
+wiremock = "0.5.10"
 whoami = "1.2.1"
 zip = "0.5.13"

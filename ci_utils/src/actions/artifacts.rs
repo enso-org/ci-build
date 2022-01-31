@@ -307,22 +307,37 @@ impl ArtifactHandler {
         let (work_tx, work_rx) = flume::unbounded();
         let (result_tx, result_rx) = flume::unbounded();
 
-        tokio::task::spawn_blocking(move || files_to_upload.map(Ok).forward(work_tx.into_sink()));
+        tokio::task::spawn(async move {
+            println!("Spawned the file discovery worker.");
+            files_to_upload
+                .inspect(|f| println!("File {} discovered for upload.", f.local_path.display()))
+                .map(Ok)
+                .forward(work_tx.into_sink())
+                .await;
+            println!("File discovery complete.");
+        });
 
         for task_index in 0..options.file_concurrency {
+            println!("Preparing file upload worker #{}.", task_index);
             let continue_on_error = options.continue_on_error;
             let uploader = self.uploader();
-            let job_receiver = work_rx.clone();
+            let mut job_receiver = work_rx.clone().into_stream();
             let result_sender = result_tx.clone();
 
             let task = async move {
-                let mut input = job_receiver.clone().into_stream().boxed();
-                while let Some(file_to_upload) = input.next().await {
+                println!("Upload worker #{} has spawned.", task_index);
+                while let Some(file_to_upload) = job_receiver.next().await {
+                    println!(
+                        "#{}: Will upload {}.",
+                        task_index,
+                        &file_to_upload.local_path.display()
+                    );
                     let result = uploader.upload_file(&file_to_upload).await;
                     result_sender.send(result).unwrap();
                 }
             };
 
+            println!("Spawning the upload worker #{}.", task_index);
             tokio::spawn(task);
         }
 
@@ -542,6 +557,47 @@ pub async fn upload_artifact(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wiremock::matchers::method;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_artifact_upload() -> Result {
+        let mock_server = MockServer::start().await;
+
+        let text = r#"{"containerId":11099678,"size":-1,"signedContent":null,"fileContainerResourceUrl":"https://pipelines.actions.githubusercontent.com/VYS7uSE1JB12MkavBOHvD6nounefzg1s5vHmQvfbiLmuvFuM6c/_apis/resources/Containers/11099678","type":"actions_storage","name":"SomeFile","url":"https://pipelines.actions.githubusercontent.com/VYS7uSE1JB12MkavBOHvD6nounefzg1s5vHmQvfbiLmuvFuM6c/_apis/pipelines/1/runs/75/artifacts?artifactName=SomeFile","expiresOn":"2022-01-29T04:07:24.5807079Z","items":null}"#;
+        mock_server
+            .register(
+                Mock::given(method("POST"))
+                    .respond_with(ResponseTemplate::new(StatusCode::CREATED).set_body_string(text)),
+            )
+            .await;
+
+        mock_server
+            .register(
+                Mock::given(method("PUT"))
+                    .respond_with(ResponseTemplate::new(StatusCode::NOT_FOUND)),
+            )
+            .await;
+
+        std::env::set_var("ACTIONS_RUNTIME_URL", mock_server.uri());
+        std::env::set_var("ACTIONS_RUNTIME_TOKEN", "password123");
+        std::env::set_var("GITHUB_RUN_ID", "12");
+
+        let path_to_upload = "Cargo.toml";
+
+        let file_to_upload = FileToUpload {
+            local_path:  PathBuf::from(path_to_upload),
+            remote_path: PathBuf::from(path_to_upload),
+        };
+
+        upload_artifact(futures::stream::once(ready(file_to_upload)), "MyCargoArtifact").await?;
+        // artifacts::upload_path(path_to_upload).await?;
+        Ok(())
+        //let client = reqwest::Client::builder().default_headers().
+    }
+
 
     #[test]
     fn deserialize_response() -> Result {
