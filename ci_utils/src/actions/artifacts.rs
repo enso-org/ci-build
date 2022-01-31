@@ -335,11 +335,14 @@ impl ArtifactHandler {
                     let result = uploader.upload_file(&file_to_upload).await;
                     result_sender.send(result).unwrap();
                 }
+                println!("Upload worker #{} finished.", task_index);
             };
 
             println!("Spawning the upload worker #{}.", task_index);
             tokio::spawn(task);
         }
+
+        drop(result_tx);
 
         let collect_results = result_rx
             .into_stream()
