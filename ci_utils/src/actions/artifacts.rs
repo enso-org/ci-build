@@ -87,7 +87,8 @@ pub mod raw {
         // TODO [mwu] note that metadata can lie about file size, e.g. named pipes on Linux
         let chunk_size = 8 * 1024 * 1024;
         let len = file.metadata().await?.len() as usize;
-        if len < chunk_size {
+        println!("Will upload file {} of size {}", local_path.as_ref().display(), len);
+        if len < chunk_size && len > 0 {
             let body = Body::from(file);
             let response = client
                 .put(upload_url)
@@ -99,6 +100,7 @@ pub mod raw {
                 .await?;
 
             check_response(response, |_, e| e).await?;
+            Ok(len)
         } else {
             let mut current_position = 0;
             loop {
@@ -108,22 +110,23 @@ pub mod raw {
                     break;
                 }
                 let body = Body::from(buffer);
+                let range = ContentRange {
+                    range: current_position..=read_bytes.saturating_sub(1),
+                    total: Some(len),
+                };
                 let response = client
                     .put(upload_url.clone())
                     .query(&[("itemPath", remote_path.as_ref().to_slash_lossy())])
-                    .header(reqwest::header::CONTENT_LENGTH, len)
-                    .header(reqwest::header::CONTENT_RANGE, ContentRange {
-                        range: current_position..=read_bytes.saturating_sub(1),
-                        total: Some(len),
-                    })
+                    .header(reqwest::header::CONTENT_LENGTH, read_bytes)
+                    .header(reqwest::header::CONTENT_RANGE, range)
                     .body(body)
                     .send()
                     .await?;
                 current_position += read_bytes;
                 check_response(response, |_, e| e).await?;
             }
+            Ok(current_position)
         }
-        Ok(len)
     }
 }
 
