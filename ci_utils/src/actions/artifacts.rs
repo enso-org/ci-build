@@ -144,10 +144,10 @@ impl Context {
 #[derive(Clone, Debug)]
 pub struct FileToUpload {
     /// Absolute path in the local filesystem.
-    local_path:  PathBuf,
+    pub local_path:  PathBuf,
     /// Relative path within the artifact container. Does not include the leading segment with the
     /// artifact name.
-    remote_path: PathBuf,
+    pub remote_path: PathBuf,
 }
 
 #[derive(Clone, Debug)]
@@ -432,47 +432,18 @@ pub async fn execute_dbg<T: DeserializeOwned + std::fmt::Debug>(
 }
 
 pub async fn upload_artifact(
-    file_provider: impl futures_util::TryStream<Ok = FileToUpload, Error = anyhow::Error>
-        + Send
-        + 'static,
+    file_provider: impl futures_util::Stream<Item = FileToUpload> + Send + 'static,
     artifact_name: impl AsRef<str>,
 ) -> Result {
+    let options = UploadOptions {
+        chunk_size:        8000000,
+        file_concurrency:  10,
+        continue_on_error: true,
+    };
+
     let context = Context::new()?;
     let mut handler = ArtifactHandler::new(&context, artifact_name.as_ref()).await?;
-
-    let (tx, rx) = flume::unbounded();
-
-    tokio::task::spawn_blocking(move || {
-        file_provider
-            .inspect_ok(|file| println!("Scheduling for upload {:?}", file))
-            .forward(tx.into_sink().sink_err_into())
-    });
-
-
-    //
-    // let mut task_handles = tasks.into_iter().map(tokio::task::spawn).collect_vec();
-    // let _rets = futures_util::future::join_all(task_handles).await;
-    //
-
-
-    // let filename = path.as_ref().file_name().unwrap();
-    // let name = filename.to_str().unwrap();
-    //
-    // let options = UploadOptions {
-    //     chunk_size:        8_000_000,
-    //     file_concurrency:  10,
-    //     continue_on_error: true,
-    // };
-    //
-    // let files = vec![FileToUpload {
-    //     local_path:  path.as_ref().to_path_buf(),
-    //     remote_path: PathBuf::from(filename).join(name),
-    // }];
-
-    // dbg!(&container);
-    // handler
-    //     .upload_artifact_to_file_container(&container.file_container_resource_url, files,
-    // &options)     .await?;
+    handler.upload_artifact_to_file_container(file_provider, &options).await?;
     handler.patch_artifact_size(artifact_name.as_ref()).await?;
     Ok(())
 }
