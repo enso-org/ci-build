@@ -22,7 +22,7 @@ async fn main() -> Result {
             match entry {
                 Ok(entry) =>
                     if entry.file_type().is_file() {
-                        tx.send(entry.into_path()).unwrap();
+                        tx.send(entry.path().strip_prefix(&dir).unwrap().to_owned()).unwrap();
                     },
                 e => {
                     e.context(anyhow!(
