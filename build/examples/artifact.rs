@@ -22,7 +22,11 @@ async fn main() -> Result {
             match entry {
                 Ok(entry) =>
                     if entry.file_type().is_file() {
-                        tx.send(entry.path().strip_prefix(&dir).unwrap().to_owned()).unwrap();
+                        let file = FileToUpload {
+                            local_path:  entry.path().to_path_buf(),
+                            remote_path: entry.path().strip_prefix(&dir).unwrap().to_path_buf(),
+                        };
+                        tx.send(file).unwrap();
                     },
                 e => {
                     e.context(anyhow!(
@@ -36,11 +40,7 @@ async fn main() -> Result {
     });
 
 
-    artifacts::upload_artifact(
-        rx.into_stream().map(|path| FileToUpload { local_path: path.clone(), remote_path: path }),
-        "MyCargoArtifact",
-    )
-    .await?;
+    artifacts::upload_artifact(rx.into_stream(), "MyCargoArtifact").await?;
     // artifacts::upload_path(path_to_upload).await?;
     Ok(())
     //let client = reqwest::Client::builder().default_headers().

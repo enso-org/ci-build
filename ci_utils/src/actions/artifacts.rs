@@ -322,7 +322,8 @@ impl ArtifactHandler {
                 .inspect(|f| println!("File {} discovered for upload.", f.local_path.display()))
                 .map(Ok)
                 .forward(work_tx.into_sink())
-                .await;
+                .await
+                .unwrap();
             println!("File discovery complete.");
         });
 
