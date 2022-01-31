@@ -233,7 +233,7 @@ impl ArtifactHandler {
         let url = self.context.artifact_url()?;
 
         dbg!(&self.json_client);
-        dbg!(&body);
+        dbg!(serde_json::to_string(&body)?);
         let request = self.json_client.post(url).json(&body).build()?;
 
         dbg!(&request);
