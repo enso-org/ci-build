@@ -240,6 +240,7 @@ impl ArtifactHandler {
         dbg!(&request);
         // TODO retry
         let response = request.send().await?;
+        dbg!(&response);
         let status = response.status();
         if status.is_success() {
             let err_body = response.text().await?;
