@@ -244,7 +244,6 @@ impl ArtifactHandler {
         if !status.is_success() {
             let err_body = response.text().await?;
             let err = anyhow!("Server replied with {}. Response body: {}", status, err_body);
-
             let err = match status {
                 StatusCode::FORBIDDEN => err.context(
                     "Artifact storage quota has been hit. Unable to upload any new artifacts.",
@@ -269,8 +268,8 @@ impl ArtifactHandler {
         options: &UploadOptions,
     ) -> Result {
         println!(
-            "File Concurrency: {}, and Chunk Size: {}.",
-            options.file_concurrency, options.chunk_size
+            "File Concurrency: {}, and Chunk Size: {}.  URL: {}",
+            options.file_concurrency, options.chunk_size, upload_url
         );
 
         println!("Will upload {} files.", files_to_upload.len());
