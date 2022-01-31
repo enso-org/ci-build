@@ -53,16 +53,15 @@ impl Manifest {
     pub fn with_new_nightly(
         &self,
         new_nightly: Edition,
-        nightlies_count: usize,
+        nightlies_count_limit: usize,
     ) -> (Manifest, Vec<&Edition>) {
-        let (nightly, non_nightly) =
+        let (nightlies, non_nightlies) =
             self.editions.iter().partition::<Vec<_>, _>(|e| e.is_nightly());
-        let number_of_nightlies_to_remove =
-            1 + nightly.len().saturating_sub(NIGHTLY_EDITIONS_LIMIT);
+        let nightlies_count_to_remove = 1 + nightlies.len().saturating_sub(nightlies_count_limit);
         let (nightlies_to_remove, nightlies_to_keep) =
-            nightly.split_at(number_of_nightlies_to_remove);
+            nightlies.split_at(nightlies_count_to_remove);
 
-        let mut new_editions = non_nightly;
+        let mut new_editions = non_nightlies;
         new_editions.extend(nightlies_to_keep);
         new_editions.push(&new_nightly);
 
@@ -145,7 +144,7 @@ pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Resul
         .put(new_edition_filename, ByteStream::from_path(&new_edition_path).await?)
         .await?;
 
-    bucket_context.put_yaml("manifest2.yaml", &manifest).await?;
+    bucket_context.put_yaml("manifest2.yaml", &new_manifest).await?;
     Ok(())
 }
 
