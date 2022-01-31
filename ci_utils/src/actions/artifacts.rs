@@ -231,12 +231,7 @@ impl ArtifactHandler {
     ) -> Result<CreateArtifactResponse> {
         let body = CreateArtifactRequest::new(artifact_name.as_ref(), None);
         let url = self.context.artifact_url()?;
-        let request = self
-            .json_client
-            .post(url)
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .json(&body)
-            .build()?;
+        let request = self.json_client.post(url).json(&body).build()?;
 
         dbg!(&request);
         // TODO retry
