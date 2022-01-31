@@ -14,7 +14,7 @@ async fn main() -> Result {
         remote_path: PathBuf::from(path_to_upload),
     };
 
-    let dir = std::env::current_exe()?.parent().unwrap();
+    let dir = std::env::current_exe()?.parent().unwrap().to_owned();
     println!("Will upload {}", dir.display());
     let (tx, rx) = flume::unbounded();
     tokio::task::spawn_blocking(move || {
