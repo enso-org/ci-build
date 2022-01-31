@@ -110,6 +110,7 @@ pub mod raw {
                 if read_bytes == 0 {
                     break;
                 }
+                println!("Will be uploading a chunk of size {}", read_bytes);
                 let body = Body::from(buffer);
                 let range = ContentRange {
                     range: current_position..=current_position + read_bytes.saturating_sub(1),
