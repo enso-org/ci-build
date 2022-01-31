@@ -250,8 +250,10 @@ impl ArtifactHandler {
                 StatusCode::FORBIDDEN => err.context(
                     "Artifact storage quota has been hit. Unable to upload any new artifacts.",
                 ),
-                StatusCode::BAD_REQUEST => err
-                    .context(format!("The artifact name {} is not valid.", artifact_name.as_ref())),
+                StatusCode::BAD_REQUEST => err.context(format!(
+                    "Server rejected the request. Is the artifact name {} valid?",
+                    artifact_name.as_ref()
+                )),
                 _ => err,
             };
             Err(err)

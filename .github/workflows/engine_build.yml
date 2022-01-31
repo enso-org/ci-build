@@ -17,7 +17,7 @@ jobs:
       - run: echo "foo content" > foo.txt
       - uses: actions/upload-artifact@v2
         with:
-          name: foo-artifact
+          name: Cergo.toml
           path: foo.txt
       - uses: actions/checkout@v2
         with:
