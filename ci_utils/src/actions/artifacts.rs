@@ -1,20 +1,11 @@
-use crate::prelude::*;
-use anyhow::Context as Trait_anyhow_Context;
-use std::collections::VecDeque;
-use std::fmt::Formatter;
-use std::fs::Metadata;
-use std::ops::DerefMut;
-use std::ops::Range;
-use std::ops::RangeInclusive;
-use std::pin::Pin;
-use std::sync::atomic::Ordering;
-use std::sync::Mutex;
-
 use crate::actions::artifacts::models::CreateArtifactRequest;
 use crate::actions::artifacts::models::CreateArtifactResponse;
 use crate::actions::artifacts::models::PatchArtifactSize;
 use crate::actions::artifacts::models::PatchArtifactSizeResponse;
 use crate::env::expect_var;
+use crate::prelude::*;
+use anyhow::Context as Trait_anyhow_Context;
+use bytes::BytesMut;
 use chrono::Duration;
 use flume::Receiver;
 use flume::Sender;
@@ -31,6 +22,15 @@ use reqwest::ClientBuilder;
 use reqwest::Response;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
+use std::collections::VecDeque;
+use std::fmt::Formatter;
+use std::fs::Metadata;
+use std::ops::DerefMut;
+use std::ops::Range;
+use std::ops::RangeInclusive;
+use std::pin::Pin;
+use std::sync::atomic::Ordering;
+use std::sync::Mutex;
 use tokio::io::AsyncReadExt;
 
 pub mod models;
@@ -41,6 +41,7 @@ pub mod raw {
     use super::*;
     use path_slash::PathExt;
     use std::io::ErrorKind;
+    use tokio::io::AsyncSeekExt;
 
     /// Creates a file container for the new artifact in the remote blob storage/file service.
     ///
@@ -105,19 +106,25 @@ pub mod raw {
         } else {
             let mut current_position = 0;
             loop {
-                let mut buffer = Vec::new();
-                buffer.resize(chunk_size, 0);
-                let read_bytes = match file.read_exact(&mut buffer).await {
-                    Ok(read_bytes) => read_bytes,
-                    Err(e) if e.kind() == ErrorKind::UnexpectedEof => break,
-                    Err(e) => return Err(e.into()),
-                };
-                println!("Will be uploading a chunk of size {}", read_bytes);
-                let body = Body::from(buffer);
+                let mut buffer = BytesMut::with_capacity(chunk_size);
+                while file.read_buf(&mut buffer).await? > 0 && buffer.len() < chunk_size {}
+                if buffer.is_empty() {
+                    break;
+                }
+
+                let read_bytes = buffer.len();
+
+                // let read_bytes = match file.read_exact(&mut buffer).await {
+                //     Ok(read_bytes) => read_bytes,
+                //     Err(e) if e.kind() == ErrorKind::UnexpectedEof => break,
+                //     Err(e) => return Err(e.into()),
+                // };
+                let body = Body::from(buffer.freeze());
                 let range = ContentRange {
                     range: current_position..=current_position + read_bytes.saturating_sub(1),
                     total: Some(len),
                 };
+                println!("{}: Will be uploading a chunk {}", local_path.as_ref().display(), range);
                 let response = client
                     .put(upload_url.clone())
                     .query(&[("itemPath", remote_path.as_ref().to_slash_lossy())])
