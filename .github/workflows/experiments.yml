@@ -1,0 +1,32 @@
+name: Manual command run
+
+# Controls when the workflow will run
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Command to be run."
+        required: true
+        type: string
+      target:
+        description: "What runner should be used."
+        required: true
+        type: choice
+        options:
+          - "[self-hosted, Linux]"
+          - "[ubuntu-latest]"
+          - "[self-hosted, Windows]"
+          - "[windows-latest]"
+          - "[self-hosted, macOS]"
+          - "[macos-latest]"
+
+
+          # A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    runs-on: ${{ fromJSON(github.event.inputs.target) }}
+
+    steps:
+      - run: ${{ github.event.inputs.command }}
