@@ -130,6 +130,13 @@ pub fn version_from_env() -> Result<Version> {
     Ok(version)
 }
 
+pub fn version_from_legacy_repo(repo_root: impl AsRef<Path>) -> Result<Version> {
+    let repo_root: PathBuf = repo_root.as_ref().absolutize()?.into();
+    let build_sbt = repo_root.join("build.sbt");
+    let build_sbt_contents = std::fs::read_to_string(build_sbt)?;
+    crate::get_enso_version(&build_sbt_contents)
+}
+
 pub fn base_version(changelog_path: impl AsRef<Path>) -> Result<Version> {
     if let Ok(from_env) = version_from_env() {
         return Ok(from_env);

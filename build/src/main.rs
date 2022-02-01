@@ -22,8 +22,6 @@ use enso_build::paths::Paths;
 use enso_build::retrieve_github_access_token;
 use enso_build::setup_octocrab;
 use enso_build::version::Versions;
-use filetime::FileTime;
-use glob::glob;
 use ide_ci::actions::workflow;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
@@ -154,11 +152,19 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Deciding on version to target.");
     let changelog_path = enso_build::paths::root_to_changelog(&enso_root);
-    let mut version = enso_build::version::base_version(&changelog_path)?;
-    version.pre = match args.kind {
-        BuildKind::Dev => Versions::local_prerelease()?,
-        BuildKind::Nightly => Versions::nightly_prerelease(&octocrab, &repo).await?,
+    let version = if let Ok(version) = enso_build::version::version_from_legacy_repo(&enso_root) {
+        println!("Using legacy version override from build.sbt: {}", version);
+        version
+    } else {
+        Version {
+            pre: match args.kind {
+                BuildKind::Dev => Versions::local_prerelease()?,
+                BuildKind::Nightly => Versions::nightly_prerelease(&octocrab, &repo).await?,
+            },
+            ..enso_build::version::base_version(&changelog_path)?
+        }
     };
+
     let versions = Versions::new(version);
     versions.publish()?;
     println!("Target version: {versions:?}.");
@@ -675,245 +681,55 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
     Ok(paths.artifact_archive.clone())
 }
 
-#[derive(Clone, Debug)]
-pub struct FragileFiles {
-    sources: Vec<PathBuf>,
-    classes: Vec<PathBuf>,
-}
-
-pub fn get_fragile_files(enso_root: impl AsRef<Path>) -> Result<FragileFiles> {
-    let runtime_root = enso_root.as_ref().join_many(["engine", "runtime"]);
-    let runtime_src = runtime_root.join_many(["src", "main", "java"]);
-    let runtime_classes = runtime_root.join_many(["target", "*", "classes"]);
-    let interpreter_path = ["org", "enso", "interpreter"];
-    let suffixes: [&[&str]; 3] = [&["Language"], &["epb", "EpbLanguage"], &["**", "*Instrument"]];
-
-    let get_files = |path_prefix: &Path, extension: &str| -> Result<Vec<PathBuf>> {
-        let mut ret = Vec::new();
-        for suffix in suffixes {
-            let pattern =
-                path_prefix.join_many(interpreter_path).join_many(suffix).with_extension(extension);
-            println!("Searching the pattern: {}", pattern.display());
-            for entry in glob(pattern.to_str().unwrap())? {
-                ret.push(entry?);
-            }
-        }
-        Ok(ret)
-    };
-
-    Ok(FragileFiles {
-        sources: get_files(&runtime_src, "java")?,
-        classes: get_files(&runtime_classes, "class")?,
-    })
-}
-
-pub fn clear_fragile_files_smart(enso_root: impl AsRef<Path>) -> Result {
-    let fragile_files = get_fragile_files(enso_root)?;
-
-    let time_to_set = FileTime::now();
-    for src_file in &fragile_files.sources {
-        println!("Touching {}", src_file.display());
-        filetime::set_file_mtime(src_file, time_to_set)?;
-    }
-    for class_file in &fragile_files.classes {
-        println!("Deleting {}", class_file.display());
-        ide_ci::io::remove_file_if_exists(class_file)?;
-    }
-    Ok(())
-}
+// #[derive(Clone, Debug)]
+// pub struct FragileFiles {
+//     sources: Vec<PathBuf>,
+//     classes: Vec<PathBuf>,
+// }
+//
+// pub fn get_fragile_files(enso_root: impl AsRef<Path>) -> Result<FragileFiles> {
+//     let runtime_root = enso_root.as_ref().join_many(["engine", "runtime"]);
+//     let runtime_src = runtime_root.join_many(["src", "main", "java"]);
+//     let runtime_classes = runtime_root.join_many(["target", "*", "classes"]);
+//     let interpreter_path = ["org", "enso", "interpreter"];
+//     let suffixes: [&[&str]; 3] = [&["Language"], &["epb", "EpbLanguage"], &["**",
+// "*Instrument"]];
+//
+//     let get_files = |path_prefix: &Path, extension: &str| -> Result<Vec<PathBuf>> {
+//         let mut ret = Vec::new();
+//         for suffix in suffixes {
+//             let pattern =
+//
+// path_prefix.join_many(interpreter_path).join_many(suffix).with_extension(extension);
+// println!("Searching the pattern: {}", pattern.display());             for entry in
+// glob(pattern.to_str().unwrap())? {                 ret.push(entry?);
+//             }
+//         }
+//         Ok(ret)
+//     };
+//
+//     Ok(FragileFiles {
+//         sources: get_files(&runtime_src, "java")?,
+//         classes: get_files(&runtime_classes, "class")?,
+//     })
+// }
+//
+// pub fn clear_fragile_files_smart(enso_root: impl AsRef<Path>) -> Result {
+//     let fragile_files = get_fragile_files(enso_root)?;
+//
+//     let time_to_set = FileTime::now();
+//     for src_file in &fragile_files.sources {
+//         println!("Touching {}", src_file.display());
+//         filetime::set_file_mtime(src_file, time_to_set)?;
+//     }
+//     for class_file in &fragile_files.classes {
+//         println!("Deleting {}", class_file.display());
+//         ide_ci::io::remove_file_if_exists(class_file)?;
+//     }
+//     Ok(())
+// }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::process::Stdio;
-
-    use enso_build::postgres::process_lines;
-    use ide_ci::extensions::path::PathExt;
-    use ide_ci::github::release::upload_asset;
-    use ide_ci::models::config::RepoContext;
-    use ide_ci::programs::git::Git;
-    use ide_ci::programs::Cmd;
-    use std::time::Duration;
-    use tokio::io::AsyncReadExt;
-    use tokio::io::BufReader;
-
-    #[tokio::test]
-    #[ignore]
-    async fn fgbhduiydfgiu() -> Result {
-        let enso_root = r"H:\NBO\enso";
-        let sbt = WithCwd::new(Sbt, &enso_root);
-        sbt.cmd()?
-            .arg(r"enso/verifyGeneratedPackage engine H:\NBO\enso\built-distribution\enso-engine-2022.1.1-nightly.2022-01-27-windows-amd64\enso-2022.1.1-nightly.2022-01-27\THIRD-PARTY")
-            .run_ok()
-            .await?;
-        Ok(())
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_paths() -> Result {
-        Ok(())
-    }
-
-    // #[tokio::test]
-    // async fn run_test() -> Result {
-    //     let paths = Paths::new(r"H:\NBO\enso")?;
-    //     run_tests(&paths, IrCaches::No).await?;
-    //     Ok(())
-    // }
-
-    #[cfg(target_os = "windows")]
-    #[tokio::test]
-    #[ignore]
-    async fn named_pipe_sbt() -> Result {
-        use tokio::net::windows::named_pipe::ClientOptions;
-
-        let path = PathBuf::from(r"H:\NBO\enso");
-        let active_path = path.join_many(["project", "target", "active.json"]);
-        let contents = std::fs::read_to_string(&active_path)?;
-
-        #[derive(Clone, Debug, Deserialize)]
-        struct Active {
-            uri: String,
-        }
-
-        let active = serde_json::from_str::<Active>(&contents)?;
-        if TARGET_OS == OS::Windows {
-            assert!(active.uri.starts_with("local:"));
-            let name = active.uri.replacen("local:", r"\\.\pipe\", 1);
-            println!("Will connect to pipe {}", name);
-            let pipe = ClientOptions::new().open(name)?;
-            let (rx, mut tx) = tokio::io::split(pipe);
-            println!("Connection established.");
-
-            tx.write_all(r#"{ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "initializationOptions": {} } }"#.as_bytes()).await?;
-            tx.write_all("\n".as_bytes()).await?;
-
-            tx.write_all(r#"{ "jsonrpc": "2.0", "id": 2, "method": "sbt/exec", "params": {"commandLine": "bootstrap" } }"#.as_bytes(),).await?;
-            tx.write_all("\n".as_bytes()).await?;
-
-            tx.write_all(r#"{ "jsonrpc": "2.0", "id": 3, "method": "sbt/exec", "params": {"commandLine": "all buildLauncherDistribution buildEngineDistribution buildProjectManagerDistribution" } }"#.as_bytes(),).await?;
-            tx.write_all("\n".as_bytes()).await?;
-
-            tx.write_all(r#"{ "jsonrpc": "2.0", "id": 4, "method": "sbt/exec", "params": {"commandLine": "exit" } }"#.as_bytes(),).await?;
-            tx.write_all("\n".as_bytes()).await?;
-            drop(tx);
-
-            println!("Sent request.");
-            let mut rx = BufReader::new(rx);
-            tokio::spawn(async move {
-                println!("Will read.");
-                loop {
-                    let mut buffer = [0; 10000];
-                    let count = rx.read(&mut buffer[..]).await.unwrap();
-                    println!("GOT: {}", String::from_utf8_lossy(&buffer[..count]));
-                }
-            })
-            .await?;
-            // process_lines(rx, |line| println!("GOT: {}", line)).await?;
-        }
-
-        // ide_ci::programs::vs::apply_dev_environment().await?;
-        // let git = Git::new(&path);
-        // // git.clean_xfd().await?;
-        // Sbt.cmd()?.current_dir(&path).arg("bootstrap").run_ok().await?;
-        // Sbt.cmd()?.current_dir(&path).arg("all buildLauncherDistribution buildEngineDistribution
-        // buildProjectManagerDistribution").run_ok().await?;
-        Ok(())
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn good_batch_package() -> Result {
-        let path = PathBuf::from(r"H:\NBO\enso");
-        ide_ci::programs::vs::apply_dev_environment().await?;
-        let git = Git::new(&path);
-        git.clean_xfd().await?;
-        Sbt.cmd()?.current_dir(&path).arg("bootstrap").run_ok().await?;
-        Sbt.cmd()?.current_dir(&path).arg("all buildLauncherDistribution buildEngineDistribution buildProjectManagerDistribution").run_ok().await?;
-        Ok(())
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn good_batch_test() -> Result {
-        let path = PathBuf::from(r"H:\NBO\enso");
-        // ide_ci::programs::vs::apply_dev_environment().await?;
-        // let git = Git::new(&path);
-        // git.clean_xfd().await?;
-        // Sbt.cmd()?.current_dir(&path).arg("bootstrap").run_ok().await?;
-        Sbt.cmd()?.current_dir(&path).arg("all test").run_ok().await?;
-        Ok(())
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn interactive_sbt() -> Result {
-        let paths = Paths::new(r"H:\NBO\enso")?;
-
-        println!("Starting SBT");
-        let mut sbt = Cmd
-            .run_script(Sbt.lookup()?)?
-            .current_dir(&paths.repo_root)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            // .group_spawn()?;
-            .spawn()?;
-
-
-        let stdout = std::mem::take(&mut sbt.stdout).unwrap();
-        let mut stdin = std::mem::take(&mut sbt.stdin).unwrap();
-        let stderr = std::mem::take(&mut sbt.stderr).unwrap();
-
-        let handle = tokio::task::spawn(process_lines(stdout, |line| {
-            println!("OUT: {}", line.trim_end());
-        }));
-        let handle2 = tokio::task::spawn(process_lines(stderr, |line| {
-            println!("ERR: {}", line.trim_end());
-        }));
-
-        stdin.write_all("bootstrap\n".as_bytes()).await?;
-
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        // println!("Closing STDIN");
-        // drop(stdin);
-        // println!("Killing SBT");
-        // sbt.kill().await?;
-        println!("Waiting for OUT");
-        handle.await??;
-        println!("Waiting for ERR");
-        handle2.await??;
-        // sbt.wait().await?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn copy_file_js() -> Result {
-        let paths = Paths::new(r"H:\NBO\enso")?;
-        ide_ci::io::copy_to(
-            paths.target.join("scala-parser.js"),
-            paths.target.join("parser-upload"),
-        )?;
-
-
-        let schema_dir =
-            paths.repo_root.join_many(["engine", "language-server", "src", "main", "schema"]);
-        ide_ci::io::copy_to(&schema_dir, paths.target.join("fbs-upload"))?;
-        ide_ci::programs::SevenZip
-            .pack(paths.target.join("fbs-upload/fbs-schema.zip"), once(schema_dir.join("*")))
-            .await?;
-
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn system() {
-        let mut system = sysinfo::System::new();
-        system.refresh_memory();
-        dbg!(system.total_memory());
-    }
 }
