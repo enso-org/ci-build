@@ -103,6 +103,9 @@ pub mod prelude {
 }
 
 use prelude::*;
+use std::net::Ipv4Addr;
+use std::net::SocketAddrV4;
+use std::net::TcpListener;
 
 use ::anyhow::Context;
 
@@ -114,5 +117,24 @@ pub const USER_AGENT: &str = "enso-build";
 
 /// Looks up a free port in the IANA private or dynamic port range.
 pub fn get_free_port() -> Result<u16> {
-    port_check::free_local_port_in_range(49152, 65535).context("Failed to find a free local port.")
+    let port_range = 49152..65535;
+    port_range
+        .into_iter()
+        .find(|port| {
+            let ipv4 = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, *port);
+            // FIXME this can show firewall dialog on windows
+            TcpListener::bind(ipv4).is_ok()
+        })
+        .context("Failed to find a free local port.")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore]
+    pub fn get_free_port_test() {
+        println!("{:?}", get_free_port());
+    }
 }
