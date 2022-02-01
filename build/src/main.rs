@@ -97,6 +97,7 @@ pub struct BuildConfiguration {
     test_standard_library: bool,
     benchmark_compilation: bool,
     build_js_parser:       bool,
+    build_bundles:         bool,
 }
 
 const LOCAL: BuildConfiguration = BuildConfiguration {
@@ -106,6 +107,7 @@ const LOCAL: BuildConfiguration = BuildConfiguration {
     test_standard_library: true,
     benchmark_compilation: true,
     build_js_parser:       true,
+    build_bundles:         false,
 };
 
 const NIGHTLY: BuildConfiguration = BuildConfiguration {
@@ -115,6 +117,7 @@ const NIGHTLY: BuildConfiguration = BuildConfiguration {
     test_standard_library: false,
     benchmark_compilation: false,
     build_js_parser:       false,
+    build_bundles:         false,
 };
 
 
@@ -133,10 +136,13 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let args: Args = argh::from_env();
-    let config = match args.kind {
+    let mut config = match args.kind {
         BuildKind::Dev => LOCAL,
         BuildKind::Nightly => NIGHTLY,
     };
+    if args.command == WhatToDo::Upload || args.bundle.contains(&true) {
+        config.build_bundles = true;
+    }
 
     let octocrab = setup_octocrab()?;
     let enso_root = args.repository.clone();
@@ -502,33 +508,36 @@ async fn main() -> anyhow::Result<()> {
     //     .pack(paths.target.join("fbs-upload/fbs-schema.zip"), once(schema_dir.join("*")))
     //     .await?;
 
-    if args.command == WhatToDo::Upload {
-        let release_id = enso_build::env::release_id()?;
 
-        // Make packages.
-        let packages = create_packages(&paths).await?;
 
+    if config.build_bundles {
         // Launcher bundle
         let bundles = create_bundles(&paths).await?;
 
-        let repo_handler = repo.repos(&octocrab);
+        if args.command == WhatToDo::Upload {
+            // Make packages.
+            let packages = create_packages(&paths).await?;
 
-        // let release_name = format!("Enso {}", paths.triple.version);
-        let tag_name = versions.to_string();
+            let release_id = enso_build::env::release_id()?;
+            let repo_handler = repo.repos(&octocrab);
 
-        let releases_handler = repo_handler.releases();
-        // let triple = paths.triple.clone();
-        let release = releases_handler
-            .get_by_id(release_id)
-            .await
-            .context(format!("Failed to find release by tag {tag_name}."))?;
+            // let release_name = format!("Enso {}", paths.triple.version);
+            let tag_name = versions.to_string();
 
-        let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
-        for package in packages {
-            ide_ci::github::release::upload_asset(&repo, &client, release.id, package).await?;
-        }
-        for bundle in bundles {
-            ide_ci::github::release::upload_asset(&repo, &client, release.id, bundle).await?;
+            let releases_handler = repo_handler.releases();
+            // let triple = paths.triple.clone();
+            let release = releases_handler
+                .get_by_id(release_id)
+                .await
+                .context(format!("Failed to find release by tag {tag_name}."))?;
+
+            let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
+            for package in packages {
+                ide_ci::github::release::upload_asset(&repo, &client, release.id, package).await?;
+            }
+            for bundle in bundles {
+                ide_ci::github::release::upload_asset(&repo, &client, release.id, bundle).await?;
+            }
         }
     }
 
@@ -632,7 +641,7 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
 
     let engine_bundle =
         ComponentPaths::new(&paths.build_dist_root, "enso-bundle", "enso", &paths.triple);
-    create_bundle(paths, &paths.launcher, &engine_bundle);
+    create_bundle(paths, &paths.launcher, &engine_bundle).await?;
     engine_bundle.pack().await?;
 
 
@@ -643,7 +652,7 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
         "enso",
         &paths.triple,
     );
-    create_bundle(paths, &paths.project_manager, &pm_bundle);
+    create_bundle(paths, &paths.project_manager, &pm_bundle).await?;
     ide_ci::io::copy(
         paths.repo_root.join_many(["distribution", "enso.bundle.template"]),
         pm_bundle.dir.join(".enso.bundle"),

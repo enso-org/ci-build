@@ -6,6 +6,7 @@ use strum::EnumString;
 #[strum(serialize_all = "kebab-case")]
 pub enum WhatToDo {
     Build,
+    // Three release-related commands below.
     Prepare,
     Upload,
     Finish,
@@ -34,6 +35,9 @@ pub struct Args {
     /// identifier of the release to be targeted (necessary for `upload` and `finish` commands)
     #[argh(option)]
     pub release_id: Option<u64>,
+    /// whether create bundles with Project Manager and Launcher
+    #[argh(option)]
+    pub bundle:     Option<bool>,
     /// command to execute (build/prepare/upload/finish)
     #[argh(positional, default = "WhatToDo::Build")]
     pub command:    WhatToDo,

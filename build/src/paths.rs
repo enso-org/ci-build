@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use std::fmt::Formatter;
 
+use crate::version::default_engine_version;
 use crate::version::Versions;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
@@ -114,8 +115,8 @@ impl Paths {
         let repo_root: PathBuf = repo_root.into().absolutize()?.into();
         let build_sbt = repo_root.join("build.sbt");
         let build_sbt_contents = std::fs::read_to_string(build_sbt)?;
-        let version = crate::get_enso_version(&build_sbt_contents)
-            .unwrap_or(Version::parse("0.0.0-LOCAL").unwrap());
+        let version =
+            crate::get_enso_version(&build_sbt_contents).unwrap_or(default_engine_version());
         Self::new_version(repo_root, version)
     }
 
