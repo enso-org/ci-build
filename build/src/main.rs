@@ -183,7 +183,7 @@ async fn main() -> anyhow::Result<()> {
                 .releases()
                 .create(&versions.tag())
                 .target_commitish(&commit)
-                .name(&versions.to_string())
+                .name(&versions.pretty_name())
                 .body(&latest_changelog_body.contents)
                 .prerelease(true)
                 .draft(true)
