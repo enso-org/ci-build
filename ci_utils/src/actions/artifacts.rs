@@ -91,13 +91,13 @@ pub mod raw {
     #[context("Failed to upload the file '{}' to path '{}'.", local_path.as_ref().display(), remote_path.as_ref().display())]
     pub async fn upload_file(
         client: &reqwest::Client,
+        chunk_size: usize,
         upload_url: Url,
         local_path: impl AsRef<Path>,
         remote_path: impl AsRef<Path>,
     ) -> Result<usize> {
         let file = tokio::fs::File::open(local_path.as_ref()).await?;
         // TODO [mwu] note that metadata can lie about file size, e.g. named pipes on Linux
-        let chunk_size = 8 * 1024 * 1024;
         let len = file.metadata().await?.len() as usize;
         println!("Will upload file {} of size {}", local_path.as_ref().display(), len);
         if len < chunk_size && len > 0 {
@@ -374,11 +374,12 @@ impl ArtifactHandler {
         })
     }
 
-    pub fn uploader(&self) -> FileUploader {
+    pub fn uploader(&self, options: &UploadOptions) -> FileUploader {
         FileUploader {
             url:           self.upload_url.clone(),
             client:        self.binary_client.clone(),
             artifact_name: PathBuf::from(&self.artifact_name),
+            chunk_size:    options.chunk_size,
         }
     }
 
@@ -409,26 +410,26 @@ impl ArtifactHandler {
 
         for task_index in 0..options.file_concurrency {
             println!("Preparing file upload worker #{}.", task_index);
-            let continue_on_error = options.continue_on_error; // TODO
-            let uploader = self.uploader();
+            let _continue_on_error = options.continue_on_error; // TODO
+            let uploader = self.uploader(options);
             let mut job_receiver = work_rx.clone().into_stream();
             let result_sender = result_tx.clone();
 
             let task = async move {
                 println!("Upload worker #{} has spawned.", task_index);
                 while let Some(file_to_upload) = job_receiver.next().await {
-                    println!(
-                        "#{}: Will upload {} to {}.",
-                        task_index,
-                        &file_to_upload.local_path.display(),
-                        &file_to_upload.remote_path.display()
-                    );
+                    // println!(
+                    //     "#{}: Will upload {} to {}.",
+                    //     task_index,
+                    //     &file_to_upload.local_path.display(),
+                    //     &file_to_upload.remote_path.display()
+                    // );
                     let result = uploader.upload_file(&file_to_upload).await;
-                    println!(
-                        "Uploading result for {}: {:?}",
-                        &file_to_upload.local_path.display(),
-                        result
-                    );
+                    // println!(
+                    //     "Uploading result for {}: {:?}",
+                    //     &file_to_upload.local_path.display(),
+                    //     result
+                    // );
                     result_sender.send(result).unwrap();
                 }
                 println!("Upload worker #{} finished.", task_index);
@@ -510,12 +511,14 @@ pub struct FileUploader {
     pub url:           Url,
     pub client:        Client,
     pub artifact_name: PathBuf,
+    pub chunk_size:    usize,
 }
 
 impl FileUploader {
     pub async fn upload_file(&self, file_to_upload: &FileToUpload) -> UploadResult {
         let uploading_res = raw::upload_file(
             &self.client,
+            self.chunk_size,
             self.url.clone(),
             &file_to_upload.local_path,
             self.artifact_name.join(&file_to_upload.remote_path),
