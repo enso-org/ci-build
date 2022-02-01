@@ -6,13 +6,7 @@ use crate::env::expect_var;
 use crate::prelude::*;
 use anyhow::Context as Trait_anyhow_Context;
 use bytes::BytesMut;
-use chrono::Duration;
-use flume::Receiver;
 use flume::Sender;
-use futures_util::future::err;
-use futures_util::SinkExt;
-use octocrab::models::Status;
-use regex::Error;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::header::InvalidHeaderValue;
@@ -24,11 +18,8 @@ use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 use std::collections::VecDeque;
 use std::fmt::Formatter;
-use std::fs::Metadata;
 use std::ops::DerefMut;
-use std::ops::Range;
 use std::ops::RangeInclusive;
-use std::pin::Pin;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use tokio::io::AsyncReadExt;
@@ -39,9 +30,6 @@ pub const API_VERSION: &str = "6.0-preview";
 
 pub mod raw {
     use super::*;
-    use path_slash::PathExt;
-    use std::io::ErrorKind;
-    use tokio::io::AsyncSeekExt;
 
     /// Creates a file container for the new artifact in the remote blob storage/file service.
     ///
@@ -77,6 +65,29 @@ pub mod raw {
         .await
     }
 
+
+    pub async fn upload_file_chunk(
+        client: &reqwest::Client,
+        upload_url: Url,
+        body: impl Into<Body>,
+        range: ContentRange,
+        remote_path: impl AsRef<Path>,
+    ) -> Result<usize> {
+        use path_slash::PathExt;
+        let body = body.into();
+        let response = client
+            .put(upload_url)
+            .query(&[("itemPath", remote_path.as_ref().to_slash_lossy())])
+            .header(reqwest::header::CONTENT_LENGTH, range.len())
+            .header(reqwest::header::CONTENT_RANGE, &range)
+            .body(body)
+            .send()
+            .await?;
+
+        check_response(response, |_, e| e).await?;
+        Ok(range.len())
+    }
+
     #[context("Failed to upload the file '{}' to path '{}'.", local_path.as_ref().display(), remote_path.as_ref().display())]
     pub async fn upload_file(
         client: &reqwest::Client,
@@ -84,61 +95,49 @@ pub mod raw {
         local_path: impl AsRef<Path>,
         remote_path: impl AsRef<Path>,
     ) -> Result<usize> {
-        use path_slash::PathExt;
-        let mut file = tokio::fs::File::open(local_path.as_ref()).await?;
+        let file = tokio::fs::File::open(local_path.as_ref()).await?;
         // TODO [mwu] note that metadata can lie about file size, e.g. named pipes on Linux
         let chunk_size = 8 * 1024 * 1024;
         let len = file.metadata().await?.len() as usize;
         println!("Will upload file {} of size {}", local_path.as_ref().display(), len);
         if len < chunk_size && len > 0 {
-            let body = Body::from(file);
-            let response = client
-                .put(upload_url)
-                .query(&[("itemPath", remote_path.as_ref().to_slash_lossy())])
-                .header(reqwest::header::CONTENT_LENGTH, len)
-                .header(reqwest::header::CONTENT_RANGE, ContentRange::whole(len as usize))
-                .body(body)
-                .send()
-                .await?;
-
-            check_response(response, |_, e| e).await?;
-            Ok(len)
+            let range = ContentRange::whole(len as usize);
+            upload_file_chunk(client, upload_url.clone(), file, range, &remote_path).await
         } else {
+            let mut chunks = stream_file_in_chunks(file, chunk_size).boxed();
             let mut current_position = 0;
             loop {
-                let mut buffer = BytesMut::with_capacity(chunk_size);
-                while file.read_buf(&mut buffer).await? > 0 && buffer.len() < chunk_size {}
-                if buffer.is_empty() {
-                    break;
-                }
+                let chunk = match chunks.try_next().await? {
+                    Some(chunk) => chunk,
+                    None => break,
+                };
 
-                let read_bytes = buffer.len();
-
-                // let read_bytes = match file.read_exact(&mut buffer).await {
-                //     Ok(read_bytes) => read_bytes,
-                //     Err(e) if e.kind() == ErrorKind::UnexpectedEof => break,
-                //     Err(e) => return Err(e.into()),
-                // };
-                let body = Body::from(buffer.freeze());
+                let read_bytes = chunk.len();
                 let range = ContentRange {
                     range: current_position..=current_position + read_bytes.saturating_sub(1),
                     total: Some(len),
                 };
-                println!("{}: Will be uploading a chunk {}", local_path.as_ref().display(), range);
-                let response = client
-                    .put(upload_url.clone())
-                    .query(&[("itemPath", remote_path.as_ref().to_slash_lossy())])
-                    .header(reqwest::header::CONTENT_LENGTH, read_bytes)
-                    .header(reqwest::header::CONTENT_RANGE, range)
-                    .body(body)
-                    .send()
-                    .await?;
+                upload_file_chunk(client, upload_url.clone(), chunk, range, &remote_path).await?;
                 current_position += read_bytes;
-                check_response(response, |_, e| e).await?;
             }
             Ok(current_position)
         }
     }
+}
+
+pub fn stream_file_in_chunks(
+    file: tokio::fs::File,
+    chunk_size: usize,
+) -> impl futures::Stream<Item = Result<Bytes>> + Send {
+    futures::stream::try_unfold(file, async move |mut file| {
+        let mut buffer = BytesMut::with_capacity(chunk_size);
+        while file.read_buf(&mut buffer).await? > 0 && buffer.len() < chunk_size {}
+        if buffer.is_empty() {
+            Ok::<_, anyhow::Error>(None)
+        } else {
+            Ok(Some((buffer.freeze(), file)))
+        }
+    })
 }
 
 
@@ -191,6 +190,26 @@ pub struct FileToUpload {
     /// Relative path within the artifact container. Does not include the leading segment with the
     /// artifact name.
     pub remote_path: PathBuf,
+}
+
+impl FileToUpload {
+    pub fn new_under_root(
+        root_path: impl AsRef<Path>,
+        local_path: impl Into<PathBuf>,
+    ) -> Result<Self> {
+        let local_path = local_path.into();
+        Ok(FileToUpload {
+            remote_path: local_path
+                .strip_prefix(&root_path)
+                .context(format!(
+                    "Failed to strip prefix {} from path {}",
+                    root_path.as_ref().display(),
+                    local_path.display()
+                ))?
+                .to_path_buf(),
+            local_path,
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -274,12 +293,24 @@ impl ContentRange {
     pub fn whole(len: usize) -> Self {
         Self { range: 0..=len.saturating_sub(1), total: Some(len) }
     }
+
+    pub fn len(&self) -> usize {
+        1 + self.range.end() - self.range.start()
+    }
 }
 
 impl TryFrom<ContentRange> for HeaderValue {
     type Error = InvalidHeaderValue;
 
     fn try_from(value: ContentRange) -> std::result::Result<Self, Self::Error> {
+        value.to_string().try_into()
+    }
+}
+
+impl TryFrom<&ContentRange> for HeaderValue {
+    type Error = InvalidHeaderValue;
+
+    fn try_from(value: &ContentRange) -> std::result::Result<Self, Self::Error> {
         value.to_string().try_into()
     }
 }
@@ -523,6 +554,29 @@ pub async fn execute_dbg<T: DeserializeOwned + std::fmt::Debug>(
     Ok(deserialized)
 }
 
+pub fn discover_and_feed(root_path: impl AsRef<Path>, sender: Sender<FileToUpload>) -> Result {
+    walkdir::WalkDir::new(&root_path).into_iter().try_for_each(|entry| {
+        let entry = entry?;
+        if entry.file_type().is_file() {
+            let file = FileToUpload::new_under_root(&root_path, entry.path())?;
+            sender
+                .send(file)
+                .context("Stopping discovery in progress, because all listeners were dropped.")?;
+        };
+        Ok(())
+    })
+}
+
+pub fn discover_recursive(
+    root_path: impl Into<PathBuf>,
+) -> impl Stream<Item = FileToUpload> + Send {
+    let root_path = root_path.into();
+
+    let (tx, rx) = flume::unbounded();
+    tokio::task::spawn_blocking(move || discover_and_feed(root_path, tx));
+    rx.into_stream()
+}
+
 pub async fn upload_artifact(
     file_provider: impl futures_util::Stream<Item = FileToUpload> + Send + 'static,
     artifact_name: impl AsRef<str>,
@@ -534,7 +588,7 @@ pub async fn upload_artifact(
     };
 
     let context = Context::new()?;
-    let mut handler = ArtifactHandler::new(&context, artifact_name.as_ref()).await?;
+    let handler = ArtifactHandler::new(&context, artifact_name.as_ref()).await?;
     handler.upload_artifact_to_file_container(file_provider, &options).await?;
     handler.patch_artifact_size(artifact_name.as_ref()).await?;
     Ok(())

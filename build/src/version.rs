@@ -5,7 +5,6 @@ use ide_ci::models::config::RepoContext;
 use octocrab::models::repos::Release;
 use semver::Prerelease;
 use std::collections::BTreeSet;
-use std::fmt::Formatter;
 use std::str::FromStr;
 
 /// Variable that stores Enso Engine version.
@@ -15,12 +14,6 @@ pub const RELEASE_MODE_VAR_NAME: &str = "ENSO_RELEASE_MODE";
 
 pub const LOCAL_BUILD_PREFIX: &str = "dev";
 pub const NIGHTLY_BUILD_PREFIX: &str = "nightly";
-// pub enum Kind {
-//     Local,
-//     Nightly,
-//     // Rc,
-//     // Stable,
-// }
 
 pub fn default_engine_version() -> Version {
     let mut ret = Version::new(0, 0, 0);

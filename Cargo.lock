@@ -1434,6 +1434,7 @@ dependencies = [
  "unicase",
  "url",
  "uuid",
+ "walkdir",
  "which",
  "whoami",
  "wiremock",
