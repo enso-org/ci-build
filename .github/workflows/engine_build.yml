@@ -10,57 +10,7 @@ on:
 
       # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  prepare:
-    runs-on: [self-hosted]
-    outputs:
-      ENSO_VERSION: ${{ steps.prepare-step.outputs.ENSO_VERSION }}
-      ENSO_RELEASE_ID: ${{ steps.prepare-step.outputs.ENSO_RELEASE_ID }}
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          repository: enso-org/enso
-          path: enso
-          ref: wip/mwu/engine-version-from-env
-      - uses: actions/checkout@v2
-        with:
-          path: ci-build
-          clean: false
-      - name: Run a multi-line script
-        id: prepare-step
-        run: cargo run --bin enso-build -- ../enso prepare --kind nightly
-        working-directory: ${{ github.workspace }}/ci-build
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-  finish:
-    runs-on: [self-hosted]
-    needs: [prepare, build]
-    env:
-      ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
-      ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          repository: enso-org/enso
-          path: enso
-          ref: wip/mwu/engine-version-from-env
-      - uses: actions/checkout@v2
-        with:
-          path: ci-build
-          clean: false
-      - name: Run a multi-line script
-        id: prepare-step
-        run: cargo run --bin enso-build -- ../enso finish --kind nightly
-        working-directory: ${{ github.workspace }}/ci-build
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-      # This workflow contains a single job called "build"
   build:
-    needs: prepare
-    env:
-      ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
-      ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
     # The type of runner that the job will run on
     runs-on: ${{ matrix.os }}
     strategy:
@@ -106,24 +56,12 @@ jobs:
 
       # Runs a set of commands using the runners shell
       - name: Run a multi-line script
-        run: cargo run --bin enso-build -- ../enso upload --kind nightly
-        working-directory: ${{ github.workspace }}/ci-build
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        if: >
-          matrix.nightly
-            && (contains(matrix.os, 'self-hosted') && (runner.os == 'Windows' || runner.os == 'Linux') 
-                || (!contains(matrix.os, 'self-hosted') && runner.os == 'macOS'))
-      - name: Run a multi-line script
         run: cargo run --bin enso-build -- ../enso build --kind nightly
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
         # Same condition as above but wrapped with !()
-        if: >
-          matrix.nightly 
-              && !(contains(matrix.os, 'self-hosted') && (runner.os == 'Windows' || runner.os == 'Linux') 
-                || (!contains(matrix.os, 'self-hosted') && runner.os == 'macOS'))
+        if: "matrix.nightly"
       - name: Run a multi-line script
         run: cargo run --bin enso-build -- ../enso build
         working-directory: ${{ github.workspace }}/ci-build
