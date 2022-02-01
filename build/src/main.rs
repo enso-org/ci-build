@@ -645,6 +645,7 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
         graalvm::Gu.call_args(["install", "python", "r"]).await?;
     }
 
+    // Launcher bundle.
     let engine_bundle =
         ComponentPaths::new(&paths.build_dist_root, "enso-bundle", "enso", &paths.triple);
     create_bundle(paths, &paths.launcher, &engine_bundle).await?;
@@ -663,6 +664,7 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
         paths.repo_root.join_many(["distribution", "enso.bundle.template"]),
         pm_bundle.dir.join(".enso.bundle"),
     )?;
+    pm_bundle.pack().await?;
     Ok(vec![engine_bundle.artifact_archive, pm_bundle.artifact_archive])
 }
 
