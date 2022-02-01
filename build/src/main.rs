@@ -608,23 +608,33 @@ impl ComponentPathExt for ComponentPaths {
     }
 }
 
-pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
-    let engine_bundle =
-        ComponentPaths::new(&paths.build_dist_root, "enso-bundle", "enso", &paths.triple);
-    engine_bundle.clear()?;
-    ide_ci::io::copy(&paths.launcher.root, &engine_bundle.root)?;
+pub async fn create_bundle(
+    paths: &Paths,
+    base_component: &ComponentPaths,
+    bundle: &ComponentPaths,
+) -> Result {
+    bundle.clear()?;
+    ide_ci::io::copy(&base_component.root, &bundle.root)?;
 
-    // Install Graalpython & FastR
+    let bundled_engine_dir = bundle.dir.join("dist").join(paths.version().to_string());
+    place_component_at(&paths.engine, &bundled_engine_dir)?;
+    place_graal_under(bundle.dir.join("runtime")).await?;
+    Ok(())
+}
+
+pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
+    // Make sure that Graal has the needed optional components installed (on platforms that support
+    // them).
     if TARGET_OS != OS::Windows {
         // Windows does not support sulong.
         graalvm::Gu.call_args(["install", "python", "r"]).await?;
     }
 
-    // Copy engine into the bundle.
-    let bundled_engine_dir = engine_bundle.dir.join("dist").join(paths.version().to_string());
-    place_component_at(&paths.engine, &bundled_engine_dir)?;
-    place_graal_under(engine_bundle.dir.join("runtime")).await?;
+    let engine_bundle =
+        ComponentPaths::new(&paths.build_dist_root, "enso-bundle", "enso", &paths.triple);
+    create_bundle(paths, &paths.launcher, &engine_bundle);
     engine_bundle.pack().await?;
+
 
     // Project manager bundle.
     let pm_bundle = ComponentPaths::new(
@@ -633,15 +643,11 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
         "enso",
         &paths.triple,
     );
-    pm_bundle.clear()?;
-    ide_ci::io::copy(&paths.project_manager.root, &pm_bundle.root)?;
-    place_component_at(&paths.engine, &bundled_engine_dir)?;
-    place_graal_under(pm_bundle.dir.join("runtime")).await?;
+    create_bundle(paths, &paths.project_manager, &pm_bundle);
     ide_ci::io::copy(
         paths.repo_root.join_many(["distribution", "enso.bundle.template"]),
         pm_bundle.dir.join(".enso.bundle"),
     )?;
-    pm_bundle.pack().await?;
     Ok(vec![engine_bundle.artifact_archive, pm_bundle.artifact_archive])
 }
 
