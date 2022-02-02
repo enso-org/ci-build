@@ -32,7 +32,6 @@ jobs:
         with:
           repository: enso-org/enso
           path: enso
-          ref: wip/mwu/engine-version-from-env
       - uses: actions/checkout@v2
         with:
           path: ci-build
