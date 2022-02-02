@@ -46,7 +46,7 @@ impl Default for Versions {
 
 impl Versions {
     pub fn new(version: Version) -> Self {
-        let release_mode = !version.pre.as_str().contains(LOCAL_BUILD_PREFIX);
+        let release_mode = !version.pre.as_str().contains(LOCAL_BUILD_PREFIX) && !version.pre.as_str().contains("SNAPSHOT");
         Versions { version, release_mode }
     }
 
