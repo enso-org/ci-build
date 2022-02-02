@@ -2,6 +2,7 @@
 
 use crate::prelude::*;
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use crate::github::OrganizationPointer;
 use crate::github::RepoPointer;
@@ -98,6 +99,18 @@ impl RepoPointer for RepoContext {
 impl Display for RepoContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}/{}", self.owner, self.name)
+    }
+}
+
+/// Parse from strings in format "owner/name". Opposite of `Display`.
+impl FromStr for RepoContext {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.split('/').collect_vec().as_slice() {
+            [owner, name] => Ok(Self { owner: owner.to_string(), name: name.to_string() }),
+            slice => bail!("Failed to parse string '{}': Splitting by '/' should yield exactly 2 pieces, found: {}", s, slice.len()),
+        }
     }
 }
 

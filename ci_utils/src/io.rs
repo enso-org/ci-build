@@ -1,7 +1,8 @@
 use crate::prelude::*;
 use fs_extra::dir::CopyOptions;
+use platforms::TARGET_OS;
 
-use crate::archive::ArchiveFormat;
+use crate::archive::Format;
 use reqwest::IntoUrl;
 
 /// Create a directory (and all missing parent directories),
@@ -13,6 +14,18 @@ pub fn create_dir_if_missing(path: impl AsRef<Path>) -> Result {
     match result {
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         result => result.anyhow_err(),
+    }
+}
+
+/// Create a parent directory for path (and all missing parent directories),
+///
+/// Does not fail when a directory already exists.
+pub fn create_parent_dir_if_missing(path: impl AsRef<Path>) -> Result<PathBuf> {
+    if let Some(parent) = path.as_ref().parent() {
+        create_dir_if_missing(parent)?;
+        Ok(parent.into())
+    } else {
+        bail!("No parent directory for path {}", path.as_ref().display())
     }
 }
 
@@ -95,7 +108,7 @@ pub async fn download_and_extract(
     let buffer = std::io::Cursor::new(contents);
 
     println!("Extracting {} to {}", filename.display(), output_dir.as_ref().display());
-    let format = ArchiveFormat::from_filename(&PathBuf::from(filename))?;
+    let format = Format::from_filename(&PathBuf::from(filename))?;
     format.extract(buffer, output_dir)
 }
 
@@ -157,6 +170,15 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
     Ok(())
 }
 
+pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
+    create_parent_dir_if_missing(destination.as_ref())?;
+    if TARGET_OS == OS::Windows {
+        crate::programs::robocopy::mirror_dir(source, destination).await
+    } else {
+        crate::programs::rsync::mirror_directory(source, destination).await
+    }
+}
+
 #[cfg(not(target_os = "windows"))]
 #[context("Failed to update permissions on `{}`", path.as_ref().display())]
 pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
@@ -169,4 +191,42 @@ pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
     let owner_can_execute = 0o0100;
     permissions.set_mode(mode | owner_can_execute);
     std::fs::set_permissions(path.as_ref(), permissions).anyhow_err()
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    #[ignore]
+    async fn copy_dir_with_symlink() -> Result {
+        let dir = tempdir()?;
+        let foo = dir.join_many(["src", "foo.txt"]);
+        std::env::set_current_dir(&dir)?;
+        create_parent_dir_if_missing(&foo)?;
+        std::fs::write(&foo, "foo")?;
+
+        let bar = foo.with_file_name("bar");
+
+        // Command::new("ls").arg("-laR").run_ok().await?;
+        #[cfg(not(target_os = "windows"))]
+        std::os::unix::fs::symlink(foo.file_name().unwrap(), &bar)?;
+        #[cfg(target_os = "windows")]
+        std::os::windows::fs::symlink_file(foo.file_name().unwrap(), &bar)?;
+
+        copy(foo.parent().unwrap(), foo.parent().unwrap().with_file_name("dest"))?;
+
+        mirror_directory(foo.parent().unwrap(), foo.parent().unwrap().with_file_name("dest2"))
+            .await?;
+
+        tokio::process::Command::new(r"C:\msys64\usr\bin\ls.exe")
+            .arg("-laR")
+            .status()
+            .await?
+            .exit_ok()?;
+
+        Ok(())
+    }
 }

@@ -18,7 +18,7 @@ pub async fn get_and_spawn_httpbin(port: u16) -> Result<Spawned> {
     let gopath = PathBuf::from(gopath); // be careful of trailing newline!
     let program = gopath.join("bin").join("httpbin");
     println!("Will spawn {}", program.display());
-    let process = Command::new(program)
+    let process = tokio::process::Command::new(program) // TODO? wrap in Program?
         .args(["-host", &iformat!(":{port}")])
         .kill_on_drop(true)
         .spawn()
@@ -43,14 +43,4 @@ pub async fn get_and_spawn_httpbin_on_free_port() -> Result<Spawned> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[tokio::test]
-    #[ignore]
-    async fn spawn_httpbin() -> Result {
-        let mut httpbin = get_and_spawn_httpbin_on_free_port().await?;
-        Command::new("cmd")
-            .args(["/c", "H:\\NBO\\enso2\\built-distribution\\enso-engine-0.2.32-SNAPSHOT-windows-amd64\\enso-0.2.32-SNAPSHOT\\bin\\enso", "--no-ir-caches", "--run", "H:\\NBO\\enso2\\test\\Tests"]).run_ok().await?;
-        httpbin.process.kill().await?;
-        Ok(())
-    }
 }

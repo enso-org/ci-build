@@ -1,3 +1,6 @@
+#![feature(bool_to_option)]
+#![feature(exit_status_error)]
+
 use crate::prelude::*;
 
 use regex::Regex;
@@ -6,12 +9,18 @@ pub mod prelude {
     pub use ide_ci::prelude::*;
 }
 
+pub mod args;
+pub mod aws;
 pub mod bump_version;
+pub mod changelog;
+pub mod enso;
+pub mod env;
 pub mod httpbin;
 pub mod paths;
 pub mod postgres;
-pub mod preflight_check;
+pub mod version;
 
+/// Get version of Enso from the `build.sbt` file contents.
 pub fn get_enso_version(build_sbt_contents: &str) -> Result<Version> {
     let version_regex = Regex::new(r#"(?m)^val *ensoVersion *= *"([^"]*)".*$"#)?;
     let version_string = version_regex
@@ -21,6 +30,18 @@ pub fn get_enso_version(build_sbt_contents: &str) -> Result<Version> {
         .expect("Missing subcapture #1 with version despite matching the regex.")
         .as_str();
     Version::parse(version_string).anyhow_err()
+}
+
+pub fn retrieve_github_access_token() -> Result<String> {
+    ide_ci::env::expect_var("GITHUB_TOKEN")
+}
+
+pub fn setup_octocrab() -> Result<Octocrab> {
+    let mut builder = octocrab::OctocrabBuilder::new();
+    if let Ok(access_token) = retrieve_github_access_token() {
+        builder = builder.personal_token(access_token)
+    }
+    builder.build().anyhow_err()
 }
 
 #[cfg(test)]

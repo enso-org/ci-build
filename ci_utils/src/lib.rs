@@ -4,7 +4,6 @@
 #![feature(associated_type_bounds)]
 #![feature(generic_associated_types)]
 #![feature(exact_size_is_empty)]
-#![feature(result_cloned)]
 #![feature(async_closure)]
 #![feature(async_stream)]
 #![feature(type_alias_impl_trait)]
@@ -26,7 +25,6 @@ pub mod models;
 pub mod platform;
 pub mod program;
 pub mod programs;
-pub mod pure_evil;
 pub mod serde;
 
 pub mod prelude {
@@ -44,6 +42,7 @@ pub mod prelude {
     pub use futures_util::stream::BoxStream;
     pub use futures_util::AsyncWrite;
     pub use futures_util::FutureExt;
+    pub use futures_util::Stream;
     pub use futures_util::StreamExt;
     pub use futures_util::TryFuture;
     pub use futures_util::TryFutureExt;
@@ -59,6 +58,7 @@ pub mod prelude {
     pub use semver::Version;
     pub use serde::Deserialize;
     pub use serde::Serialize;
+    pub use shrinkwraprs::Shrinkwrap;
     pub use snafu::Snafu;
     pub use std::borrow::Borrow;
     pub use std::borrow::Cow;
@@ -75,14 +75,14 @@ pub mod prelude {
     pub use std::iter::FromIterator;
     pub use std::path::Path;
     pub use std::path::PathBuf;
-    pub use std::stream::Stream;
+    pub use std::str::FromStr;
     pub use std::sync::Arc;
     pub use tokio::io::AsyncWriteExt;
-    pub use tokio::process::Command;
     pub use url::Url;
     pub use uuid::Uuid;
 
     pub use crate::EMPTY_REQUEST_BODY;
+
 
     pub use crate::anyhow::ResultExt;
     pub use crate::extensions::command::CommandExt;
@@ -91,6 +91,7 @@ pub mod prelude {
     pub use crate::extensions::path::PathExt;
     pub use crate::github::RepoPointer;
     pub use crate::goodie::Goodie;
+    pub use crate::program::command::Command;
     pub use crate::program::Program;
     pub use crate::program::ProgramExt;
     pub use crate::program::Shell;
@@ -101,17 +102,39 @@ pub mod prelude {
     }
 }
 
+use prelude::*;
+use std::net::Ipv4Addr;
+use std::net::SocketAddrV4;
+use std::net::TcpListener;
+
+use ::anyhow::Context;
+
 /// `None` that is used to represent an empty request body in calls `octocrab`.
 pub const EMPTY_REQUEST_BODY: Option<&()> = None;
 
 /// The user agent string name used by our HTTP clients.
 pub const USER_AGENT: &str = "enso-build";
 
-use prelude::*;
-
-use ::anyhow::Context;
-
 /// Looks up a free port in the IANA private or dynamic port range.
 pub fn get_free_port() -> Result<u16> {
-    port_check::free_local_port_in_range(49152, 65535).context("Failed to find a free local port.")
+    let port_range = 49152..65535;
+    port_range
+        .into_iter()
+        .find(|port| {
+            let ipv4 = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, *port);
+            // FIXME this can show firewall dialog on windows
+            TcpListener::bind(ipv4).is_ok()
+        })
+        .context("Failed to find a free local port.")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore]
+    pub fn get_free_port_test() {
+        println!("{:?}", get_free_port());
+    }
 }

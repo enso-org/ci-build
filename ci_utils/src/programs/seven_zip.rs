@@ -66,33 +66,33 @@ impl ExecutionError {
 }
 
 impl SevenZip {
-    pub fn add_cmd<P: AsRef<OsStr>>(
+    pub fn add_cmd<P: AsRef<Path>>(
         &self,
-        output_archive: impl AsRef<OsStr>,
+        output_archive: impl AsRef<Path>,
         paths_to_pack: impl IntoIterator<Item = P>,
     ) -> Result<Command> {
         let output_archive = output_archive.as_ref();
         let mut cmd = self.cmd()?;
-        cmd.arg(ArchiveCommand::Add)
-            .args(Switch::AssumeYes)
-            .arg(output_archive)
-            .args(paths_to_pack);
+        cmd.arg(ArchiveCommand::Add).args(Switch::AssumeYes).arg(output_archive);
+        for path in paths_to_pack {
+            cmd.arg(path.as_ref());
+        }
         Ok(cmd)
     }
 
     /// Removes the old archive under output path if it was present.
-    pub async fn pack<P: AsRef<OsStr>>(
+    pub async fn pack<P: AsRef<Path>>(
         &self,
-        output_archive: impl AsRef<OsStr>,
+        output_archive: impl AsRef<Path>,
         paths_to_pack: impl IntoIterator<Item = P>,
     ) -> Result {
         crate::io::remove_if_exists(output_archive.as_ref())?;
         self.add(output_archive, paths_to_pack).await
     }
 
-    pub async fn add<P: AsRef<OsStr>>(
+    pub async fn add<P: AsRef<Path>>(
         &self,
-        output_archive: impl AsRef<OsStr>,
+        output_archive: impl AsRef<Path>,
         paths_to_pack: impl IntoIterator<Item = P>,
     ) -> Result {
         self.add_cmd(output_archive, paths_to_pack)?.run_ok().await
@@ -100,15 +100,25 @@ impl SevenZip {
 
     pub fn unpack_cmd(
         &self,
-        archive: impl AsRef<OsStr>,
-        output_directory: impl AsRef<OsStr>,
+        archive: impl AsRef<Path>,
+        output_directory: impl AsRef<Path>,
     ) -> Result<Command> {
         let out_switch = Switch::OutputDirectory(output_directory.as_ref().into());
         let mut cmd = self.cmd()?;
         cmd.arg(ArchiveCommand::ExtractWithFullPaths)
             .args(Switch::AssumeYes)
             .args(out_switch)
-            .arg(archive);
+            .arg(archive.as_ref());
+        Ok(cmd)
+    }
+
+    pub fn unpack_from_stdin_cmd(&self, output_directory: impl AsRef<Path>) -> Result<Command> {
+        let out_switch = Switch::OutputDirectory(output_directory.as_ref().into());
+        let mut cmd = self.cmd()?;
+        cmd.arg(ArchiveCommand::ExtractWithFullPaths)
+            .args(Switch::AssumeYes)
+            .args(out_switch)
+            .args(Switch::ReadFromStdin);
         Ok(cmd)
     }
 }
@@ -137,6 +147,8 @@ pub enum Switch {
     OverwriteMode(OverwriteMode),
     RedirectStream(StreamType, StreamDestination),
     SetCharset(Charset),
+    /// Read data from standard input, rather than from a file.
+    ReadFromStdin,
 }
 
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -216,6 +228,7 @@ impl IntoIterator for Switch {
             Self::OverwriteMode(AutoRenameExisting) => vec!["-aot".into()],
             Self::RedirectStream(str, dest) => vec!["-bs".into(), str.into(), dest.into()],
             Self::SetCharset(charset) => vec!["-scc".into(), charset.into()],
+            Self::ReadFromStdin => vec!["-si".into()],
         }
         .into_iter()
     }

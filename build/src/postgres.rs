@@ -172,7 +172,7 @@ impl Postgresql {
         let mut cmd = Docker.run_cmd(&opts)?;
         cmd.stderr(Stdio::piped());
         cmd.kill_on_drop(true);
-        let mut child = cmd.spawn_nicer().anyhow_err()?;
+        let mut child = cmd.spawn().anyhow_err()?;
         let stderr = child
             .stderr
             .ok_or_else(|| anyhow!("Failed to access standard output of the spawned process!"))?;
@@ -225,11 +225,14 @@ mod tests {
             database_name:      "test".into(),
         };
         let child = Postgresql::start(config).await?;
-        std::mem::forget(child);
-        // let mut httpbin = get_and_spawn_httpbin_on_free_port().await?;
-        Command::new("cmd")
-            .args(["/c", "H:\\NBO\\enso2\\built-distribution\\enso-engine-0.2.32-SNAPSHOT-windows-amd64\\enso-0.2.32-SNAPSHOT\\bin\\enso", "--no-ir-caches", "--run", "H:\\NBO\\enso2\\test\\Database_Tests"]).run_ok().await?;
-        // httpbin.process.kill().await?;
+        // std::mem::forget(child);
+        // // let mut httpbin = get_and_spawn_httpbin_on_free_port().await?;
+        // Command::new("cmd")
+        //     .args(["/c",
+        // "H:\\NBO\\enso2\\built-distribution\\enso-engine-0.2.32-SNAPSHOT-windows-amd64\\enso-0.2.
+        // 32-SNAPSHOT\\bin\\enso", "--no-ir-caches", "--run",
+        // "H:\\NBO\\enso2\\test\\Database_Tests"]).run_ok().await?; httpbin.process.kill().
+        // await?;
         Ok(())
     }
 }

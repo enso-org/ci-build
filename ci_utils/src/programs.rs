@@ -10,11 +10,14 @@ pub mod go;
 pub mod java;
 pub mod node;
 pub mod pwsh;
+pub mod robocopy;
 pub mod sbt;
 pub mod seven_zip;
 pub mod sh;
+pub mod tar;
 pub mod vs;
 pub mod vswhere;
+pub mod rsync;
 
 pub use cargo::Cargo;
 pub use cmd::Cmd;

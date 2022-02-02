@@ -1,10 +1,20 @@
 use crate::prelude::*;
 use std::fmt::Formatter;
 
+use crate::version::Versions;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
 
-const ARCHIVE_EXTENSION: &str = match TARGET_OS {
+#[cfg(target_os = "linux")]
+pub const LIBRARIES_TO_TEST: [&str; 6] =
+    ["Tests", "Table_Tests", "Database_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
+
+// Test postgres only on Linux
+#[cfg(not(target_os = "linux"))]
+pub const LIBRARIES_TO_TEST: [&str; 5] =
+    ["Tests", "Table_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
+
+pub const ARCHIVE_EXTENSION: &str = match TARGET_OS {
     OS::Windows => "zip",
     _ => "tar.gz",
 };
@@ -37,7 +47,12 @@ impl ComponentPaths {
     }
 
     pub fn emit_to_actions(&self, prefix: &str) -> Result {
-        let paths = [("NAME", &self.name), ("ROOT", &self.root), ("DIR", &self.dir)];
+        let paths = [
+            ("NAME", &self.name),
+            ("ROOT", &self.root),
+            ("DIR", &self.dir),
+            ("ARCHIVE", &self.artifact_archive),
+        ];
         for (what, path) in paths {
             ide_ci::actions::workflow::set_env(
                 &iformat!("{prefix}_DIST_{what}"),
@@ -50,14 +65,14 @@ impl ComponentPaths {
 
 #[derive(Clone, Debug)]
 pub struct TargetTriple {
-    pub os:      OS,
-    pub arch:    Arch,
-    pub version: Version,
+    pub os:       OS,
+    pub arch:     Arch,
+    pub versions: Versions,
 }
 
 impl TargetTriple {
-    pub fn new(version: Version) -> Self {
-        Self { os: TARGET_OS, arch: TARGET_ARCH, version }
+    pub fn new(versions: Versions) -> Self {
+        Self { os: TARGET_OS, arch: TARGET_ARCH, versions }
     }
 
 
@@ -77,7 +92,7 @@ impl TargetTriple {
 
 impl Display for TargetTriple {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}-{}-{}", self.version, self.os, self.arch())
+        write!(f, "{}-{}-{}", self.versions.version, self.os, self.arch())
     }
 }
 
@@ -95,26 +110,24 @@ pub struct Paths {
 }
 
 impl Paths {
-    pub fn new(repo_root: impl Into<PathBuf>) -> Result<Self> {
-        let repo_root: PathBuf = repo_root.into().absolutize()?.into();
-        let build_sbt = repo_root.join("build.sbt");
-        let build_sbt_contents = std::fs::read_to_string(build_sbt)?;
-        let version = crate::get_enso_version(&build_sbt_contents)
-            .unwrap_or(Version::parse("0.0.0-LOCAL").unwrap());
-        Self::new_version(repo_root, version)
+    pub fn distribution(&self) -> PathBuf {
+        self.repo_root.join("distribution")
     }
 
+    /// Create a new set of paths for building the Enso with a given version number.
     pub fn new_version(repo_root: impl Into<PathBuf>, version: Version) -> Result<Self> {
         let repo_root: PathBuf = repo_root.into().absolutize()?.into();
         let build_dist_root = repo_root.join("built-distribution");
         let target = repo_root.join("target");
 
-        let triple = TargetTriple::new(version.clone());
+        let versions = Versions::new(version);
+
+        let triple = TargetTriple::new(versions);
         let launcher = ComponentPaths::new(&build_dist_root, "enso-launcher", "enso", &triple);
         let engine = ComponentPaths::new(
             &build_dist_root,
             "enso-engine",
-            &format!("enso-{}", version),
+            &format!("enso-{}", &triple.versions.version),
             &triple,
         );
         let project_manager =
@@ -145,5 +158,36 @@ impl Paths {
 
     pub fn stdlib_test(&self, test_name: impl AsRef<Path>) -> PathBuf {
         self.stdlib_tests().join(test_name)
+    }
+
+    pub fn changelog(&self) -> PathBuf {
+        root_to_changelog(&self.repo_root)
+    }
+
+    pub fn edition_name(&self) -> String {
+        self.triple.versions.edition_name()
+    }
+
+    // e.g. enso2\distribution\editions\2021.20-SNAPSHOT.yaml
+    pub fn edition_file(&self) -> PathBuf {
+        self.distribution()
+            .join_many(["editions", &self.edition_name()])
+            .with_appended_extension("yaml")
+    }
+
+    pub fn version(&self) -> &Version {
+        &self.triple.versions.version
+    }
+}
+
+pub fn root_to_changelog(root: impl AsRef<Path>) -> PathBuf {
+    let changelog_filename = "CHANGELOG.md";
+    let root_path = root.as_ref().join(changelog_filename);
+    // TODO: transitional code to support both locations of the changelog
+    //       only the root one should prevail
+    if root_path.exists() {
+        root_path
+    } else {
+        root.as_ref().join_many(["app", "gui", changelog_filename])
     }
 }
