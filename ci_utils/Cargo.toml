@@ -14,9 +14,12 @@ cached = "0.26.2"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 command-group = { version = "1.0.8", features = ["with-tokio"] }
+crossbeam = "0.8.1"
 derive_more = "0.99.17"
 dirs = "4.0.0"
+filetime = "0.2.15"
 flate2 = "1.0.22"
+flume = "0.10.10"
 fn-error-context = "0.2.0"
 fs_extra = "1.2.0"
 futures = "0.3.17"
@@ -29,21 +32,24 @@ itertools = "0.10.1"
 lazy_static = "1.4.0"
 new_mime_guess = "4.0.0"
 nix = "0.23.0"
-octocrab = "0.15.1"
+octocrab = { git = "https://github.com/enso-org/octocrab" }
 path-absolutize = "3.0.11"
+pathdiff = "0.2.1"
+path-slash = "0.1.4"
 platforms = "2.0.0"
 pin-project = "1.0.8"
 port_check = "0.1.5"
 rand = "0.8.4"
 regex = "1.5.4"
 reqwest = { version = "0.11.5", features = ["stream"] }
-snafu = "0.6.10"
+snafu = "0.7.0"
 semver = { version = "1.0.4", features=["serde"] }
 serde = { version = "1.0.130", features= ["derive"]}
 serde_json = "1.0.68"
 serde_yaml = "0.8.21"
 scopeguard = "1.1.0"
 shrinkwraprs = "0.3.0"
+strum = { version = "0.23", features = ["derive"] }
 sysinfo = "0.22.2"
 tar = "0.4.37"
 tempfile = "3.2.0"
@@ -52,6 +58,8 @@ tokio-util = {version = "0.6.9", features = ["full"] }
 unicase = "2.6.0"
 url = "2.2.2"
 uuid = { version = "0.8.2", features= ["v4"] }
+walkdir = "2.3.2"
 which = "4.2.2"
+wiremock = "0.5.10"
 whoami = "1.2.1"
 zip = "0.5.13"

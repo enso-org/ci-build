@@ -1,53 +1,60 @@
 use crate::prelude::*;
 use fs_extra::dir::CopyOptions;
+use platforms::TARGET_OS;
 
-use crate::archive::ArchiveFormat;
+use crate::archive::Format;
 use reqwest::IntoUrl;
-use snafu::ResultExt;
-
-#[derive(Debug, Snafu)]
-pub enum IoOperationFailed {
-    #[snafu(display("Failed to create directory {}: {}", path.display(), source))]
-    CreateDir { path: PathBuf, source: std::io::Error },
-    #[snafu(display("Failed to remove {}: {}", path.display(), source))]
-    Remove { path: PathBuf, source: std::io::Error },
-}
 
 /// Create a directory (and all missing parent directories),
 ///
 /// Does not fail when a directory already exists.
-pub fn create_dir_if_missing(path: impl AsRef<Path>) -> std::io::Result<()> {
-    let result = std::fs::create_dir_all(path);
+#[context("Failed to create directory {}", path.as_ref().display())]
+pub fn create_dir_if_missing(path: impl AsRef<Path>) -> Result {
+    let result = std::fs::create_dir_all(&path);
     match result {
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
-        result => result,
+        result => result.anyhow_err(),
+    }
+}
+
+/// Create a parent directory for path (and all missing parent directories),
+///
+/// Does not fail when a directory already exists.
+pub fn create_parent_dir_if_missing(path: impl AsRef<Path>) -> Result<PathBuf> {
+    if let Some(parent) = path.as_ref().parent() {
+        create_dir_if_missing(parent)?;
+        Ok(parent.into())
+    } else {
+        bail!("No parent directory for path {}", path.as_ref().display())
     }
 }
 
 /// Remove a directory with all its subtree.
 ///
 /// Does not fail if the directory is already gone.
-pub fn remove_dir_if_exists(path: impl AsRef<Path>) -> std::io::Result<()> {
-    let result = std::fs::remove_dir_all(path);
+#[context("Failed to remove directory {}", path.as_ref().display())]
+pub fn remove_dir_if_exists(path: impl AsRef<Path>) -> Result {
+    let result = std::fs::remove_dir_all(&path);
     match result {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        result => dbg!(result),
+        result => result.anyhow_err(),
     }
 }
 
 /// Remove a regular file.
 ///
 /// Does not fail if the file is already gone.
-pub fn remove_file_if_exists(path: impl AsRef<Path>) -> std::io::Result<()> {
-    let result = std::fs::remove_file(path);
+#[context("Failed to remove file {}", path.as_ref().display())]
+pub fn remove_file_if_exists(path: impl AsRef<Path>) -> Result<()> {
+    let result = std::fs::remove_file(&path);
     match result {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        result => dbg!(result),
+        result => result.anyhow_err(),
     }
 }
 
 
-pub fn remove_if_exists(path: impl AsRef<Path>) -> std::io::Result<()> {
+pub fn remove_if_exists(path: impl AsRef<Path>) -> Result {
     let path = path.as_ref();
     if path.is_dir() {
         remove_dir_if_exists(path)
@@ -60,8 +67,8 @@ pub fn remove_if_exists(path: impl AsRef<Path>) -> std::io::Result<()> {
 pub fn reset_dir(path: impl AsRef<Path>) -> Result {
     let path = path.as_ref();
     println!("Will reset directory {}", path.display());
-    remove_dir_if_exists(&path).context(Remove { path: path.clone() })?;
-    create_dir_if_missing(&path).context(CreateDir { path: path.clone() })?;
+    remove_dir_if_exists(&path)?;
+    create_dir_if_missing(&path)?;
     Ok(())
 }
 
@@ -101,7 +108,7 @@ pub async fn download_and_extract(
     let buffer = std::io::Cursor::new(contents);
 
     println!("Extracting {} to {}", filename.display(), output_dir.as_ref().display());
-    let format = ArchiveFormat::from_filename(&PathBuf::from(filename))?;
+    let format = Format::from_filename(&PathBuf::from(filename))?;
     format.extract(buffer, output_dir)
 }
 
@@ -157,9 +164,69 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
         } else {
             std::fs::copy(source_file, destination_file)?;
         }
-        
     } else {
         bail!("Cannot copy to the root path: {}", destination_file.display());
     }
     Ok(())
+}
+
+pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
+    create_parent_dir_if_missing(destination.as_ref())?;
+    if TARGET_OS == OS::Windows {
+        crate::programs::robocopy::mirror_dir(source, destination).await
+    } else {
+        crate::programs::rsync::mirror_directory(source, destination).await
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+#[context("Failed to update permissions on `{}`", path.as_ref().display())]
+pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
+    use crate::anyhow::ResultExt;
+    use std::os::unix::prelude::*;
+    println!("Setting executable permission on {}", path.as_ref().display());
+    let metadata = path.as_ref().metadata()?;
+    let mut permissions = metadata.permissions();
+    let mode = permissions.mode();
+    let owner_can_execute = 0o0100;
+    permissions.set_mode(mode | owner_can_execute);
+    std::fs::set_permissions(path.as_ref(), permissions).anyhow_err()
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    #[ignore]
+    async fn copy_dir_with_symlink() -> Result {
+        let dir = tempdir()?;
+        let foo = dir.join_many(["src", "foo.txt"]);
+        std::env::set_current_dir(&dir)?;
+        create_parent_dir_if_missing(&foo)?;
+        std::fs::write(&foo, "foo")?;
+
+        let bar = foo.with_file_name("bar");
+
+        // Command::new("ls").arg("-laR").run_ok().await?;
+        #[cfg(not(target_os = "windows"))]
+        std::os::unix::fs::symlink(foo.file_name().unwrap(), &bar)?;
+        #[cfg(target_os = "windows")]
+        std::os::windows::fs::symlink_file(foo.file_name().unwrap(), &bar)?;
+
+        copy(foo.parent().unwrap(), foo.parent().unwrap().with_file_name("dest"))?;
+
+        mirror_directory(foo.parent().unwrap(), foo.parent().unwrap().with_file_name("dest2"))
+            .await?;
+
+        tokio::process::Command::new(r"C:\msys64\usr\bin\ls.exe")
+            .arg("-laR")
+            .status()
+            .await?
+            .exit_ok()?;
+
+        Ok(())
+    }
 }

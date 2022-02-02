@@ -1,5 +1,44 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
+use octocrab::models::ReleaseId;
+use reqwest::Body;
+
+
+#[context("Failed to upload the asset {}", asset.as_ref().display())]
+pub async fn upload_asset(
+    repo: &impl RepoPointer,
+    client: &reqwest::Client,
+    release: ReleaseId,
+    asset: impl AsRef<Path>,
+) -> Result {
+    let upload_url = format!(
+        "https://uploads.github.com/repos/{}/{}/releases/{}/assets",
+        repo.owner(),
+        repo.name(),
+        release
+    );
+    let asset_path = asset.as_ref();
+    let mime = new_mime_guess::from_path(asset_path).first_or_octet_stream();
+    let file = tokio::fs::File::open(asset_path).await?;
+    let file_size = file.metadata().await?.len();
+    let file_contents_stream = tokio_util::io::ReaderStream::new(file);
+    let body = Body::wrap_stream(file_contents_stream);
+    let asset_name = asset_path.file_name().unwrap().to_string_lossy();
+    let request = client
+        .post(upload_url)
+        .query(&[("name", asset_name.as_ref())])
+        .header(reqwest::header::ACCEPT, "application/vnd.github.v3+json")
+        .header(reqwest::header::CONTENT_TYPE, mime.to_string())
+        .header(reqwest::header::CONTENT_LENGTH, file_size)
+        .body(body)
+        .build()?;
+
+    dbg!(&request);
+    let response = client.execute(request).await?;
+    dbg!(&response);
+    response.error_for_status()?;
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {

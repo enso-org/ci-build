@@ -1,4 +1,4 @@
-//! Structures in this module model the types used in GitHub API.
+//! Structures in this module model the types used in GitHub REST API.
 
 use crate::prelude::*;
 

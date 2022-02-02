@@ -15,13 +15,13 @@ pub trait PathExt: AsRef<Path> {
     /// use ide_ci::extensions::path::PathExt;
     /// use std::path::PathBuf;
     ///
-    /// let path = PathBuf::from("foo.tar").append_extension("gz");
+    /// let path = PathBuf::from("foo.tar").with_appended_extension("gz");
     /// assert_eq!(path, PathBuf::from("foo.tar.gz"));
     ///
-    /// let path = PathBuf::from("foo").append_extension("zip");
+    /// let path = PathBuf::from("foo").with_appended_extension("zip");
     /// assert_eq!(path, PathBuf::from("foo.zip"));
     /// ```
-    fn append_extension(&self, extension: impl AsRef<OsStr>) -> PathBuf {
+    fn with_appended_extension(&self, extension: impl AsRef<OsStr>) -> PathBuf {
         let mut ret = self.as_ref().to_path_buf().into_os_string();
         ret.push(".");
         ret.push(extension.as_ref());

@@ -1,9 +1,11 @@
 use crate::prelude::*;
 
-use crate::models::actions::RegistrationToken;
 use octocrab::models::repos::Release;
 
 const MAX_PER_PAGE: u8 = 100;
+
+pub mod model;
+pub mod release;
 
 /// Entity that uniquely identifies a GitHub-hosted repository.
 #[async_trait]
@@ -15,7 +17,7 @@ pub trait RepoPointer {
     async fn generate_runner_registration_token(
         &self,
         octocrab: &Octocrab,
-    ) -> anyhow::Result<RegistrationToken> {
+    ) -> anyhow::Result<model::RegistrationToken> {
         let path =
             iformat!("/repos/{self.owner()}/{self.name()}/actions/runners/registration-token");
         let url = octocrab.absolute_url(path)?;
@@ -30,6 +32,16 @@ pub trait RepoPointer {
 
     fn repos<'a>(&'a self, client: &'a Octocrab) -> octocrab::repos::RepoHandler<'a> {
         client.repos(self.owner(), self.name())
+    }
+
+    async fn all_releases(
+        &self,
+        client: &Octocrab,
+    ) -> octocrab::Result<Vec<octocrab::models::repos::Release>> {
+        let repo = self.repos(client);
+        let page = repo.releases().list().per_page(MAX_PER_PAGE).send().await?;
+        // TODO: rate limit?
+        client.all_pages(page).await
     }
 
     async fn latest_release(
@@ -66,7 +78,7 @@ pub trait OrganizationPointer {
     async fn generate_runner_registration_token(
         &self,
         octocrab: &Octocrab,
-    ) -> anyhow::Result<RegistrationToken> {
+    ) -> anyhow::Result<model::RegistrationToken> {
         let path = iformat!("/orgs/{self.name()}/actions/runners/registration-token");
         let url = octocrab.absolute_url(path)?;
         octocrab.post(url, EMPTY_REQUEST_BODY).await.map_err(Into::into)
@@ -119,4 +131,17 @@ pub async fn latest_runner_url(octocrab: &Octocrab, os: OS) -> anyhow::Result<Ur
 pub async fn fetch_runner(octocrab: &Octocrab, os: OS, output_dir: impl AsRef<Path>) -> Result {
     let url = latest_runner_url(octocrab, os).await?;
     crate::io::download_and_extract(url, output_dir).await
+}
+
+/// Sometimes octocrab is just not enough.
+///
+/// Client has set the authorization header.
+pub fn create_client(pat: impl AsRef<str>) -> Result<reqwest::Client> {
+    let mut header_map = reqwest::header::HeaderMap::new();
+    header_map.append(reqwest::header::AUTHORIZATION, format!("Bearer {}", pat.as_ref()).parse()?);
+    reqwest::Client::builder()
+        .user_agent("enso-build")
+        .default_headers(header_map)
+        .build()
+        .anyhow_err()
 }

@@ -2,10 +2,10 @@
 
 use crate::prelude::*;
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use crate::github::OrganizationPointer;
 use crate::github::RepoPointer;
-use crate::models::actions::RegistrationToken;
 use crate::serde::regex_vec;
 use crate::serde::single_or_sequence;
 use regex::Regex;
@@ -47,7 +47,7 @@ impl RunnerLocation {
     pub async fn generate_runner_registration_token(
         &self,
         octocrab: &Octocrab,
-    ) -> anyhow::Result<RegistrationToken> {
+    ) -> anyhow::Result<crate::github::model::RegistrationToken> {
         match self {
             RunnerLocation::Organization(org) =>
                 org.generate_runner_registration_token(octocrab).await,
@@ -99,6 +99,18 @@ impl RepoPointer for RepoContext {
 impl Display for RepoContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}/{}", self.owner, self.name)
+    }
+}
+
+/// Parse from strings in format "owner/name". Opposite of `Display`.
+impl FromStr for RepoContext {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.split('/').collect_vec().as_slice() {
+            [owner, name] => Ok(Self { owner: owner.to_string(), name: name.to_string() }),
+            slice => bail!("Failed to parse string '{}': Splitting by '/' should yield exactly 2 pieces, found: {}", s, slice.len()),
+        }
     }
 }
 
