@@ -181,5 +181,13 @@ impl Paths {
 }
 
 pub fn root_to_changelog(root: impl AsRef<Path>) -> PathBuf {
-    root.as_ref().join_many(["app", "gui", "CHANGELOG.md"])
+    let changelog_filename = "CHANGELOG.md";
+    let root_path = root.as_ref().join(changelog_filename);
+    // TODO: transitional code to support both locations of the changelog
+    //       only the root one should prevail
+    if root_path.exists() {
+        root_path
+    } else {
+        root.as_ref().join_many(["app", "gui", changelog_filename])
+    }
 }

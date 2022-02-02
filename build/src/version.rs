@@ -143,8 +143,8 @@ pub fn base_version(changelog_path: impl AsRef<Path>) -> Result<Version> {
     }
 
     let changelog_contents = std::fs::read_to_string(changelog_path.as_ref())?;
-    let mut headers = crate::changelog::iterate_headers_text(&changelog_contents)
-        .map(ide_ci::program::version::find_in_text);
+    let mut headers = crate::changelog::iterate_headers(&changelog_contents)
+        .map(|h| ide_ci::program::version::find_in_text(h.text));
 
     let version = match headers.next() {
         Some(Ok(version)) => version,

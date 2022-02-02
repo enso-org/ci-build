@@ -683,54 +683,6 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
     Ok(paths.artifact_archive.clone())
 }
 
-// #[derive(Clone, Debug)]
-// pub struct FragileFiles {
-//     sources: Vec<PathBuf>,
-//     classes: Vec<PathBuf>,
-// }
-//
-// pub fn get_fragile_files(enso_root: impl AsRef<Path>) -> Result<FragileFiles> {
-//     let runtime_root = enso_root.as_ref().join_many(["engine", "runtime"]);
-//     let runtime_src = runtime_root.join_many(["src", "main", "java"]);
-//     let runtime_classes = runtime_root.join_many(["target", "*", "classes"]);
-//     let interpreter_path = ["org", "enso", "interpreter"];
-//     let suffixes: [&[&str]; 3] = [&["Language"], &["epb", "EpbLanguage"], &["**",
-// "*Instrument"]];
-//
-//     let get_files = |path_prefix: &Path, extension: &str| -> Result<Vec<PathBuf>> {
-//         let mut ret = Vec::new();
-//         for suffix in suffixes {
-//             let pattern =
-//
-// path_prefix.join_many(interpreter_path).join_many(suffix).with_extension(extension);
-// println!("Searching the pattern: {}", pattern.display());             for entry in
-// glob(pattern.to_str().unwrap())? {                 ret.push(entry?);
-//             }
-//         }
-//         Ok(ret)
-//     };
-//
-//     Ok(FragileFiles {
-//         sources: get_files(&runtime_src, "java")?,
-//         classes: get_files(&runtime_classes, "class")?,
-//     })
-// }
-//
-// pub fn clear_fragile_files_smart(enso_root: impl AsRef<Path>) -> Result {
-//     let fragile_files = get_fragile_files(enso_root)?;
-//
-//     let time_to_set = FileTime::now();
-//     for src_file in &fragile_files.sources {
-//         println!("Touching {}", src_file.display());
-//         filetime::set_file_mtime(src_file, time_to_set)?;
-//     }
-//     for class_file in &fragile_files.classes {
-//         println!("Deleting {}", class_file.display());
-//         ide_ci::io::remove_file_if_exists(class_file)?;
-//     }
-//     Ok(())
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
