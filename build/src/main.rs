@@ -122,6 +122,11 @@ const NIGHTLY: BuildConfiguration = BuildConfiguration {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("Initial environment:");
+
+    // We want arg parsing to be the very first thing, so when user types wrong arguments, the error
+    // diagnostics will be first and only thing that is output.
+    let args: Args = argh::from_env();
+
     for (key, value) in std::env::vars() {
         // The below should not be needed - any secrets should be passed to us from the GitHub
         // Actions as secrets already. However, as a failsafe, we'll mask anythinh that looks
@@ -133,12 +138,11 @@ async fn main() -> anyhow::Result<()> {
         iprintln!("\t{key}={value}");
     }
 
-    let args: Args = argh::from_env();
     let mut config = match args.kind {
         BuildKind::Dev => LOCAL,
         BuildKind::Nightly => NIGHTLY,
     };
-    if args.command == WhatToDo::Upload || args.bundle.contains(&true) {
+    if matches!(args.command, WhatToDo::Upload(_)) || args.bundle.contains(&true) {
         config.build_bundles = true;
     }
 
@@ -171,7 +175,7 @@ async fn main() -> anyhow::Result<()> {
     let paths = Paths::new_version(&enso_root, versions.version.clone())?;
 
     match args.command {
-        WhatToDo::Prepare => {
+        WhatToDo::Prepare(_) => {
             let commit = ide_ci::actions::env::commit()?;
             let latest_changelog_body =
                 enso_build::changelog::retrieve_unreleased_release_notes(paths.changelog())?;
@@ -194,7 +198,7 @@ async fn main() -> anyhow::Result<()> {
 
             return Ok(());
         }
-        WhatToDo::Finish => {
+        WhatToDo::Finish(_) => {
             let release_id = enso_build::env::release_id()?;
             println!("Looking for release with id {release_id} on github.");
             let release = repo.repos(&octocrab).releases().get_by_id(release_id).await?;
@@ -203,21 +207,13 @@ async fn main() -> anyhow::Result<()> {
             iprintln!("Done. Release URL: {release.url}");
             return Ok(());
         }
-        WhatToDo::Build | WhatToDo::Upload => {}
-    }
+        // We don't use catch-all `_` arm, as we want to consider this point each time a new variant
+        // is added.
+        WhatToDo::Build(_) | WhatToDo::Upload(_) | WhatToDo::Run(_) => {}
+    };
 
-    let git = Git::new(&enso_root);
-    if config.clean_repo {
-        git.clean_xfd().await?;
-        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
-        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
-    }
-
-    let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
-    println!("Build configuration: {:#?}", config);
-
+    // Build environment preparations.
     let goodies = GoodieDatabase::new()?;
-    let client = reqwest::Client::new();
 
     // Building native images with Graal on Windows requires Microsoft Visual C++ Build Tools
     // available in the environment. If it is not visible, we need to add it.
@@ -225,20 +221,28 @@ async fn main() -> anyhow::Result<()> {
         ide_ci::programs::vs::apply_dev_environment().await?;
     }
 
-    // Setup Tests on Windows
-    if TARGET_OS == OS::Windows {
-        std::env::set_var("CI_TEST_TIMEFACTOR", "2");
-        std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
-    }
+    // Setup GraalVM
+    let graalvm = graalvm::GraalVM {
+        client:        &octocrab,
+        graal_version: &GRAAL_VERSION,
+        java_version:  GRAAL_JAVA_VERSION,
+        os:            TARGET_OS,
+        arch:          TARGET_ARCH,
+    };
+    goodies.require(&graalvm).await?;
+    graalvm::Gu.require_present().await?;
+    graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
 
-    // ide_ci::actions::workflow::set_env("ENSO_RELEASE_MODE", args.release_mode.to_string()).ok();
+    // Setup SBT
+    goodies.require(&sbt::Sbt).await?;
+    ide_ci::programs::Sbt.require_present().await?;
+
+    // Other programs.
+    ide_ci::programs::Git::default().require_present().await?;
     ide_ci::programs::Go.require_present().await?;
     ide_ci::programs::Cargo.require_present().await?;
     ide_ci::programs::Node.require_present().await?;
     ide_ci::programs::Npm.require_present().await?;
-
-
-    // Disable TCP/UDP Offloading
 
     // Setup Conda Environment
     // Install FlatBuffers Compiler
@@ -265,6 +269,48 @@ async fn main() -> anyhow::Result<()> {
         ide_ci::programs::Flatc.lookup()?;
     }
 
+    let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
+    println!("Build configuration: {:#?}", config);
+
+    if let WhatToDo::Run(run) = args.command {
+        return match run.command_pieces.as_slice() {
+            [head, tail @ ..] => {
+                let mut child = std::process::Command::new(head)
+                    .args(tail)
+                    .current_dir(paths.repo_root)
+                    .spawn()?;
+                child.wait()?.exit_ok()?;
+                Ok(())
+            }
+            args => bail!("Invalid argument list for a command to be run: {:?}", args),
+        };
+    }
+
+
+    let git = Git::new(&enso_root);
+    if config.clean_repo {
+        git.clean_xfd().await?;
+        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
+        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
+    }
+
+    // Setup Tests on Windows
+    if TARGET_OS == OS::Windows {
+        std::env::set_var("CI_TEST_TIMEFACTOR", "2");
+        std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
+    }
+
+    //
+
+
+
+    //
+
+
+
+    // Disable TCP/UDP Offloading
+
+
     // Install Dependencies of the Simple Library Server
     ide_ci::programs::Npm
         .install(enso_root.join_many(["tools", "simple-library-server"]))?
@@ -273,25 +319,9 @@ async fn main() -> anyhow::Result<()> {
         .exit_ok()?;
 
     // Download Project Template Files
+    let client = reqwest::Client::new();
     download_project_templates(client.clone(), enso_root.clone()).await?;
 
-    // Setup GraalVM
-    let graalvm = graalvm::GraalVM {
-        client:        &octocrab,
-        graal_version: &GRAAL_VERSION,
-        java_version:  GRAAL_JAVA_VERSION,
-        os:            TARGET_OS,
-        arch:          TARGET_ARCH,
-    };
-    goodies.require(&graalvm).await?;
-    graalvm::Gu.require_present().await?;
-
-    // Setup SBT
-    goodies.require(&sbt::Sbt).await?;
-    ide_ci::programs::Sbt.require_present().await?;
-
-
-    graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
 
 
     let sbt = WithCwd::new(Sbt, &enso_root);
@@ -520,7 +550,7 @@ async fn main() -> anyhow::Result<()> {
         // Launcher bundle
         let bundles = create_bundles(&paths).await?;
 
-        if args.command == WhatToDo::Upload {
+        if matches!(args.command, WhatToDo::Upload(_)) {
             // Make packages.
             let packages = create_packages(&paths).await?;
 
