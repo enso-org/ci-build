@@ -70,31 +70,31 @@ jobs:
 
 
       ###################################################################################
-#      - name: Publish the Engine Distribution Artifact
-#        uses: actions/upload-artifact@v2
-#        with:
-#          name: ${{ env.ENGINE_DIST_NAME }}
-#          # Irregular, engine is pre-zipped to avoid long paths issues of nodejs.
-#          path: ${{ env.ENGINE_DIST_ARCHIVE }}
-#      - name: Publish the Launcher
-#        uses: actions/upload-artifact@v2
-#        with:
-#          name: ${{ env.LAUNCHER_DIST_NAME }}
-#          path: ${{ env.LAUNCHER_DIST_ROOT }}
-#      - name: Publish the Project Manager
-#        uses: actions/upload-artifact@v2
-#        with:
-#          name: ${{ env.PROJECTMANAGER_DIST_NAME }}
-#          path: ${{ env.PROJECTMANAGER_DIST_ROOT }}
-#      - name: Publish the FlatBuffers Schemas
-#        if: runner.os == 'Linux'
-#        uses: actions/upload-artifact@v2
-#        with:
-#          name: Engine Protocol FlatBuffers Schemas
-#          path: ${{ env.TARGET_DIR }}/fbs-upload/fbs-schema.zip
-#      - name: Publish the Parser JS Bundle
-#        if: runner.os == 'Linux'
-#        uses: actions/upload-artifact@v2
-#        with:
-#          name: Parser JS Bundle
-#          path: ${{ env.TARGET_DIR }}/scala-parser.js
+      - name: Publish the Engine Distribution Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.ENGINE_DIST_NAME }}
+          # Irregular, engine is pre-zipped to avoid long paths issues of nodejs.
+          path: ${{ env.ENGINE_DIST_ARCHIVE }}
+      - name: Publish the Launcher
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.LAUNCHER_DIST_NAME }}
+          path: ${{ env.LAUNCHER_DIST_ROOT }}
+      - name: Publish the Project Manager
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.PROJECTMANAGER_DIST_NAME }}
+          path: ${{ env.PROJECTMANAGER_DIST_ROOT }}
+      - name: Publish the FlatBuffers Schemas
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v2
+        with:
+          name: Engine Protocol FlatBuffers Schemas
+          path: ${{ env.TARGET_DIR }}/fbs-upload/fbs-schema.zip
+      - name: Publish the Parser JS Bundle
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v2
+        with:
+          name: Parser JS Bundle
+          path: ${{ env.TARGET_DIR }}/scala-parser.js
