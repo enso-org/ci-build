@@ -24,7 +24,7 @@ jobs:
           clean: false
       - name: Run a multi-line script
         id: prepare-step
-        run: cargo run --bin enso-build -- ../enso prepare --kind nightly
+        run: cargo run --bin enso-build -- ../enso --kind nightly prepare
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -47,7 +47,7 @@ jobs:
           clean: false
       - name: Run a multi-line script
         id: prepare-step
-        run: cargo run --bin enso-build -- ../enso finish --kind nightly
+        run: cargo run --bin enso-build -- ../enso --kind nightly finish
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -86,7 +86,7 @@ jobs:
 
       # Runs a set of commands using the runners shell
       - name: Run a multi-line script
-        run: cargo run --bin enso-build -- ../enso upload --kind nightly
+        run: cargo run --bin enso-build -- ../enso --kind nightly upload
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}

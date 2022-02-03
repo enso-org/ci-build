@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use crate::prelude::*;
 use octocrab::models::ReleaseId;
 use reqwest::Body;

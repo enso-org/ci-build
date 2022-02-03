@@ -33,5 +33,6 @@ impl<T: AsRef<Path>> PathExt for T {}
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 }
