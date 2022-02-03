@@ -561,6 +561,9 @@ async fn main() -> anyhow::Result<()> {
                 ide_ci::github::release::upload_asset(&repo, &client, release.id, bundle).await?;
             }
         }
+    } else {
+        // Perhaps won't be needed with the new artifact API.
+        package_component(&paths.engine).await?;
     }
 
     Ok(())
