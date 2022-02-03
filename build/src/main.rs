@@ -22,7 +22,6 @@ use enso_build::paths::Paths;
 use enso_build::retrieve_github_access_token;
 use enso_build::setup_octocrab;
 use enso_build::version::Versions;
-use ide_ci::actions::workflow;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
 use ide_ci::goodie::GoodieDatabase;
@@ -412,21 +411,8 @@ async fn main() -> anyhow::Result<()> {
     }
     if config.test_scala {
         // Test Enso
-        let test_result = sbt
-            .call_arg("set Global / parallelExecution := false; runtime/clean; compile; test")
-            .await;
-        if let Err(err) = test_result {
-            workflow::Message {
-                level: workflow::MessageLevel::Error,
-                text:  iformat!("Tests failed: {err}"),
-            }
-        } else {
-            workflow::Message {
-                level: workflow::MessageLevel::Notice,
-                text:  iformat!("Tests were completed successfully."),
-            }
-        }
-        .send();
+        sbt.call_arg("set Global / parallelExecution := false; runtime/clean; compile; test")
+            .await?;
     }
 
     // === Build Distribution ===
