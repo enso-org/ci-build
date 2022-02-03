@@ -34,7 +34,6 @@ use ide_ci::programs::Flatc;
 use ide_ci::programs::Sbt;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
-use std::env::consts::EXE_EXTENSION;
 use sysinfo::SystemExt;
 
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
@@ -694,7 +693,7 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
         let pattern =
             paths.dir.join_many(["bin", "*"]).with_extension(EXE_EXTENSION).display().to_string();
         for binary in glob::glob(&pattern)? {
-            ide_ci::io::allow_owner_execute(binary?);
+            ide_ci::io::allow_owner_execute(binary?)?;
         }
     }
 
