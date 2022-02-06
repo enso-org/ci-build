@@ -19,7 +19,7 @@ use enso_build::enso::BuiltEnso;
 use enso_build::enso::IrCaches;
 use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
-use enso_build::retrieve_github_access_token;
+use enso_build::{paths, retrieve_github_access_token};
 use enso_build::setup_octocrab;
 use enso_build::version::Versions;
 use ide_ci::extensions::path::PathExt;
@@ -203,6 +203,14 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         WhatToDo::Build | WhatToDo::Upload => {}
+    }
+
+    if ide_ci::run_in_ci() {
+        // On CI we remove IR caches. They might contain invalid or outdated data, as are using
+        // engine version as part of the key. As such, any change made to engine that does not
+        // change its version might break the caches.
+        // See (private): https://discord.com/channels/401396655599124480/407883082310352928/939618590158630922
+        ide_ci::io::remove_dir_if_exists(paths::cache_directory())?;
     }
 
     let git = Git::new(&enso_root);
@@ -663,7 +671,7 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
         let pattern =
             paths.dir.join_many(["bin", "*"]).with_extension(EXE_EXTENSION).display().to_string();
         for binary in glob::glob(&pattern)? {
-            ide_ci::io::allow_owner_execute(binary?);
+            ide_ci::io::allow_owner_execute(binary?)?;
         }
     }
 
