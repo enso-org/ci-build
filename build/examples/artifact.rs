@@ -32,7 +32,7 @@ async fn main() -> Result {
 
     let context = artifacts::Context::new()?;
     let handler = artifacts::ArtifactHandler::new(&context, "").await?;
-    let list = handler.list_artifacts();
+    let list = handler.list_artifacts().await;
     dbg!(list);
 
     Ok(())
