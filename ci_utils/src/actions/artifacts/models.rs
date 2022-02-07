@@ -73,7 +73,7 @@ pub struct ListArtifactsResponse {
 pub struct ArtifactResponse {
     pub container_id: u64,
     pub size: i64,
-    pub signed_content: String,
+    pub signed_content: Option<String>,
     pub file_container_resource_url: Url,
     pub r#type: String,
     pub name: String,
