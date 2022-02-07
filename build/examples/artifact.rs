@@ -30,6 +30,10 @@ async fn main() -> Result {
     let artifacts = octocrat.actions().list_workflow_run_artifacts("enso-org", "ci-build", run_id).send().await;
     dbg!(artifacts);
 
+    let context = artifacts::Context::new()?;
+    let handler = artifacts::ArtifactHandler::new(&context, "").await?;
+    let list = handler.list_artifacts();
+    dbg!(list);
 
     Ok(())
 }

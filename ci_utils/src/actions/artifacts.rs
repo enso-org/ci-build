@@ -123,6 +123,16 @@ pub mod raw {
             Ok(current_position)
         }
     }
+
+
+
+    #[context("Failed to list artifacts for the current run.")]
+    pub async fn list_artifacts(
+        json_client: &reqwest::Client,
+        artifact_url: Url,
+    ) -> Result<serde_json::Value> {
+        json_client.get(artifact_url).send().await?.json().await.anyhow_err()
+    }
 }
 
 pub fn stream_file_in_chunks(
@@ -490,6 +500,10 @@ impl ArtifactHandler {
         // TODO retry
         let response = patch_request.send().await?;
         Ok(response.json().await?)
+    }
+
+    pub async fn list_artifacts(&self) -> Result<serde_json::Value> {
+        raw::list_artifacts(&self.json_client, self.artifact_url.clone()).await
     }
 }
 
