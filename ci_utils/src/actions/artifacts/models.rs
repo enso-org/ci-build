@@ -61,3 +61,21 @@ pub struct PatchArtifactSizeResponse {
     // This is not actually present, despite what GH sources say.
     // pub upload_url:     Url,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ListArtifactsResponse {
+    pub count: i64,
+    pub value: Vec<ArtifactResponse>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactResponse {
+    pub container_id: String,
+    pub size: i64,
+    pub signed_content: String,
+    pub file_container_resource_url: Url,
+    pub r#type: String,
+    pub name: String,
+    pub url: Url,
+}

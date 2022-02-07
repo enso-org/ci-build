@@ -2,6 +2,7 @@ use crate::actions::artifacts::models::CreateArtifactRequest;
 use crate::actions::artifacts::models::CreateArtifactResponse;
 use crate::actions::artifacts::models::PatchArtifactSize;
 use crate::actions::artifacts::models::PatchArtifactSizeResponse;
+use crate::actions::artifacts::models::ArtifactResponse;
 use crate::env::expect_var;
 use crate::prelude::*;
 use anyhow::Context as Trait_anyhow_Context;
@@ -29,6 +30,7 @@ pub mod models;
 pub const API_VERSION: &str = "6.0-preview";
 
 pub mod raw {
+    use crate::actions::artifacts::models::ListArtifactsResponse;
     use super::*;
 
     /// Creates a file container for the new artifact in the remote blob storage/file service.
@@ -130,8 +132,8 @@ pub mod raw {
     pub async fn list_artifacts(
         json_client: &reqwest::Client,
         artifact_url: Url,
-    ) -> Result<serde_json::Value> {
-        json_client.get(artifact_url).send().await?.json().await.anyhow_err()
+    ) -> Result<Vec<ArtifactResponse>> {
+        Ok(json_client.get(artifact_url).send().await?.json::<ListArtifactsResponse>().await?.value)
     }
 }
 
@@ -509,7 +511,7 @@ impl ArtifactHandler {
         Ok(response.json().await?)
     }
 
-    pub async fn list_artifacts(&self) -> Result<serde_json::Value> {
+    pub async fn list_artifacts(&self) -> Result<Vec<ArtifactResponse>> {
         raw::list_artifacts(&self.json_client, self.artifact_url.clone()).await
     }
 }
