@@ -71,7 +71,7 @@ pub struct ListArtifactsResponse {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtifactResponse {
-    pub container_id: String,
+    pub container_id: u64,
     pub size: i64,
     pub signed_content: String,
     pub file_container_resource_url: Url,
