@@ -12,24 +12,26 @@ on:
         description: "Command to be run."
         required: true
         type: string
-      target:
-        description: "What runner should be used."
-        required: true
-        type: choice
-        options:
-          - "[self-hosted, Linux]"
-          - "[ubuntu-latest]"
-          - "[self-hosted, Windows]"
-          - "[windows-latest]"
-          - "[self-hosted, macOS]"
-          - "[macos-latest]"
-
 
           # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
   build:
-    runs-on: ${{ fromJSON(github.event.inputs.target) }}
+    runs-on: Linux
 
     steps:
-      - run: ${{ github.event.inputs.command }}
+      - run: echo "foo content" > foo.txt
+      - uses: actions/upload-artifact@v2
+        with:
+          name: Cergo.toml
+          path: foo.txt
+      - uses: actions/checkout@v2
+        with:
+          clean: false
+      - uses: actions/github-script@v5
+        with:
+          script: |
+            core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
+            core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
+            core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
+      - run: cargo run --example artifact
