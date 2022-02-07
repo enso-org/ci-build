@@ -92,6 +92,9 @@ pub struct BuildConfiguration {
     mode:                  BuildMode,
     test_scala:            bool,
     test_standard_library: bool,
+    /// Whether benchmarks are compiled.
+    ///
+    /// Note that this does not run the benchmarks, only ensures that they are buildable.
     benchmark_compilation: bool,
     build_js_parser:       bool,
     build_bundles:         bool,
@@ -313,23 +316,17 @@ async fn main() -> anyhow::Result<()> {
     sbt.call_arg("bootstrap").await?;
 
     println!("Verifying the Stdlib Version.");
-    sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
+
+    // TRANSITION: the PR that movevs changelog also removes the need (and possibility) of stdlib
+    //             version updates through sbt
+    if !paths.changelog().exists() {
+        sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
+    }
+
     if TARGET_OS != OS::Windows {
         // FIXME debug what is going on here
         sbt.call_arg("verifyLicensePackages").await?;
     }
-    // match config.mode {
-    //     BuildMode::Development => {
-    //         sbt.call_arg("stdlib-version-updater/run check").await?;
-    //     }
-    //     BuildMode::NightlyRelease => {
-    //         sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
-    //         if TARGET_OS != OS::Windows {
-    //             // FIXME debug what is going on here
-    //             sbt.call_arg("verifyLicensePackages").await?;
-    //         }
-    //     }
-    // };
 
     if system.total_memory() > 10_000_000 {
         let mut tasks = vec![
