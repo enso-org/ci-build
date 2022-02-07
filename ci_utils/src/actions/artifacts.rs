@@ -605,13 +605,8 @@ pub fn discover_recursive(
 pub async fn upload_artifact(
     file_provider: impl futures_util::Stream<Item = FileToUpload> + Send + 'static,
     artifact_name: impl AsRef<str>,
+    options: UploadOptions,
 ) -> Result {
-    let options = UploadOptions {
-        chunk_size:        8000000,
-        file_concurrency:  10,
-        continue_on_error: true,
-    };
-
     let context = Context::new()?;
     let handler = ArtifactHandler::new(&context, artifact_name.as_ref()).await?;
     handler.upload_artifact_to_file_container(file_provider, &options).await?;
