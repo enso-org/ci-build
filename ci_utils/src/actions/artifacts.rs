@@ -191,6 +191,32 @@ impl Context {
             ClientBuilder::new().default_headers(headers).user_agent(crate::USER_AGENT);
         f(base_builder).build().anyhow_err()
     }
+
+    pub fn json_client(&self) -> Result<Client> {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        self.prepare_client(|builder| {
+            builder.default_headers(headers)
+        })
+    }
+
+    pub fn binary_client(&self) -> Result<Client> {
+        let keep_alive_seconds = 3;
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/octet-stream"),
+        );
+        headers.insert(reqwest::header::CONNECTION, HeaderValue::from_static("Keep-Alive"));
+        headers.insert("Keep-Alive", keep_alive_seconds.into());
+        self.prepare_client(|builder| {
+            builder.default_headers(headers)
+        })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -373,27 +399,8 @@ pub struct ArtifactHandler {
 
 impl ArtifactHandler {
     pub async fn new(context: &Context, artifact_name: impl AsRef<str>) -> Result<Self> {
-        let keep_alive_seconds = 3;
-        let json_client = context.prepare_client(|builder| {
-            let mut headers = HeaderMap::new();
-            headers.insert(
-                reqwest::header::CONTENT_TYPE,
-                HeaderValue::from_static("application/json"),
-            );
-            builder.default_headers(headers)
-        })?;
-
-        let binary_client = context.prepare_client(|builder| {
-            let mut headers = HeaderMap::new();
-            headers.insert(
-                reqwest::header::CONTENT_TYPE,
-                HeaderValue::from_static("application/octet-stream"),
-            );
-            headers.insert(reqwest::header::CONNECTION, HeaderValue::from_static("Keep-Alive"));
-            headers.insert("Keep-Alive", keep_alive_seconds.into());
-            builder.default_headers(headers)
-        })?;
-
+        let json_client = context.json_client()?;
+        let binary_client = context.binary_client()?;
         let container =
             raw::create_container(&json_client, context.artifact_url()?, &artifact_name).await?;
         Ok(ArtifactHandler {

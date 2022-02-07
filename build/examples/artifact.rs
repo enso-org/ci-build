@@ -31,8 +31,7 @@ async fn main() -> Result {
     dbg!(artifacts);
 
     let context = artifacts::Context::new()?;
-    let handler = artifacts::ArtifactHandler::new(&context, "").await?;
-    let list = handler.list_artifacts().await;
+    let list = ide_ci::actions::artifacts::raw::list_artifacts(&context.json_client()?, context.artifact_url()?).await?;
     dbg!(list);
 
     Ok(())
