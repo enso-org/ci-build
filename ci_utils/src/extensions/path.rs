@@ -27,6 +27,10 @@ pub trait PathExt: AsRef<Path> {
         ret.push(extension.as_ref());
         ret.into()
     }
+
+    fn as_str(&self) -> &str {
+        self.as_ref().to_str().unwrap()
+    }
 }
 
 impl<T: AsRef<Path>> PathExt for T {}
