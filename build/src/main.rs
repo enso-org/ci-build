@@ -315,11 +315,11 @@ async fn main() -> anyhow::Result<()> {
     println!("Bootstrapping Enso project.");
     sbt.call_arg("bootstrap").await?;
 
-    println!("Verifying the Stdlib Version.");
 
     // TRANSITION: the PR that movevs changelog also removes the need (and possibility) of stdlib
     //             version updates through sbt
     if !paths.changelog().exists() {
+        println!("Verifying the Stdlib Version.");
         sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
     }
 
