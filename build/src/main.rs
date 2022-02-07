@@ -19,7 +19,7 @@ use enso_build::enso::BuiltEnso;
 use enso_build::enso::IrCaches;
 use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
-use enso_build::retrieve_github_access_token;
+use enso_build::{paths, retrieve_github_access_token};
 use enso_build::setup_octocrab;
 use enso_build::version::Versions;
 use ide_ci::extensions::path::PathExt;
@@ -92,6 +92,9 @@ pub struct BuildConfiguration {
     mode:                  BuildMode,
     test_scala:            bool,
     test_standard_library: bool,
+    /// Whether benchmarks are compiled.
+    ///
+    /// Note that this does not run the benchmarks, only ensures that they are buildable.
     benchmark_compilation: bool,
     build_js_parser:       bool,
     build_bundles:         bool,
@@ -210,6 +213,21 @@ async fn main() -> anyhow::Result<()> {
         // is added.
         WhatToDo::Build(_) | WhatToDo::Upload(_) | WhatToDo::Run(_) => {}
     };
+
+    if ide_ci::run_in_ci() {
+        // On CI we remove IR caches. They might contain invalid or outdated data, as are using
+        // engine version as part of the key. As such, any change made to engine that does not
+        // change its version might break the caches.
+        // See (private): https://discord.com/channels/401396655599124480/407883082310352928/939618590158630922
+        ide_ci::io::remove_dir_if_exists(paths::cache_directory())?;
+    }
+
+    let git = Git::new(&enso_root);
+    if config.clean_repo {
+        git.clean_xfd().await?;
+        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
+        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
+    }
 
     // Build environment preparations.
     let goodies = GoodieDatabase::new()?;
@@ -334,24 +352,18 @@ async fn main() -> anyhow::Result<()> {
     println!("Bootstrapping Enso project.");
     sbt.call_arg("bootstrap").await?;
 
-    println!("Verifying the Stdlib Version.");
-    sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
+
+    // TRANSITION: the PR that movevs changelog also removes the need (and possibility) of stdlib
+    //             version updates through sbt
+    if !paths.changelog().exists() {
+        println!("Verifying the Stdlib Version.");
+        sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
+    }
+
     if TARGET_OS != OS::Windows {
         // FIXME debug what is going on here
         sbt.call_arg("verifyLicensePackages").await?;
     }
-    // match config.mode {
-    //     BuildMode::Development => {
-    //         sbt.call_arg("stdlib-version-updater/run check").await?;
-    //     }
-    //     BuildMode::NightlyRelease => {
-    //         sbt.call_arg("stdlib-version-updater/run update --no-format").await?;
-    //         if TARGET_OS != OS::Windows {
-    //             // FIXME debug what is going on here
-    //             sbt.call_arg("verifyLicensePackages").await?;
-    //         }
-    //     }
-    // };
 
     if system.total_memory() > 10_000_000 {
         let mut tasks = vec![
@@ -690,11 +702,10 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
 pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
     #[cfg(not(target_os = "windows"))]
     {
-        use std::env::consts::EXE_EXTENSION;
         let pattern =
             paths.dir.join_many(["bin", "*"]).with_extension(EXE_EXTENSION).display().to_string();
         for binary in glob::glob(&pattern)? {
-            ide_ci::io::allow_owner_execute(binary?);
+            ide_ci::io::allow_owner_execute(binary?)?;
         }
     }
 

@@ -128,6 +128,11 @@ pub fn get_free_port() -> Result<u16> {
         .context("Failed to find a free local port.")
 }
 
+/// Check if the environment suggests that we are being run in a CI.
+pub fn run_in_ci() -> bool {
+    std::env::var("CI").is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

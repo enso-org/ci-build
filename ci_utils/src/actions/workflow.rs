@@ -28,7 +28,7 @@ pub fn debug(message: &str) {
 pub fn set_env(name: &str, value: impl Display) -> Result {
     iprintln!("Will try writing Github Actions environment variable: {name}={value}");
     std::env::set_var(name, value.to_string());
-    if std::env::var("CI").is_ok() {
+    if crate::run_in_ci() {
         let env_file = crate::env::expect_var_os("GITHUB_ENV")?;
         let line = iformat!("{name}={value}\n");
         std::fs::OpenOptions::new()
