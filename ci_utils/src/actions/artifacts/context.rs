@@ -57,7 +57,7 @@ impl Context {
             .anyhow_err()
     }
 
-    pub fn binary_client(&self) -> Result<Client> {
+    pub fn upload_client(&self) -> Result<Client> {
         let keep_alive_seconds = 3;
 
         let mut headers = HeaderMap::new();

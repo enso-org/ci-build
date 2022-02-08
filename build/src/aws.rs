@@ -144,7 +144,7 @@ pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Resul
         .put(new_edition_filename, ByteStream::from_path(&new_edition_path).await?)
         .await?;
 
-    bucket_context.put_yaml("manifest2.yaml", &new_manifest).await?;
+    bucket_context.put_yaml("manifest.yaml", &new_manifest).await?;
     Ok(())
 }
 

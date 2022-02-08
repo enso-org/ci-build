@@ -209,6 +209,10 @@ async fn main() -> anyhow::Result<()> {
             println!("Found the target release, will publish it.");
             repo.repos(&octocrab).releases().update(release.id.0).draft(false).send().await?;
             iprintln!("Done. Release URL: {release.url}");
+
+            println!("Updating edition in the AWS S3.");
+            enso_build::aws::update_manifest()
+
             return Ok(());
         }
         // We don't use catch-all `_` arm, as we want to consider this point each time a new variant

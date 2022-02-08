@@ -175,6 +175,18 @@ impl Paths {
             .with_appended_extension("yaml")
     }
 
+    pub async fn upload_manifest_artifact(&self) -> Result {
+        ide_ci::actions::artifacts::upload_single_file(self.edition_file(), "Edition File").await
+    }
+
+    pub async fn download_manifest_artifact(&self) -> Result {
+        ide_ci::actions::artifacts::download_single_file_artifact(
+            "Edition File",
+            self.edition_file(),
+        )
+        .await
+    }
+
     pub fn version(&self) -> &Version {
         &self.triple.versions.version
     }

@@ -1,13 +1,10 @@
 #![feature(default_free_fn)]
 
 use enso_build::prelude::*;
-use enso_build::setup_octocrab;
 use tempfile::TempDir;
 
 use ide_ci::actions::artifacts;
-use ide_ci::actions::artifacts::download::FileToDownload;
-use ide_ci::actions::artifacts::models::ItemType;
-use ide_ci::actions::artifacts::raw;
+use ide_ci::actions::artifacts::download::ArtifactDownloader;
 use ide_ci::actions::artifacts::run_session::SessionClient;
 
 #[tokio::main]
@@ -16,14 +13,14 @@ async fn main() -> Result {
 
     println!("Will upload {}", dir.display());
     let provider = artifacts::discover_recursive(dir);
-    artifacts::upload_artifact(provider, "MyPrecious", default()).await?;
+    artifacts::upload(provider, "MyPrecious", default()).await?;
 
 
     let file = std::env::current_exe()?;
     println!("Will upload {}", file.display());
     let artifact_name = file.file_name().unwrap().to_str().unwrap();
     let provider = artifacts::single_file_provider(file.clone())?;
-    artifacts::upload_artifact(provider, artifact_name, default()).await?;
+    artifacts::upload(provider, artifact_name, default()).await?;
     println!("Upload done!");
     // artifacts::upload_single_file(file, )
 
@@ -63,24 +60,11 @@ async fn main() -> Result {
     .await?;
     dbg!(&items);
 
-    let download_client = context.download_client()?;
     let temp = TempDir::new()?;
-    for item in items.value {
-        if item.item_type == ItemType::File {
-            dbg!(FileToDownload::new(temp.path(), &item, &relevant_entry.name));
-            let destination = temp.path().join(item.relative_path());
-            raw::endpoints::download_item(
-                &download_client,
-                item.content_location.clone(),
-                &destination,
-            )
-            .await?;
+    let downloader = ArtifactDownloader::new(session.clone(), artifact_name).await?;
+    downloader.download_all_to(temp.path()).await?;
 
-            assert_eq!(std::fs::read(&destination)?, std::fs::read(&file)?);
-        }
-    }
-
-
-
+    let expected_path = temp.path().join(artifact_name);
+    assert_eq!(std::fs::read(&expected_path)?, std::fs::read(&file)?);
     Ok(())
 }
