@@ -10,13 +10,13 @@ const PATH_ENVIRONMENT_NAME: &str = "PATH";
 
 pub fn expect_var(name: impl AsRef<str>) -> Result<String> {
     let name = name.as_ref();
-    std::env::var(name).context(anyhow!("Missing environment variable {}", name))
+    std::env::var(name).context(anyhow!("Missing environment variable {}.", name))
 }
 
 pub fn expect_var_os(name: impl AsRef<OsStr>) -> Result<OsString> {
     let name = name.as_ref();
     std::env::var_os(name)
-        .ok_or_else(|| anyhow!("Missing environment variable {}", name.to_string_lossy()))
+        .ok_or_else(|| anyhow!("Missing environment variable {}.", name.to_string_lossy()))
 }
 
 pub fn prepend_to_path(path: impl Into<PathBuf>) -> Result {

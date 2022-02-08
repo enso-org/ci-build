@@ -8,7 +8,6 @@ use ide_ci::actions::artifacts;
 use ide_ci::actions::artifacts::download::FileToDownload;
 use ide_ci::actions::artifacts::models::ItemType;
 use ide_ci::actions::artifacts::run_session::SessionClient;
-use ide_ci::actions::artifacts::FileToUpload;
 
 #[tokio::main]
 async fn main() -> Result {

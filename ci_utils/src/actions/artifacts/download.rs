@@ -18,20 +18,15 @@ impl FileToDownload {
         entry: &ContainerEntry,
         artifact_name: &str,
     ) -> Result<Self> {
-        let path_without_name = entry
-            .path
-            .strip_prefix(artifact_name)
-            .context("Entry path does not start with an artifact name.")?;
-        ensure!(entry.path.is_absolute(), "Path {} is not absolute.", entry.path.display());
-        let path_without_name_and_following_separator = path_without_name
-            .strip_prefix("/")
-            .or_else(|_| path_without_name.strip_prefix("\\"))
-            .context("Artifact path is invalid: should be followed by a separator.")?;
+        ensure!(entry.path.is_relative(), "Path {} is not relative.", entry.path.display());
+        let mut path_iter = entry.path.iter();
+        ensure!(
+            path_iter.next() == Some(&OsStr::new(artifact_name)),
+            "Entry path does not start with an artifact name."
+        );
 
         Ok(Self {
-            target:                 target_root
-                .as_ref()
-                .join(path_without_name_and_following_separator),
+            target:                 target_root.as_ref().join(path_iter),
             remote_source_location: entry.content_location.clone(),
         })
     }
