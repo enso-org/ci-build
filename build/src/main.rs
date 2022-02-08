@@ -35,7 +35,9 @@ use ide_ci::programs::Flatc;
 use ide_ci::programs::Sbt;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
+use std::env::consts::EXE_EXTENSION;
 use sysinfo::SystemExt;
+
 
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
 const GRAAL_VERSION: Version = Version::new(21, 1, 0);

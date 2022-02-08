@@ -354,6 +354,8 @@ pub fn single_file_provider(path: impl Into<PathBuf>) -> Result<impl Stream<Item
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::actions::artifacts::models::CreateArtifactResponse;
+    use reqwest::StatusCode;
     use wiremock::matchers::method;
     use wiremock::Mock;
     use wiremock::MockServer;
@@ -389,7 +391,8 @@ mod tests {
             remote_path: PathBuf::from(path_to_upload),
         };
 
-        upload_artifact(futures::stream::once(ready(file_to_upload)), "MyCargoArtifact").await?;
+        upload_artifact(futures::stream::once(ready(file_to_upload)), "MyCargoArtifact", default())
+            .await?;
         // artifacts::upload_path(path_to_upload).await?;
         Ok(())
         //let client = reqwest::Client::builder().default_headers().
