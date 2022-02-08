@@ -151,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let octocrab = setup_octocrab()?;
-    let enso_root = args.repository.clone();
+    let enso_root = args.target.clone();
     println!("Repository location: {}", enso_root.display());
 
 

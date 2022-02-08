@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use anyhow::Context;
 
 use ide_ci::models::config::RepoContext;
 use strum::EnumString;
@@ -56,6 +57,10 @@ pub fn default_kind() -> BuildKind {
     crate::env::build_kind().unwrap_or(BuildKind::Dev)
 }
 
+pub fn default_repo() -> RepoContext {
+    ide_ci::actions::env::repository().context("Fallback for the missing --repo argument.").unwrap()
+}
+
 /// Build, test and packave Enso Engine.
 #[derive(Clone, Debug, FromArgs)]
 pub struct Args {
@@ -64,7 +69,7 @@ pub struct Args {
     pub kind:       BuildKind,
     /// path to the local copy of the Enso Engine repository
     #[argh(positional)]
-    pub repository: PathBuf,
+    pub target:     PathBuf,
     /// identifier of the release to be targeted (necessary for `upload` and `finish` commands)
     #[argh(option)]
     pub release_id: Option<u64>,
@@ -72,7 +77,7 @@ pub struct Args {
     #[argh(option)]
     pub bundle:     Option<bool>,
     /// repository that will be targeted for the release info purposes
-    #[argh(option)]
+    #[argh(option, default = "default_repo()")]
     pub repo:       RepoContext,
     #[argh(subcommand)]
     pub command:    WhatToDo,
