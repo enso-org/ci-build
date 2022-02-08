@@ -1,4 +1,6 @@
 use crate::prelude::*;
+use chrono::DateTime;
+use chrono::Utc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")] // Sic!
@@ -82,27 +84,41 @@ pub struct ArtifactResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct QueryArtifactResponse {
-    count: i64,
-    value: Vec<ContainerEntry>,
+    pubcount: i64,
+    pubvalue: Vec<ContainerEntry>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContainerEntry {
-    container_id:       u64,
-    scope_identifier:   String,
-    path:               String,
-    item_type:          String,
-    status:             String,
-    file_length:        Option<i64>,
-    file_encoding:      Option<i64>,
-    file_type:          Option<i64>,
-    date_created:       String,
-    date_last_modified: String,
-    created_by:         String,
-    last_modified_by:   String,
-    item_location:      String,
-    content_location:   String,
-    file_id:            Option<usize>,
-    content_id:         String,
+    pub container_id:       u64,
+    pub scope_identifier:   Uuid,
+    pub path:               PathBuf,
+    pub item_type:          ItemType,
+    pub status:             EntryStatus,
+    pub file_length:        Option<i64>,
+    pub file_encoding:      Option<i64>,
+    pub file_type:          Option<i64>,
+    pub date_created:       DateTime<Utc>,
+    pub date_last_modified: DateTime<Utc>,
+    pub created_by:         Uuid,
+    pub last_modified_by:   Uuid,
+    pub item_location:      Url,
+    pub content_location:   Url,
+    pub file_id:            Option<usize>,
+    pub content_id:         String,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EntryStatus {
+    Created,
+    // No other values known at this point.
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ItemType {
+    File,
+    Folder,
 }

@@ -14,9 +14,11 @@ use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 
 pub mod context;
+pub mod download;
 pub mod models;
 pub mod raw;
 pub mod run_session;
+mod upload;
 
 pub const API_VERSION: &str = "6.0-preview";
 

@@ -58,7 +58,7 @@ tokio = { version = "1.15.0", features = ["full"] }
 tokio-util = {version = "0.6.9", features = ["full"] }
 unicase = "2.6.0"
 url = "2.2.2"
-uuid = { version = "0.8.2", features= ["v4"] }
+uuid = { version = "0.8.2", features= ["v4", "serde"] }
 walkdir = "2.3.2"
 which = "4.2.2"
 wiremock = "0.5.10"
