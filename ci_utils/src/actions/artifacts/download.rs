@@ -13,7 +13,11 @@ pub struct FileToDownload {
 
 impl FileToDownload {
     #[context("Failed to process entry {} from artifact {}.", entry.path.display(), artifact_name)]
-    pub fn new(target_root: PathBuf, entry: &ContainerEntry, artifact_name: &str) -> Result<Self> {
+    pub fn new(
+        target_root: impl AsRef<Path>,
+        entry: &ContainerEntry,
+        artifact_name: &str,
+    ) -> Result<Self> {
         let path_without_name = entry
             .path
             .strip_prefix(artifact_name)
@@ -25,7 +29,9 @@ impl FileToDownload {
             .context("Artifact path is invalid: should be followed by a separator.")?;
 
         Ok(Self {
-            target:                 target_root.join(path_without_name_and_following_separator),
+            target:                 target_root
+                .as_ref()
+                .join(path_without_name_and_following_separator),
             remote_source_location: entry.content_location.clone(),
         })
     }

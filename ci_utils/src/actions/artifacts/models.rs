@@ -84,8 +84,8 @@ pub struct ArtifactResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct QueryArtifactResponse {
-    pubcount: i64,
-    pubvalue: Vec<ContainerEntry>,
+    pub count: i64,
+    pub value: Vec<ContainerEntry>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

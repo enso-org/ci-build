@@ -2,9 +2,12 @@
 
 use enso_build::prelude::*;
 use enso_build::setup_octocrab;
+use tempfile::TempDir;
 
 use ide_ci::actions::artifacts;
+use ide_ci::actions::artifacts::download::FileToDownload;
 use ide_ci::actions::artifacts::run_session::SessionClient;
+use ide_ci::actions::artifacts::FileToUpload;
 
 #[tokio::main]
 async fn main() -> Result {
@@ -51,6 +54,11 @@ async fn main() -> Result {
     )
     .await?;
     dbg!(&items);
+
+    let temp = TempDir::new()?;
+    for item in items.value {
+        dbg!(FileToDownload::new(temp.path(), &item, &relevant_entry.name));
+    }
 
 
 
