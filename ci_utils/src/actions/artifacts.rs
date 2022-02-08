@@ -87,7 +87,7 @@ pub async fn download_single_file_artifact(
     let downloader =
         download::ArtifactDownloader::new(SessionClient::new_from_env()?, artifact_name.as_ref())
             .await?;
-    match downloader.items.as_slice() {
+    match downloader.file_items().collect_vec().as_slice() {
         [item] => {
             let file = FileToDownload {
                 target:                 target.into(),

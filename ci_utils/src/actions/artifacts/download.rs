@@ -57,6 +57,10 @@ impl ArtifactDownloader {
         }
         Ok(())
     }
+
+    pub fn file_items(&self) -> impl Iterator<Item = &ContainerEntry> {
+        self.items.iter().filter(|entry| entry.item_type == ItemType::File)
+    }
 }
 
 
