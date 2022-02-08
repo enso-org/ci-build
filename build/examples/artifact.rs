@@ -6,6 +6,7 @@ use tempfile::TempDir;
 
 use ide_ci::actions::artifacts;
 use ide_ci::actions::artifacts::download::FileToDownload;
+use ide_ci::actions::artifacts::models::ItemType;
 use ide_ci::actions::artifacts::run_session::SessionClient;
 use ide_ci::actions::artifacts::FileToUpload;
 
@@ -57,7 +58,9 @@ async fn main() -> Result {
 
     let temp = TempDir::new()?;
     for item in items.value {
-        dbg!(FileToDownload::new(temp.path(), &item, &relevant_entry.name));
+        if item.item_type == ItemType::File {
+            dbg!(FileToDownload::new(temp.path(), &item, &relevant_entry.name));
+        }
     }
 
 
