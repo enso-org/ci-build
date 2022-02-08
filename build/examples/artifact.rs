@@ -2,7 +2,6 @@
 
 use enso_build::prelude::*;
 use enso_build::setup_octocrab;
-use reqwest::header::HeaderMap;
 use tempfile::TempDir;
 
 use ide_ci::actions::artifacts;
@@ -28,11 +27,11 @@ async fn main() -> Result {
     println!("Upload done!");
     // artifacts::upload_single_file(file, )
 
-    let octocrab = setup_octocrab()?;
     let context = artifacts::context::Context::new_from_env()?;
     let session = SessionClient::new(&context)?;
 
     // println!("Checking artifacts through official API");
+    // let octocrab = setup_octocrab()?;
     // let run_id = ide_ci::actions::env::run_id()?;
     // println!("Got run ID {run_id}");
     // let run = octocrab.workflows("enso-org", "ci-build").get(run_id).await?;
