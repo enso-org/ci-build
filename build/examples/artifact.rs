@@ -33,10 +33,10 @@ async fn main() -> Result {
 
     let run_id = ide_ci::actions::env::run_id()?;
     let run = octocrab.workflows("enso-org", "ci-build").get(run_id).await;
-    dbg!(run);
+    dbg!(run)?;
     let artifacts =
         octocrab.actions().list_workflow_run_artifacts("enso-org", "ci-build", run_id).send().await;
-    dbg!(artifacts);
+    dbg!(artifacts)?;
 
 
     let list = session.list_artifacts().await?;

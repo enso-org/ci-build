@@ -10,7 +10,6 @@ use reqwest::ClientBuilder;
 use crate::actions::artifacts::API_VERSION;
 use crate::env::expect_var;
 use crate::extensions::reqwest::ClientBuilderExt;
-use crate::programs::vs::Cl;
 
 #[derive(Clone, Debug)]
 pub struct Context {
@@ -65,6 +64,7 @@ impl Context {
         headers.insert(reqwest::header::CONNECTION, HeaderValue::from_static("Keep-Alive"));
         headers.insert("Keep-Alive", keep_alive_seconds.into());
         self.prepare_client(mime::APPLICATION_OCTET_STREAM)?
+            .default_content_type(mime::APPLICATION_JSON)
             .default_headers(headers)
             .build()
             .anyhow_err()
