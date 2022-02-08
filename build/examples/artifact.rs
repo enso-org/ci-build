@@ -25,12 +25,14 @@ async fn main() -> Result {
     let artifact_name = file.file_name().unwrap().to_str().unwrap();
     let provider = artifacts::single_file_provider(file.clone())?;
     artifacts::upload_artifact(provider, artifact_name, default()).await?;
+    println!("Upload done!");
     // artifacts::upload_single_file(file, )
 
     let octocrab = setup_octocrab()?;
     let context = artifacts::context::Context::new_from_env()?;
     let session = SessionClient::new(&context)?;
 
+    println!("Checking artifacts through official API");
     let run_id = ide_ci::actions::env::run_id()?;
     let run = octocrab.workflows("enso-org", "ci-build").get(run_id).await;
     dbg!(run)?;
@@ -39,6 +41,7 @@ async fn main() -> Result {
     dbg!(artifacts)?;
 
 
+    println!("Checking artifacts through runtime API");
     let list = session.list_artifacts().await?;
     dbg!(&list);
 
