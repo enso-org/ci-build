@@ -50,7 +50,7 @@ async fn main() -> Result {
         &relevant_entry.name,
     )
     .await?;
-    dbg!(list);
+    dbg!(&items);
 
 
 
