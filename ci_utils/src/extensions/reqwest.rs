@@ -26,7 +26,7 @@ impl ClientBuilderExt for reqwest::ClientBuilder {
         // We can safely unwrap, because we know that all mime types are in format that can be used
         // as HTTP header value.
         header.insert(CONNECTION, HeaderValue::from_static("Keep-Alive"));
-        header.insert(HeaderName::from_static("Keep-Alive"), HeaderValue::from(seconds));
+        header.insert(HeaderName::from_static("keep-alive"), HeaderValue::from(seconds));
         self.default_headers(header)
     }
 
