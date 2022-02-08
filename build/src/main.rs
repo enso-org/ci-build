@@ -32,6 +32,7 @@ use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::git::Git;
 use ide_ci::programs::Flatc;
 use ide_ci::programs::Sbt;
+use ide_ci::run_in_ci;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
 use std::env::consts::EXE_EXTENSION;
@@ -197,7 +198,6 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
 
             enso_build::env::emit_release_id(release.id);
-
             return Ok(());
         }
         WhatToDo::Finish(_) => {
@@ -208,6 +208,7 @@ async fn main() -> anyhow::Result<()> {
             repo.repos(&octocrab).releases().update(release.id.0).draft(false).send().await?;
             iprintln!("Done. Release URL: {release.url}");
 
+            paths.download_edition_file_artifact().await?;
             println!("Updating edition in the AWS S3.");
             enso_build::aws::update_manifest(repo, &paths).await?;
 
@@ -547,6 +548,9 @@ async fn main() -> anyhow::Result<()> {
     //     .await?;
 
 
+    if TARGET_OS == OS::Linux && run_in_ci() {
+        paths.upload_edition_file_artifact().await?;
+    }
 
     if config.build_bundles {
         // Launcher bundle
