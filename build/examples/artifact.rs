@@ -32,17 +32,17 @@ async fn main() -> Result {
     let context = artifacts::context::Context::new_from_env()?;
     let session = SessionClient::new(&context)?;
 
-    println!("Checking artifacts through official API");
-    let run_id = ide_ci::actions::env::run_id()?;
-    println!("Got run ID {run_id}");
-    let run = octocrab.workflows("enso-org", "ci-build").get(run_id).await?;
-    println!("Got run information {run:?}");
-    let artifacts = octocrab
-        .actions()
-        .list_workflow_run_artifacts("enso-org", "ci-build", run_id)
-        .send()
-        .await?;
-    println!("Got acrtifacts information {artifacts:?}");
+    // println!("Checking artifacts through official API");
+    // let run_id = ide_ci::actions::env::run_id()?;
+    // println!("Got run ID {run_id}");
+    // let run = octocrab.workflows("enso-org", "ci-build").get(run_id).await?;
+    // println!("Got run information {run:?}");
+    // let artifacts = octocrab
+    //     .actions()
+    //     .list_workflow_run_artifacts("enso-org", "ci-build", run_id)
+    //     .send()
+    //     .await?;
+    // println!("Got artifacts information {artifacts:?}");
 
 
     println!("Checking artifacts through runtime API");
