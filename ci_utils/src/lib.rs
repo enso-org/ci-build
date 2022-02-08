@@ -9,6 +9,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(default_free_fn)]
 #![feature(trait_alias)]
+#![feature(io_error_other)]
 
 pub mod actions;
 pub mod anyhow;

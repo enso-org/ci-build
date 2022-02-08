@@ -2,6 +2,8 @@ use crate::prelude::*;
 
 use anyhow::Context;
 use bytes::BytesMut;
+use reqwest::header::HeaderMap;
+use reqwest::header::CONTENT_LENGTH;
 use reqwest::Body;
 use reqwest::Response;
 use reqwest::StatusCode;
@@ -19,6 +21,8 @@ use crate::reqwest::ContentRange;
 
 pub mod endpoints {
     use super::*;
+    use reqwest::header::HeaderValue;
+    use tokio_util::io::StreamReader;
 
     /// Creates a file container for the new artifact in the remote blob storage/file service.
     ///
@@ -120,6 +124,40 @@ pub mod endpoints {
         let response = patch_request.send().await?;
         Ok(response.json().await?)
     }
+
+    pub async fn download_item(
+        bin_client: &reqwest::Client,
+        artifact_location: Url,
+        destination: impl AsRef<Path>,
+    ) -> Result {
+        println!("Downloading {} to {}.", artifact_location, destination.as_ref().display());
+        let file = tokio::fs::File::create(destination);
+
+        let response = bin_client.get(artifact_location).send().await?;
+        let expected_size = decode_content_length(response.headers());
+        let is_gzipped = response
+            .headers()
+            .get(reqwest::header::ACCEPT_ENCODING)
+            .contains(&HeaderValue::from_static("gzip"));
+
+        let mut reader = StreamReader::new(response.bytes_stream().map_err(std::io::Error::other));
+
+        if is_gzipped {
+            let mut decoded_stream = async_compression::tokio::bufread::GzipDecoder::new(reader);
+            tokio::io::copy(&mut decoded_stream, &mut file.await?).await?;
+        } else {
+            tokio::io::copy(&mut reader, &mut file.await?).await?;
+        }
+
+
+        Ok(())
+    }
+}
+
+pub fn decode_content_length(headers: &HeaderMap) -> Option<usize> {
+    let value = headers.get(CONTENT_LENGTH)?;
+    let text = value.to_str().ok()?;
+    text.parse::<usize>().ok()
 }
 
 

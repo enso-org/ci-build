@@ -2,11 +2,13 @@
 
 use enso_build::prelude::*;
 use enso_build::setup_octocrab;
+use reqwest::header::HeaderMap;
 use tempfile::TempDir;
 
 use ide_ci::actions::artifacts;
 use ide_ci::actions::artifacts::download::FileToDownload;
 use ide_ci::actions::artifacts::models::ItemType;
+use ide_ci::actions::artifacts::raw;
 use ide_ci::actions::artifacts::run_session::SessionClient;
 
 #[tokio::main]
@@ -55,10 +57,20 @@ async fn main() -> Result {
     .await?;
     dbg!(&items);
 
+    let download_client = context.download_client()?;
     let temp = TempDir::new()?;
     for item in items.value {
         if item.item_type == ItemType::File {
             dbg!(FileToDownload::new(temp.path(), &item, &relevant_entry.name));
+            let destination = temp.path().join(item.relative_path());
+            raw::endpoints::download_item(
+                &download_client,
+                item.content_location.clone(),
+                &destination,
+            )
+            .await?;
+
+            dbg!(destination.metadata());
         }
     }
 

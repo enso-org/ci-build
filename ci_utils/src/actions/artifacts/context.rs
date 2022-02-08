@@ -1,12 +1,16 @@
 use crate::prelude::*;
+use mime::Mime;
+use mime::APPLICATION_JSON;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
+use reqwest::header::ACCEPT_ENCODING;
 use reqwest::Client;
 use reqwest::ClientBuilder;
 
 use crate::actions::artifacts::API_VERSION;
 use crate::env::expect_var;
 use crate::extensions::reqwest::ClientBuilderExt;
+use crate::programs::vs::Cl;
 
 #[derive(Clone, Debug)]
 pub struct Context {
@@ -33,11 +37,11 @@ impl Context {
         Url::parse(&url_text).anyhow_err()
     }
 
-    pub fn prepare_client(&self) -> Result<ClientBuilder> {
+    pub fn prepare_client(&self, accept_mime: Mime) -> Result<ClientBuilder> {
         let mut headers = HeaderMap::new();
         headers.insert(
             reqwest::header::ACCEPT,
-            iformat!("application/json;api-version={self.api_version}").parse()?,
+            iformat!("{accept_mime};api-version={self.api_version}").parse()?,
         );
         headers.insert(
             reqwest::header::AUTHORIZATION,
@@ -48,7 +52,10 @@ impl Context {
     }
 
     pub fn json_client(&self) -> Result<Client> {
-        self.prepare_client()?.default_content_type(mime::APPLICATION_JSON).build().anyhow_err()
+        self.prepare_client(mime::APPLICATION_JSON)?
+            .default_content_type(mime::APPLICATION_JSON)
+            .build()
+            .anyhow_err()
     }
 
     pub fn binary_client(&self) -> Result<Client> {
@@ -57,9 +64,17 @@ impl Context {
         let mut headers = HeaderMap::new();
         headers.insert(reqwest::header::CONNECTION, HeaderValue::from_static("Keep-Alive"));
         headers.insert("Keep-Alive", keep_alive_seconds.into());
-        self.prepare_client()?
+        self.prepare_client(mime::APPLICATION_OCTET_STREAM)?
             .default_headers(headers)
-            .default_content_type(mime::APPLICATION_OCTET_STREAM)
+            .build()
+            .anyhow_err()
+    }
+
+    pub fn download_client(&self) -> Result<Client> {
+        self.prepare_client(mime::APPLICATION_OCTET_STREAM)?
+            .default_content_type(APPLICATION_JSON)
+            .keep_alive(10)
+            .default_header(ACCEPT_ENCODING, HeaderValue::try_from("gzip").unwrap())
             .build()
             .anyhow_err()
     }

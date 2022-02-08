@@ -1,6 +1,11 @@
 use crate::actions::artifacts::models::ContainerEntry;
+use crate::actions::artifacts::API_VERSION;
 use crate::prelude::*;
-use anyhow::Context;
+// use anyhow::Context;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderValue;
+use reqwest::header::ACCEPT;
+use reqwest::header::ACCEPT_ENCODING;
 
 #[derive(Clone, Debug)]
 pub struct FileToDownload {
@@ -30,4 +35,21 @@ impl FileToDownload {
             remote_source_location: entry.content_location.clone(),
         })
     }
+}
+
+pub fn headers() -> HeaderMap {
+    let mut header = HeaderMap::new();
+    // We can safely unwrap, because we know that all mime types are in format that can be used
+    // as HTTP header value.
+    header.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip"));
+    header.insert(
+        ACCEPT,
+        HeaderValue::try_from(format!(
+            "{};api-version={}",
+            mime::APPLICATION_OCTET_STREAM,
+            API_VERSION
+        ))
+        .unwrap(),
+    );
+    header
 }

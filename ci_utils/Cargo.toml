@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.44"
 argh = "0.1.6"
+async-compression = {version = "0.3.12", features = ["tokio", "gzip"]}
 async-trait = "0.1.51"
 bytes = "1.0.0"
 cached = "0.26.2"
