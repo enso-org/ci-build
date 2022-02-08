@@ -134,7 +134,7 @@ pub mod endpoints {
         let file = tokio::fs::File::create(destination);
 
         let response = bin_client.get(artifact_location).send().await?;
-        let expected_size = decode_content_length(response.headers());
+        // let expected_size = decode_content_length(response.headers());
         let is_gzipped = response
             .headers()
             .get(reqwest::header::ACCEPT_ENCODING)
