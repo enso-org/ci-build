@@ -1,10 +1,10 @@
 //! See: https://docs.github.com/en/actions/learn-github-actions/environment-variables
 
-use anyhow::Context;
-use octocrab::models::RunId;
 use crate::env::expect_var;
 use crate::models::config::RepoContext;
 use crate::prelude::*;
+use anyhow::Context;
+use octocrab::models::RunId;
 
 pub const RUNNER_NAME_VAR: &str = "RUNNER_NAME";
 
@@ -39,5 +39,8 @@ pub fn commit() -> Result<String> {
 }
 
 pub fn run_id() -> Result<RunId> {
-    expect_var("GITHUB_RUN_ID")?.parse::<u64>().context("Failed to parse Run ID from the `GITHUB_RUN_ID` variable.").map(into)
+    expect_var("GITHUB_RUN_ID")?
+        .parse::<u64>()
+        .context("Failed to parse Run ID from the `GITHUB_RUN_ID` variable.")
+        .map(into)
 }

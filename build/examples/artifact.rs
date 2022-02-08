@@ -4,7 +4,7 @@ use enso_build::prelude::*;
 use enso_build::setup_octocrab;
 
 use ide_ci::actions::artifacts;
-use ide_ci::actions::artifacts::FileToUpload;
+use ide_ci::actions::artifacts::run_session::SessionClient;
 
 #[tokio::main]
 async fn main() -> Result {
@@ -17,22 +17,42 @@ async fn main() -> Result {
 
     let file = std::env::current_exe()?;
     println!("Will upload {}", file.display());
-    let file = FileToUpload::new(file)?;
-    let artifact_name = file.remote_path.as_str().to_owned();
-    let provider = futures::stream::iter([file]);
+    let artifact_name = file.file_name().unwrap().to_str().unwrap();
+    let provider = artifacts::single_file_provider(file.clone())?;
     artifacts::upload_artifact(provider, artifact_name, default()).await?;
     // artifacts::upload_single_file(file, )
 
-    let octocrat = setup_octocrab()?;
+    let octocrab = setup_octocrab()?;
+    let context = artifacts::context::Context::new_from_env()?;
+    let session = SessionClient::new(&context)?;
+
     let run_id = ide_ci::actions::env::run_id()?;
-    let run = octocrat.workflows("enso-org", "ci-build").get(run_id).await;
+    let run = octocrab.workflows("enso-org", "ci-build").get(run_id).await;
     dbg!(run);
-    let artifacts = octocrat.actions().list_workflow_run_artifacts("enso-org", "ci-build", run_id).send().await;
+    let artifacts =
+        octocrab.actions().list_workflow_run_artifacts("enso-org", "ci-build", run_id).send().await;
     dbg!(artifacts);
 
-    let context = artifacts::Context::new()?;
-    let list = ide_ci::actions::artifacts::raw::list_artifacts(&context.json_client()?, context.artifact_url()?).await?;
+
+    let list = session.list_artifacts().await?;
+    dbg!(&list);
+
+    let relevant_entry = list
+        .iter()
+        .find(|artifact| artifact.name == artifact_name)
+        .ok_or_else(|| anyhow!("Failed to find artifact by name {artifact_name}."))?;
+
+    dbg!(&relevant_entry);
+
+    let items = ide_ci::actions::artifacts::raw::endpoints::get_container_items(
+        &context.json_client()?,
+        relevant_entry.file_container_resource_url.clone(),
+        &relevant_entry.name,
+    )
+    .await?;
     dbg!(list);
+
+
 
     Ok(())
 }

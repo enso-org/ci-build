@@ -27,7 +27,14 @@ impl AsRef<OsStr> for Option {
 
 pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
     // rsync treats "path/to/dir" and "path/to/dir/" differently.
-    // We want the latter (otherwise `source` would be placed inside `destination`), so we append an empty path segment.
+    // We want the latter (otherwise `source` would be placed inside `destination`), so we append an
+    // empty path segment.
     let source = source.as_ref().join("");
-    Rsync.cmd()?.args([Option::Archive, Option::Delete]).arg(&source).arg(destination.as_ref()).run_ok().await
+    Rsync
+        .cmd()?
+        .args([Option::Archive, Option::Delete])
+        .arg(&source)
+        .arg(destination.as_ref())
+        .run_ok()
+        .await
 }

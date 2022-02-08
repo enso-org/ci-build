@@ -4,4 +4,5 @@ pub mod iterator;
 pub mod maps;
 pub mod output;
 pub mod path;
+pub mod reqwest;
 pub mod version;

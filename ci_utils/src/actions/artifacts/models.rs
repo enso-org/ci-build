@@ -79,3 +79,30 @@ pub struct ArtifactResponse {
     pub name: String,
     pub url: Url,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct QueryArtifactResponse {
+    count: i64,
+    value: Vec<ContainerEntry>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerEntry {
+    container_id:       u64,
+    scope_identifier:   String,
+    path:               String,
+    item_type:          String,
+    status:             String,
+    file_length:        Option<i64>,
+    file_encoding:      Option<i64>,
+    file_type:          Option<i64>,
+    date_created:       String,
+    date_last_modified: String,
+    created_by:         String,
+    last_modified_by:   String,
+    item_location:      String,
+    content_location:   String,
+    file_id:            Option<usize>,
+    content_id:         String,
+}

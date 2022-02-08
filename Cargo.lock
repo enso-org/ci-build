@@ -1406,6 +1406,7 @@ dependencies = [
  "indexmap",
  "itertools 0.10.3",
  "lazy_static",
+ "mime",
  "new_mime_guess",
  "nix 0.23.1",
  "octocrab",
