@@ -77,7 +77,7 @@ async fn main() -> Result {
             )
             .await?;
 
-            dbg!(destination.metadata());
+            assert_eq!(std::fs::read(&destination)?, std::fs::read(&file)?);
         }
     }
 
