@@ -37,3 +37,5 @@ jobs:
             core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
             core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
       - run: cargo run --example artifact
+        env:
+          RUST_BACKTRACE: 1
