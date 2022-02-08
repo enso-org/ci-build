@@ -28,7 +28,6 @@ use ide_ci::future::AsyncPolicy;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies::graalvm;
 use ide_ci::goodies::sbt;
-use ide_ci::models::config::RepoContext;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::git::Git;
 use ide_ci::programs::Flatc;
@@ -155,8 +154,7 @@ async fn main() -> anyhow::Result<()> {
     println!("Repository location: {}", enso_root.display());
 
 
-    let repo = ide_ci::actions::env::repository()
-        .unwrap_or(RepoContext { owner: "enso-org".into(), name: "ci-build".into() });
+    let repo = &args.repo;
 
     println!("Deciding on version to target.");
     let changelog_path = enso_build::paths::root_to_changelog(&enso_root);
@@ -211,7 +209,7 @@ async fn main() -> anyhow::Result<()> {
             iprintln!("Done. Release URL: {release.url}");
 
             println!("Updating edition in the AWS S3.");
-            enso_build::aws::update_manifest()
+            enso_build::aws::update_manifest(repo, &paths).await?;
 
             return Ok(());
         }
@@ -573,10 +571,10 @@ async fn main() -> anyhow::Result<()> {
 
             let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
             for package in packages {
-                ide_ci::github::release::upload_asset(&repo, &client, release.id, package).await?;
+                ide_ci::github::release::upload_asset(repo, &client, release.id, package).await?;
             }
             for bundle in bundles {
-                ide_ci::github::release::upload_asset(&repo, &client, release.id, bundle).await?;
+                ide_ci::github::release::upload_asset(repo, &client, release.id, bundle).await?;
             }
         }
     } else {

@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+use ide_ci::models::config::RepoContext;
 use strum::EnumString;
 
 #[derive(FromArgs, Clone, PartialEq, Debug)]
@@ -70,7 +71,9 @@ pub struct Args {
     /// whether create bundles with Project Manager and Launcher
     #[argh(option)]
     pub bundle:     Option<bool>,
-    /// command to execute (build/prepare/upload/finish)
+    /// repository that will be targeted for the release info purposes
+    #[argh(option)]
+    pub repo:       RepoContext,
     #[argh(subcommand)]
     pub command:    WhatToDo,
     /* #[argh(subcommand)]
