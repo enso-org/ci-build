@@ -32,6 +32,7 @@ use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies::graalvm;
 use ide_ci::goodies::sbt;
 use ide_ci::models::config::RepoContext;
+use ide_ci::platform::default_shell;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::git::Git;
 use ide_ci::programs::Flatc;
@@ -295,47 +296,11 @@ async fn main() -> anyhow::Result<()> {
     let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
     println!("Build configuration: {:#?}", config);
 
-    if let WhatToDo::Run(run) = args.command {
-        return match run.command_pieces.as_slice() {
-            [head, tail @ ..] => {
-                let mut child = std::process::Command::new(head)
-                    .args(tail)
-                    .current_dir(paths.repo_root)
-                    .spawn()?;
-                child.wait()?.exit_ok()?;
-                Ok(())
-            }
-            args => bail!("Invalid argument list for a command to be run: {:?}", args),
-        };
-    }
-
-
-    let git = Git::new(&enso_root);
-    if config.clean_repo {
-        git.clean_xfd().await?;
-        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
-        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
-    }
-
     // Setup Tests on Windows
     if TARGET_OS == OS::Windows {
         std::env::set_var("CI_TEST_TIMEFACTOR", "2");
         std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
     }
-
-    // Disable TCP/UDP Offloading
-
-
-    // Install Dependencies of the Simple Library Server
-    ide_ci::programs::Npm
-        .install(enso_root.join_many(["tools", "simple-library-server"]))?
-        .status()
-        .await?
-        .exit_ok()?;
-
-    // Download Project Template Files
-    let client = reqwest::Client::new();
-    download_project_templates(client.clone(), enso_root.clone()).await?;
 
     let build_sbt_content = std::fs::read_to_string(paths.build_sbt())?;
     // Setup GraalVM
@@ -350,6 +315,42 @@ async fn main() -> anyhow::Result<()> {
     graalvm::Gu.require_present().await?;
     graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
 
+    if let WhatToDo::Run(run) = args.command {
+        let mut run = run.command_pieces.iter();
+        if let Some(program) = run.next() {
+            println!("Spawning program {}.", program.to_str().unwrap());
+            tokio::process::Command::new(program)
+                .args(run)
+                .current_dir(paths.repo_root)
+                .spawn()?
+                .wait()
+                .await?
+                .exit_ok()?;
+        } else {
+            println!("Spawning default shell.");
+            default_shell().run_shell()?.current_dir(paths.repo_root).run_ok().await?;
+        }
+        return Ok(());
+    }
+
+    // Install Dependencies of the Simple Library Server
+    ide_ci::programs::Npm
+        .install(enso_root.join_many(["tools", "simple-library-server"]))?
+        .status()
+        .await?
+        .exit_ok()?;
+
+
+    // Download Project Template Files
+    let client = reqwest::Client::new();
+    download_project_templates(client.clone(), enso_root.clone()).await?;
+
+    let git = Git::new(&enso_root);
+    if config.clean_repo {
+        git.clean_xfd().await?;
+        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
+        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
+    }
 
     let sbt = WithCwd::new(Sbt, &enso_root);
 

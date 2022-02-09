@@ -28,4 +28,8 @@ impl Shell for Bash {
         cmd.arg(script_path.as_ref());
         Ok(cmd)
     }
+
+    fn run_shell(&self) -> Result<Command> {
+        self.cmd()
+    }
 }
