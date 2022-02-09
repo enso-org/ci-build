@@ -5,7 +5,6 @@ use ide_ci::models::config::RepoContext;
 use octocrab::models::repos::Release;
 use semver::Prerelease;
 use std::collections::BTreeSet;
-use std::str::FromStr;
 
 /// Variable that stores Enso Engine version.
 pub const VERSION_VAR_NAME: &str = "ENSO_VERSION";
@@ -46,7 +45,8 @@ impl Default for Versions {
 
 impl Versions {
     pub fn new(version: Version) -> Self {
-        let release_mode = !version.pre.as_str().contains(LOCAL_BUILD_PREFIX) && !version.pre.as_str().contains("SNAPSHOT");
+        let release_mode = !version.pre.as_str().contains(LOCAL_BUILD_PREFIX)
+            && !version.pre.as_str().contains("SNAPSHOT");
         Versions { version, release_mode }
     }
 

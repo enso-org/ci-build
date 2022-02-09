@@ -17,9 +17,12 @@ use enso_build::args::BuildKind;
 use enso_build::args::WhatToDo;
 use enso_build::enso::BuiltEnso;
 use enso_build::enso::IrCaches;
+use enso_build::get_graal_version;
+use enso_build::get_java_major_version;
+use enso_build::paths;
 use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
-use enso_build::{paths, retrieve_github_access_token};
+use enso_build::retrieve_github_access_token;
 use enso_build::setup_octocrab;
 use enso_build::version::Versions;
 use ide_ci::extensions::path::PathExt;
@@ -38,8 +41,8 @@ use std::env::consts::EXE_EXTENSION;
 use sysinfo::SystemExt;
 
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
-const GRAAL_VERSION: Version = Version::new(21, 1, 0);
-const GRAAL_JAVA_VERSION: graalvm::JavaVersion = graalvm::JavaVersion::Java11;
+// const GRAAL_VERSION: Version = Version::new(21, 1, 0);
+// const GRAAL_JAVA_VERSION: graalvm::JavaVersion = graalvm::JavaVersion::Java11;
 const PARALLEL_ENSO_TESTS: AsyncPolicy = AsyncPolicy::Sequential;
 
 pub async fn download_project_templates(client: reqwest::Client, enso_root: PathBuf) -> Result {
@@ -285,11 +288,12 @@ async fn main() -> anyhow::Result<()> {
     // Download Project Template Files
     download_project_templates(client.clone(), enso_root.clone()).await?;
 
+    let build_sbt_content = std::fs::read_to_string(paths.build_sbt())?;
     // Setup GraalVM
     let graalvm = graalvm::GraalVM {
         client:        &octocrab,
-        graal_version: &GRAAL_VERSION,
-        java_version:  GRAAL_JAVA_VERSION,
+        graal_version: get_graal_version(&build_sbt_content)?,
+        java_version:  get_java_major_version(&build_sbt_content)?,
         os:            TARGET_OS,
         arch:          TARGET_ARCH,
     };

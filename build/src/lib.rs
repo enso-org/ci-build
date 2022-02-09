@@ -2,7 +2,7 @@
 #![feature(exit_status_error)]
 
 use crate::prelude::*;
-
+use ide_ci::programs::java;
 use regex::Regex;
 
 pub mod prelude {
@@ -30,6 +30,36 @@ pub fn get_enso_version(build_sbt_contents: &str) -> Result<Version> {
         .expect("Missing subcapture #1 with version despite matching the regex.")
         .as_str();
     Version::parse(version_string).anyhow_err()
+}
+
+pub fn get_string_assignment_value(
+    build_sbt_contents: &str,
+    variable_name: &str,
+) -> Result<String> {
+    let regex_text = format!(r#"(?m)^val *{variable_name} *= *"([^"]*)".*$"#);
+    let regex = Regex::new(&regex_text)?;
+    Ok(regex
+        .captures(&build_sbt_contents)
+        .ok_or_else(|| {
+            anyhow!(
+                "Failed to find line with assignment to `{variable_name}`. Does it match the following regex?   {regex_text}  "
+            )
+        })?
+        .get(1)
+        // The below denotes an internal error in our regex syntax, we do want panic.
+        .expect("Missing subcapture #1 with version despite matching the regex.")
+        .as_str()
+        .to_string())
+}
+
+/// Get version of Enso from the `build.sbt` file contents.
+pub fn get_graal_version(build_sbt_contents: &str) -> Result<Version> {
+    get_string_assignment_value(build_sbt_contents, "graalVersion")?.parse2()
+}
+
+/// Get version of Enso from the `build.sbt` file contents.
+pub fn get_java_major_version(build_sbt_contents: &str) -> Result<java::LanguageVersion> {
+    get_string_assignment_value(build_sbt_contents, "javaVersion")?.parse2()
 }
 
 pub fn retrieve_github_access_token() -> Result<String> {
@@ -67,6 +97,32 @@ val stdLibVersion  = ensoVersion
         assert_eq!(version.pre.as_str(), "SNAPSHOT");
 
         println!("{}\n{:?}", version, version);
+        Ok(())
+    }
+
+    #[test]
+    pub fn get_graal_version_test() -> Result {
+        let contents = r#"
+val scalacVersion         = "2.13.7"
+val graalVersion          = "21.1.0"
+val javaVersion           = "11"
+val defaultDevEnsoVersion = "0.0.0-dev"
+val ensoVersion = sys.env.getOrElse(
+  "ENSO_VERSION",
+  defaultDevEnsoVersion
+) // Note [Engine And Launcher Version]
+val currentEdition = sys.env.getOrElse(
+  "ENSO_EDITION",
+  defaultDevEnsoVersion
+) // Note [Default Editions]
+
+// Note [Stdlib Version]
+val stdLibVersion       = defaultDevEnsoVersion
+"#;
+        let version = get_graal_version(contents)?;
+        assert_eq!(version.major, 21);
+        assert_eq!(version.minor, 1);
+        assert_eq!(version.patch, 0);
         Ok(())
     }
 }

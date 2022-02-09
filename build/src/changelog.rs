@@ -62,10 +62,10 @@ pub fn retrieve_last_release(changelog: impl AsRef<Path>) -> Result<Version> {
 
 #[test]
 fn aaaa() -> Result {
-    let opts = pulldown_cmark::Options::all();
+    // let opts = pulldown_cmark::Options::all();
 
     let path = r"H:\NBO\enso\app\gui\CHANGELOG.md";
-    let text = std::fs::read_to_string(path)?;
+    // let text = std::fs::read_to_string(path)?;
     let entry = retrieve_unreleased_release_notes(path)?;
     dbg!(entry);
     Ok(())
