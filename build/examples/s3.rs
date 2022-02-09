@@ -18,7 +18,11 @@ async fn main() -> Result {
     dbg!(bucket_context.get("").await?);
 
     let test_file = "test_file.exe";
-    bucket_context.put(test_file, ByteStream::from_path(&std::env::current_exe()?).await?).await?;
+    dbg!(
+        bucket_context
+            .put(test_file, ByteStream::from_path(&std::env::current_exe()?).await?)
+            .await?
+    );
 
     Ok(())
 }
