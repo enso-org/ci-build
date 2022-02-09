@@ -91,12 +91,13 @@ impl BucketContext {
     }
 
     pub async fn put(&self, path: &str, data: ByteStream) -> Result<PutObjectOutput> {
-        self.client
+        dbg!(self.client
             .put_object()
             .bucket(&self.bucket)
             .acl(self.upload_acl.clone())
             .key(format!("{}/{}", self.key_prefix, path))
-            .body(data)
+            .body(data))
+
             .send()
             .await
             .anyhow_err()
