@@ -58,6 +58,11 @@ impl Manifest {
         let (nightlies, non_nightlies) =
             self.editions.iter().partition::<Vec<_>, _>(|e| e.is_nightly());
         let nightlies_count_to_remove = 1 + nightlies.len().saturating_sub(nightlies_count_limit);
+        println!(
+            "Will remove {} nightly editions from {} found.",
+            nightlies_count_to_remove,
+            nightlies.len()
+        );
         let (nightlies_to_remove, nightlies_to_keep) =
             nightlies.split_at(nightlies_count_to_remove);
 
@@ -91,16 +96,16 @@ impl BucketContext {
     }
 
     pub async fn put(&self, path: &str, data: ByteStream) -> Result<PutObjectOutput> {
-        dbg!(self.client
+        dbg!(self
+            .client
             .put_object()
             .bucket(&self.bucket)
             .acl(self.upload_acl.clone())
             .key(format!("{}/{}", self.key_prefix, path))
             .body(data))
-
-            .send()
-            .await
-            .anyhow_err()
+        .send()
+        .await
+        .anyhow_err()
     }
 
     pub async fn get_yaml<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
@@ -131,6 +136,7 @@ pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Resul
     );
 
     let manifest = bucket_context.get_yaml::<Manifest>(MANIFEST_FILENAME).await?;
+    println!("Got manifest index from S3: {:#?}", manifest);
 
 
     let (new_manifest, nightlies_to_remove) =

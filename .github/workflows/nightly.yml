@@ -22,6 +22,7 @@ jobs:
         with:
           path: ci-build
           clean: false
+
       - name: Run a multi-line script
         id: prepare-step
         run: cargo run --bin enso-build -- ../enso --kind nightly prepare
