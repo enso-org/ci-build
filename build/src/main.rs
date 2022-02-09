@@ -18,6 +18,9 @@ use enso_build::args::BuildKind;
 use enso_build::args::WhatToDo;
 use enso_build::enso::BuiltEnso;
 use enso_build::enso::IrCaches;
+use enso_build::get_graal_version;
+use enso_build::get_java_major_version;
+use enso_build::paths;
 use enso_build::paths;
 use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
@@ -42,8 +45,8 @@ use sysinfo::SystemExt;
 
 
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
-const GRAAL_VERSION: Version = Version::new(21, 1, 0);
-const GRAAL_JAVA_VERSION: graalvm::JavaVersion = graalvm::JavaVersion::Java11;
+// const GRAAL_VERSION: Version = Version::new(21, 1, 0);
+// const GRAAL_JAVA_VERSION: graalvm::JavaVersion = graalvm::JavaVersion::Java11;
 const PARALLEL_ENSO_TESTS: AsyncPolicy = AsyncPolicy::Sequential;
 
 pub async fn download_project_templates(client: reqwest::Client, enso_root: PathBuf) -> Result {
@@ -355,6 +358,24 @@ async fn main() -> anyhow::Result<()> {
     let client = reqwest::Client::new();
     download_project_templates(client.clone(), enso_root.clone()).await?;
 
+    let build_sbt_content = std::fs::read_to_string(paths.build_sbt())?;
+    // Setup GraalVM
+    let graalvm = graalvm::GraalVM {
+        client:        &octocrab,
+        graal_version: get_graal_version(&build_sbt_content)?,
+        java_version:  get_java_major_version(&build_sbt_content)?,
+        os:            TARGET_OS,
+        arch:          TARGET_ARCH,
+    };
+    goodies.require(&graalvm).await?;
+    graalvm::Gu.require_present().await?;
+
+    // Setup SBT
+    goodies.require(&sbt::Sbt).await?;
+    ide_ci::programs::Sbt.require_present().await?;
+
+
+    graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
 
 
     let sbt = WithCwd::new(Sbt, &enso_root);

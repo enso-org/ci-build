@@ -98,7 +98,9 @@ pub fn find_asset_url_by_text<'a>(release: &'a Release, text: &str) -> anyhow::R
         .iter()
         .filter(|asset| asset.name.contains(&text))
         .max_by_key(|asset| asset.size)
-        .ok_or_else(|| anyhow!("Cannot find release asset by string {}", text))?;
+        .ok_or_else(|| {
+            anyhow!("Cannot find release asset by string {} in the release {}.", text, release.url)
+        })?;
     Ok(&matching_asset.browser_download_url)
 }
 

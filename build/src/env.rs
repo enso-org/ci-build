@@ -7,7 +7,7 @@ pub const ENSO_RELEASE_ID: &str = "ENSO_RELEASE_ID";
 pub const ENSO_BUILD_KIND: &str = "ENSO_BUILD_KIND";
 
 pub fn release_id() -> Result<ReleaseId> {
-    Ok(expect_var(ENSO_RELEASE_ID)?.parse::<u64>()?.into())
+    u64::parse_into(expect_var(ENSO_RELEASE_ID)?)
 }
 
 pub fn emit_release_id(id: ReleaseId) {

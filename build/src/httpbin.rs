@@ -39,8 +39,3 @@ impl Drop for Spawned {
 pub async fn get_and_spawn_httpbin_on_free_port() -> Result<Spawned> {
     get_and_spawn_httpbin(ide_ci::get_free_port()?).await
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-}

@@ -1,3 +1,4 @@
+#![feature(min_specialization)]
 #![feature(exit_status_error)]
 #![feature(option_result_contains)]
 #![feature(associated_type_defaults)]
@@ -69,6 +70,7 @@ pub mod prelude {
     pub use std::ffi::OsStr;
     pub use std::ffi::OsString;
     pub use std::fmt::Display;
+    pub use std::fmt::Formatter;
     pub use std::future::ready;
     pub use std::future::Future;
     pub use std::io::Read;
@@ -77,7 +79,7 @@ pub mod prelude {
     pub use std::iter::FromIterator;
     pub use std::path::Path;
     pub use std::path::PathBuf;
-    pub use std::str::FromStr;
+    pub use std::pin::Pin;
     pub use std::sync::Arc;
     pub use tokio::io::AsyncWriteExt;
     pub use url::Url;
@@ -88,9 +90,11 @@ pub mod prelude {
 
     pub use crate::anyhow::ResultExt;
     pub use crate::extensions::command::CommandExt;
+    pub use crate::extensions::from_string::FromString;
     pub use crate::extensions::iterator::TryIteratorExt;
     pub use crate::extensions::output::OutputExt;
     pub use crate::extensions::path::PathExt;
+    pub use crate::extensions::str::StrLikeExt;
     pub use crate::github::RepoPointer;
     pub use crate::goodie::Goodie;
     pub use crate::program::command::Command;
