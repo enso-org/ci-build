@@ -193,6 +193,13 @@ pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
     std::fs::set_permissions(path.as_ref(), permissions).anyhow_err()
 }
 
+#[cfg(target_os = "windows")]
+#[context("Failed to update permissions on `{}`", path.as_ref().display())]
+pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
+    // No-op on Windows.
+    Ok(())
+}
+
 
 #[cfg(test)]
 mod tests {
