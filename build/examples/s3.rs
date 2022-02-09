@@ -15,7 +15,6 @@ async fn main() -> Result {
         upload_acl: ObjectCannedAcl::PublicRead,
         key_prefix: "enso".into(),
     };
-    dbg!(bucket_context.get("").await?);
 
     let test_file = "test_file.exe";
     dbg!(
