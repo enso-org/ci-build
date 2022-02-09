@@ -17,7 +17,7 @@ pub fn find_in_text(text: &str) -> anyhow::Result<Version> {
         .find(text)
         .ok_or_else(|| anyhow!("Failed to find semver string within the following: {}", text))?;
     let version_text = matched.as_str();
-    Version::parse(version_text).map_err(<_>::into)
+    Version::from_str(version_text)
 }
 
 #[cfg(test)]

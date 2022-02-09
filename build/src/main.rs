@@ -18,6 +18,8 @@ use enso_build::args::BuildKind;
 use enso_build::args::WhatToDo;
 use enso_build::enso::BuiltEnso;
 use enso_build::enso::IrCaches;
+use enso_build::get_graal_version;
+use enso_build::get_java_major_version;
 use enso_build::paths;
 use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
@@ -30,6 +32,7 @@ use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies::graalvm;
 use ide_ci::goodies::sbt;
 use ide_ci::models::config::RepoContext;
+use ide_ci::platform::default_shell;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::git::Git;
 use ide_ci::programs::Flatc;
@@ -42,8 +45,8 @@ use sysinfo::SystemExt;
 
 
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
-const GRAAL_VERSION: Version = Version::new(21, 1, 0);
-const GRAAL_JAVA_VERSION: graalvm::JavaVersion = graalvm::JavaVersion::Java11;
+// const GRAAL_VERSION: Version = Version::new(21, 1, 0);
+// const GRAAL_JAVA_VERSION: graalvm::JavaVersion = graalvm::JavaVersion::Java11;
 const PARALLEL_ENSO_TESTS: AsyncPolicy = AsyncPolicy::Sequential;
 
 pub async fn download_project_templates(client: reqwest::Client, enso_root: PathBuf) -> Result {
@@ -254,18 +257,6 @@ async fn main() -> anyhow::Result<()> {
         ide_ci::programs::vs::apply_dev_environment().await?;
     }
 
-    // Setup GraalVM
-    let graalvm = graalvm::GraalVM {
-        client:        &octocrab,
-        graal_version: &GRAAL_VERSION,
-        java_version:  GRAAL_JAVA_VERSION,
-        os:            TARGET_OS,
-        arch:          TARGET_ARCH,
-    };
-    goodies.require(&graalvm).await?;
-    graalvm::Gu.require_present().await?;
-    graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
-
     // Setup SBT
     goodies.require(&sbt::Sbt).await?;
     ide_ci::programs::Sbt.require_present().await?;
@@ -305,44 +296,42 @@ async fn main() -> anyhow::Result<()> {
     let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
     println!("Build configuration: {:#?}", config);
 
-    if let WhatToDo::Run(run) = args.command {
-        return match run.command_pieces.as_slice() {
-            [head, tail @ ..] => {
-                let mut child = std::process::Command::new(head)
-                    .args(tail)
-                    .current_dir(paths.repo_root)
-                    .spawn()?;
-                child.wait()?.exit_ok()?;
-                Ok(())
-            }
-            args => bail!("Invalid argument list for a command to be run: {:?}", args),
-        };
-    }
-
-
-    let git = Git::new(&enso_root);
-    if config.clean_repo {
-        git.clean_xfd().await?;
-        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
-        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
-    }
-
     // Setup Tests on Windows
     if TARGET_OS == OS::Windows {
         std::env::set_var("CI_TEST_TIMEFACTOR", "2");
         std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
     }
 
-    //
+    let build_sbt_content = std::fs::read_to_string(paths.build_sbt())?;
+    // Setup GraalVM
+    let graalvm = graalvm::GraalVM {
+        client:        &octocrab,
+        graal_version: get_graal_version(&build_sbt_content)?,
+        java_version:  get_java_major_version(&build_sbt_content)?,
+        os:            TARGET_OS,
+        arch:          TARGET_ARCH,
+    };
+    goodies.require(&graalvm).await?;
+    graalvm::Gu.require_present().await?;
+    graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
 
-
-
-    //
-
-
-
-    // Disable TCP/UDP Offloading
-
+    if let WhatToDo::Run(run) = args.command {
+        let mut run = run.command_pieces.iter();
+        if let Some(program) = run.next() {
+            println!("Spawning program {}.", program.to_str().unwrap());
+            tokio::process::Command::new(program)
+                .args(run)
+                .current_dir(paths.repo_root)
+                .spawn()?
+                .wait()
+                .await?
+                .exit_ok()?;
+        } else {
+            println!("Spawning default shell.");
+            default_shell().run_shell()?.current_dir(paths.repo_root).run_ok().await?;
+        }
+        return Ok(());
+    }
 
     // Install Dependencies of the Simple Library Server
     ide_ci::programs::Npm
@@ -351,11 +340,17 @@ async fn main() -> anyhow::Result<()> {
         .await?
         .exit_ok()?;
 
+
     // Download Project Template Files
     let client = reqwest::Client::new();
     download_project_templates(client.clone(), enso_root.clone()).await?;
 
-
+    let git = Git::new(&enso_root);
+    if config.clean_repo {
+        git.clean_xfd().await?;
+        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
+        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
+    }
 
     let sbt = WithCwd::new(Sbt, &enso_root);
 

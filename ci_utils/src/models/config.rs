@@ -2,7 +2,6 @@
 
 use crate::prelude::*;
 use std::collections::HashMap;
-use std::str::FromStr;
 
 use crate::github::OrganizationPointer;
 use crate::github::RepoPointer;
@@ -103,7 +102,7 @@ impl Display for RepoContext {
 }
 
 /// Parse from strings in format "owner/name". Opposite of `Display`.
-impl FromStr for RepoContext {
+impl std::str::FromStr for RepoContext {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {

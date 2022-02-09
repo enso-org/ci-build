@@ -38,6 +38,10 @@ impl Shell for Cmd {
         command.arg(script_path.as_ref());
         Ok(command)
     }
+
+    fn run_shell(&self) -> Result<Command> {
+        self.cmd()
+    }
 }
 
 pub fn run_commands<'a, Cmds, Arg>(commands: Cmds) -> anyhow::Result<Command>

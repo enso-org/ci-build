@@ -191,6 +191,10 @@ impl Paths {
     pub fn version(&self) -> &Version {
         &self.triple.versions.version
     }
+
+    pub fn build_sbt(&self) -> PathBuf {
+        self.repo_root.join("build.sbt")
+    }
 }
 
 pub fn root_to_changelog(root: impl AsRef<Path>) -> PathBuf {

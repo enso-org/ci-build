@@ -1,34 +1,17 @@
 use crate::prelude::*;
 
+use crate::extensions::path::PathExt;
 use crate::goodie::GoodieDatabase;
 use crate::models::config::RepoContext;
 
-use crate::extensions::path::PathExt;
+use crate::programs::java;
 use platforms::TARGET_OS;
-use std::fmt::Formatter;
 
 pub struct Gu;
 
 impl Program for Gu {
     fn executable_name() -> &'static str {
         "gu"
-    }
-}
-
-pub enum JavaVersion {
-    Java8,
-    Java11,
-    Java17,
-}
-
-impl Display for JavaVersion {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Java8 => "java8",
-            Self::Java11 => "java11",
-            Self::Java17 => "java17",
-        }
-        .fmt(f)
     }
 }
 
@@ -57,8 +40,8 @@ const PACKAGE_PREFIX: &str = "graalvm-ce";
 
 pub struct GraalVM<'a> {
     pub client:        &'a Octocrab,
-    pub graal_version: &'a Version,
-    pub java_version:  JavaVersion,
+    pub graal_version: Version,
+    pub java_version:  java::LanguageVersion,
     pub os:            OS,
     pub arch:          Arch,
 }
@@ -92,6 +75,8 @@ impl<'a> GraalVM<'a> {
             other_arch => unimplemented!("Architecture `{}` is not supported!", other_arch),
         };
 
+        let java_version = format!("java{}", java_version.0);
+
         let platform_string =
             format!("{}-{}-{}-{}", PACKAGE_PREFIX, java_version, os_name, arch_name);
         let repo = RepoContext { owner: "graalvm".into(), name: "graalvm-ce-builds".into() };
@@ -106,7 +91,7 @@ impl<'a> Goodie for GraalVM<'a> {
     type Instance = Instance;
 
     async fn is_already_available(&self) -> Result<bool> {
-        Ok(Self::find_graal_version().await.as_ref().contains(&self.graal_version))
+        Ok(Self::find_graal_version().await.contains(&self.graal_version))
     }
 
     async fn lookup(&self, database: &GoodieDatabase) -> Result<Self::Instance> {
