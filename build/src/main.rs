@@ -679,8 +679,3 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
     ide_ci::archive::create(&paths.artifact_archive, [&paths.root]).await?;
     Ok(paths.artifact_archive.clone())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-}
