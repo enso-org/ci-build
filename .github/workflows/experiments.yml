@@ -18,8 +18,8 @@ jobs:
   # This workflow contains a single job called "build"
   build:
     runs-on:
-#      - Linux
-      - Windows
+      - Linux
+#      - Windows
       - self-hosted
 
     steps:
