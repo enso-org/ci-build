@@ -193,6 +193,27 @@ pub fn root_to_changelog(root: impl AsRef<Path>) -> PathBuf {
     }
 }
 
+/// The default value of `ENSO_DATA_DIRECTORY`.
+/// See: https://enso.org/docs/developer/enso/distribution/distribution.html#installed-enso-distribution-layout
+pub fn default_data_directory() -> PathBuf {
+    let project_path = match TARGET_OS {
+        OS::MacOS => "org.enso",
+        _ => "enso",
+    };
+    // We can unwrap, because all systems we target define data local directory.
+    dirs::data_local_dir().unwrap().join(project_path)
+}
+
+/// Get the `ENSO_DATA_DIRECTORY` path.
+pub fn data_directory() -> PathBuf {
+    std::env::var_os("ENSO_DATA_DIRECTORY").map_or_else(|| default_data_directory(), PathBuf::from)
+}
+
+/// Get the place where global IR caches are stored.
+pub fn cache_directory() -> PathBuf {
+    data_directory().join("cache")
+}
+
 pub trait GuiPaths {
     fn root(&self) -> &Path;
     fn temp(&self) -> &Path;
