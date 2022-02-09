@@ -46,6 +46,12 @@ jobs:
         with:
           path: ci-build
           clean: false
+      - uses: actions/github-script@v5
+        with:
+          script: |
+            core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
+            core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
+            core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
       - name: Run a multi-line script
         id: prepare-step
         run: cargo run --bin enso-build -- ../enso --kind nightly finish
@@ -86,6 +92,12 @@ jobs:
           conda-channels: anaconda, conda-forge
 
       # Runs a set of commands using the runners shell
+      - uses: actions/github-script@v5
+        with:
+          script: |
+            core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
+            core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
+            core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
       - name: Run a multi-line script
         run: cargo run --bin enso-build -- ../enso --kind nightly upload
         working-directory: ${{ github.workspace }}/ci-build
