@@ -19,7 +19,8 @@ jobs:
   build:
     runs-on:
 #      - Linux
-      - [Windows, self-hosted]
+      - Windows
+      - self-hosted
 
     steps:
       - run: echo "foo content" > foo.txt
