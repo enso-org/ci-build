@@ -1,4 +1,4 @@
-name: Manual command run
+name: Experimental command
 
 # Controls when the workflow will run
 on:
@@ -19,7 +19,7 @@ jobs:
   build:
     runs-on:
 #      - Linux
-      - Windows
+      - [Windows, self-hosted]
 
     steps:
       - run: echo "foo content" > foo.txt
@@ -36,7 +36,7 @@ jobs:
             core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
             core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
             core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
-      - run: cargo run --example aws
+      - run: cargo run --example s3
         env:
           RUST_BACKTRACE: 1
           AWS_ACCESS_KEY_ID: ${{ secrets.ARTEFACT_S3_ACCESS_KEY_ID }}
