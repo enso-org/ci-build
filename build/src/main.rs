@@ -7,6 +7,7 @@
 #![feature(async_stream)]
 #![feature(default_free_fn)]
 #![feature(map_first_last)]
+#![feature(bool_to_option)]
 
 pub use ide_ci::prelude;
 use ide_ci::prelude::*;
@@ -102,6 +103,21 @@ pub struct BuildConfiguration {
     build_bundles:         bool,
 }
 
+impl BuildConfiguration {
+    pub fn new(args: &Args) -> Self {
+        let mut config = match args.kind {
+            BuildKind::Dev => LOCAL,
+            BuildKind::Nightly => NIGHTLY,
+        };
+
+        // Update build configuration with a custom arg overrides.
+        if matches!(args.command, WhatToDo::Upload(_)) || args.bundle.contains(&true) {
+            config.build_bundles = true;
+        }
+        config
+    }
+}
+
 const LOCAL: BuildConfiguration = BuildConfiguration {
     clean_repo:            true,
     mode:                  BuildMode::Development,
@@ -122,9 +138,36 @@ const NIGHTLY: BuildConfiguration = BuildConfiguration {
     build_bundles:         false,
 };
 
+pub async fn deduce_versions(
+    octocrab: &Octocrab,
+    build_kind: BuildKind,
+    target_repo: &RepoContext,
+    root_path: impl AsRef<Path>,
+) -> Result<Versions> {
+    println!("Deciding on version to target.");
+    let changelog_path = enso_build::paths::root_to_changelog(&root_path);
+    let version = if let Ok(version) = enso_build::version::version_from_legacy_repo(root_path) {
+        println!("Using legacy version override from build.sbt: {}", version);
+        version
+    } else {
+        Version {
+            pre: match build_kind {
+                BuildKind::Dev => Versions::local_prerelease()?,
+                BuildKind::Nightly => Versions::nightly_prerelease(octocrab, target_repo).await?,
+            },
+            ..enso_build::version::base_version(&changelog_path)?
+        }
+    };
+    Ok(Versions::new(version))
+}
+
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // We want arg parsing to be the very first thing, so when user types wrong arguments, the error
+    // diagnostics will be first and only thing that is output.
+    let args: Args = argh::from_env();
+
     println!("Initial environment:");
 
     // We want arg parsing to be the very first thing, so when user types wrong arguments, the error
@@ -132,14 +175,7 @@ async fn main() -> anyhow::Result<()> {
     let args: Args = argh::from_env();
 
     for (key, value) in std::env::vars() {
-        // The below should not be needed - any secrets should be passed to us from the GitHub
-        // Actions as secrets already. However, as a failsafe, we'll mask anythinh that looks
-        // secretive.
-        if key.contains("SECRET") || key.contains("TOKEN") || key.contains("KEY") {
-            ide_ci::actions::workflow::mask_value(&value);
-        }
-
-        iprintln!("\t{key}={value}");
+        println!("\t{key}={value}");
     }
 
     let mut config = match args.kind {
@@ -150,29 +186,15 @@ async fn main() -> anyhow::Result<()> {
         config.build_bundles = true;
     }
 
+    // Get default build configuration for given build kind.
+    let config = BuildConfiguration::new(&args);
     let octocrab = setup_octocrab()?;
     let enso_root = args.target.clone();
     println!("Repository location: {}", enso_root.display());
 
-
     let repo = &args.repo;
 
-    println!("Deciding on version to target.");
-    let changelog_path = enso_build::paths::root_to_changelog(&enso_root);
-    let version = if let Ok(version) = enso_build::version::version_from_legacy_repo(&enso_root) {
-        println!("Using legacy version override from build.sbt: {}", version);
-        version
-    } else {
-        Version {
-            pre: match args.kind {
-                BuildKind::Dev => Versions::local_prerelease()?,
-                BuildKind::Nightly => Versions::nightly_prerelease(&octocrab, &repo).await?,
-            },
-            ..enso_build::version::base_version(&changelog_path)?
-        }
-    };
-
-    let versions = Versions::new(version);
+    let versions = deduce_versions(&octocrab, args.kind, &repo, &enso_root).await?;
     versions.publish()?;
     println!("Target version: {versions:?}.");
     let paths = Paths::new_version(&enso_root, versions.version.clone())?;
@@ -724,4 +746,139 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use enso_build::paths::GuiPaths;
+    use enso_build::paths::TargetTriple;
+    use ide_ci::io::download_and_extract;
+    use ide_ci::programs::Npm;
+    use regex::Regex;
+    use tempfile::TempDir;
+
+    /// Workaround fix by wdanilo, see: https://github.com/rustwasm/wasm-pack/issues/790
+    pub fn js_workaround_patcher(code: impl Into<String>) -> Result<String> {
+        let replacements = [
+            (r"if \(\(typeof URL.*}\);", "return imports"),
+            (r"if \(typeof module.*let result;", "return imports"),
+            (r"export default init;", "export default init"),
+        ];
+
+        let mut ret = code.into();
+        for (regex, replacement) in replacements {
+            let regex = Regex::new(regex).unwrap();
+            ret = regex.replace_all(&ret, replacement).to_string();
+        }
+
+        ret.push_str(
+            "\nexport function after_load(w,m) { wasm = w; init.__wbindgen_wasm_module = m;}",
+        );
+        Ok(ret)
+    }
+
+    pub fn patch_file(
+        path: impl AsRef<Path>,
+        patcher: impl FnOnce(String) -> Result<String>,
+    ) -> Result {
+        let original_content = std::fs::read_to_string(&path)?;
+        let patched_content = patcher(original_content)?;
+        std::fs::write(path, patched_content)?;
+        Ok(())
+    }
+
+    async fn download_js_assets(paths: &impl GuiPaths) -> Result {
+        let workdir = paths.root().join(".assets-temp");
+        ide_ci::io::reset_dir(&workdir)?;
+
+        let ide_assets_main_zip = "ide-assets-main.zip";
+        let ide_assets_url = "https://github.com/enso-org/ide-assets/archive/refs/heads/main.zip";
+        let unzipped_assets = workdir.join_many(["ide-assets-main", "content", "assets"]);
+        let js_lib_assets = paths.ide_desktop_lib_content().join("assets");
+        download_and_extract(ide_assets_url, workdir).await?;
+        Ok(())
+    }
+
+    async fn init(paths: &impl GuiPaths) -> Result {
+        if !paths.dist_build_init().exists() {
+            println!("Initialization");
+            println!("Installing build script dependencies.");
+            Npm.cmd()?.current_dir(paths.script()).arg("install").run_ok().await?;
+            ide_ci::io::create_dir_if_missing(paths.dist())?;
+            std::fs::write(paths.dist_build_init(), "")?;
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn build_ide() -> Result {
+        #[derive(Debug, Shrinkwrap)]
+        pub struct GuiPathsData {
+            #[shrinkwrap(main_field)]
+            pub root: PathBuf,
+            pub temp: TempDir,
+        }
+
+        impl GuiPaths for GuiPathsData {
+            fn root(&self) -> &Path {
+                &self.root
+            }
+
+            fn temp(&self) -> &Path {
+                self.temp.path()
+            }
+        }
+
+        let root_path = PathBuf::from("H:/NBO/enso5");
+        let paths = GuiPathsData { root: root_path.clone(), temp: TempDir::new()? };
+        let versions = Versions::new(Version::parse("2022.1.1-nightly.2022-02-03")?);
+        let target = TargetTriple::new(versions);
+        let is_dev = false;
+
+        init(&paths).await?;
+
+        let target_crate = "app/gui";
+        let env = std::env::vars().filter(|(name, _val)| !name.starts_with("CARGO"));
+
+        // let mut cmd = tokio::process::Command::new("wasm-pack");
+        // cmd.env_remove("RUSTUP_TOOLCHAIN");
+        // cmd.args([
+        //     "build",
+        //     "--target",
+        //     "web",
+        //     "--out-dir",
+        //     &paths.wasm().as_os_str().to_str().unwrap(),
+        //     "--out-name",
+        //     "ide",
+        //     target_crate,
+        // ])
+        // .current_dir(root_path)
+        // .spawn()?
+        // .wait()
+        // .await?
+        // .exit_ok()?;
+        //
+        //
+        // patch_file(paths.wasm_glue(), js_workaround_patcher)?;
+        // std::fs::rename(paths.wasm_main_raw(), paths.wasm_main())?;
+
+        // if (!argv.dev) {
+        //     console.log('Minimizing the WASM binary.')
+        //                 await gzip(paths.wasm.main, paths.wasm.mainGz)
+        //
+        //     const limitMb = 4.6
+        //     await checkWasmSize(paths.wasm.mainGz, limitMb)
+        // }
+        // Copy WASM files from temporary directory to Webpack's `dist` directory.
+        // ide_ci::io::copy(paths.wasm(), paths.dist_wasm())?;
+
+
+
+        // // JS PART
+        Npm.args(["run", "install"])?.current_dir(paths.ide_desktop()).run_ok().await?;
+        download_js_assets(&paths).await?;
+        enso_build::project_manager::ensure_present(paths.dist(), &target).await?;
+
+        Npm.cmd()?.current_dir(paths.ide_desktop()).args(["run", "dist"]).run_ok().await?;
+
+        println!("{}", paths.temp.path().display());
+        std::mem::forget(paths.temp);
+        Ok(())
+    }
 }

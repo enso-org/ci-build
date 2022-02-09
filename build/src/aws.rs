@@ -147,11 +147,3 @@ pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Resul
     bucket_context.put_yaml("manifest.yaml", &new_manifest).await?;
     Ok(())
 }
-
-#[tokio::test]
-async fn aaa() -> Result {
-    let repo = RepoContext::from_str("enso-org/enso")?;
-    let paths = Paths::new_version(r"H:\NBO\enso", Version::parse("2022.1.1-nightly.2022-01-28")?)?;
-    update_manifest(&repo, &paths).await?;
-    Ok(())
-}

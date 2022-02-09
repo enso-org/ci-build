@@ -25,6 +25,7 @@ futures = "0.3.17"
 futures-util = "0.3.17"
 glob = "0.3.0"
 graphql_client = "0.10.0"
+handlebars = "4.2.1"
 ide-ci = {path = "../ci_utils"}
 ifmt = "0.3.3"
 indexmap = "1.7.0"
@@ -33,7 +34,7 @@ lazy_static = "1.4.0"
 nix = "0.23.0"
 octocrab = { git = "https://github.com/enso-org/octocrab" }
 path-absolutize = "3.0.11"
-platforms = "2.0.0"
+platforms = {version= "2.0.0", features= ["serde"]}
 pin-project = "1.0.8"
 port_check = "0.1.5"
 pulldown-cmark = "0.9.1"

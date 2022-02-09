@@ -1,5 +1,6 @@
 #![feature(bool_to_option)]
 #![feature(exit_status_error)]
+#![feature(option_result_contains)]
 
 use crate::prelude::*;
 
@@ -18,6 +19,7 @@ pub mod env;
 pub mod httpbin;
 pub mod paths;
 pub mod postgres;
+pub mod project_manager;
 pub mod version;
 
 /// Get version of Enso from the `build.sbt` file contents.

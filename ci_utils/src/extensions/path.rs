@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use serde::de::DeserializeOwned;
 
 pub trait PathExt: AsRef<Path> {
     fn join_many<P: AsRef<Path>>(&self, segments: impl IntoIterator<Item = P>) -> PathBuf {
@@ -26,6 +27,17 @@ pub trait PathExt: AsRef<Path> {
         ret.push(".");
         ret.push(extension.as_ref());
         ret.into()
+    }
+
+    #[context("Failed to deserialize file `{}` as type `{}`.", self.as_ref().display(), std::any::type_name::<T>())]
+    fn read_to_json<T: DeserializeOwned>(&self) -> Result<T> {
+        let file = std::fs::File::open(self)?;
+        serde_json::from_reader(file).anyhow_err()
+    }
+
+    fn write_as_json<T: Serialize>(&self, value: &T) -> Result {
+        let file = std::fs::File::create(self)?;
+        serde_json::to_writer(file, value).anyhow_err()
     }
 
     fn as_str(&self) -> &str {
