@@ -29,6 +29,7 @@ use ide_ci::future::AsyncPolicy;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies::graalvm;
 use ide_ci::goodies::sbt;
+use ide_ci::models::config::RepoContext;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::git::Git;
 use ide_ci::programs::Flatc;
@@ -169,24 +170,12 @@ async fn main() -> anyhow::Result<()> {
     let args: Args = argh::from_env();
 
     println!("Initial environment:");
-
-    // We want arg parsing to be the very first thing, so when user types wrong arguments, the error
-    // diagnostics will be first and only thing that is output.
-    let args: Args = argh::from_env();
-
     for (key, value) in std::env::vars() {
         println!("\t{key}={value}");
     }
+    println!("\n===End of the environment dump===\n");
 
-    let mut config = match args.kind {
-        BuildKind::Dev => LOCAL,
-        BuildKind::Nightly => NIGHTLY,
-    };
-    if matches!(args.command, WhatToDo::Upload(_)) || args.bundle.contains(&true) {
-        config.build_bundles = true;
-    }
-
-    // Get default build configuration for given build kind.
+    // Get default build configuration for a given build kind.
     let config = BuildConfiguration::new(&args);
     let octocrab = setup_octocrab()?;
     let enso_root = args.target.clone();

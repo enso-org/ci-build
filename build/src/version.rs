@@ -31,7 +31,7 @@ pub fn is_nightly_release(release: &Release) -> bool {
 
 
 
-#[derive(Clone, Debug, Serialize, Deserialize, Shrinkwrap)]
+#[derive(Clone, Debug, Serialize, Deserialize, Shrinkwrap, PartialEq)]
 pub struct Versions {
     pub version:      Version,
     #[shrinkwrap(main_field)]

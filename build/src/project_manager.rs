@@ -1,7 +1,5 @@
 use crate::prelude::*;
 
-// use octocrab::Error::Url;
-use crate::paths::Paths;
 use crate::paths::TargetTriple;
 use crate::paths::ARCHIVE_EXTENSION;
 
