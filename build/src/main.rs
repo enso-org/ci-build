@@ -21,7 +21,6 @@ use enso_build::enso::IrCaches;
 use enso_build::get_graal_version;
 use enso_build::get_java_major_version;
 use enso_build::paths;
-use enso_build::paths;
 use enso_build::paths::ComponentPaths;
 use enso_build::paths::Paths;
 use enso_build::retrieve_github_access_token;
@@ -257,18 +256,6 @@ async fn main() -> anyhow::Result<()> {
         ide_ci::programs::vs::apply_dev_environment().await?;
     }
 
-    // Setup GraalVM
-    let graalvm = graalvm::GraalVM {
-        client:        &octocrab,
-        graal_version: &GRAAL_VERSION,
-        java_version:  GRAAL_JAVA_VERSION,
-        os:            TARGET_OS,
-        arch:          TARGET_ARCH,
-    };
-    goodies.require(&graalvm).await?;
-    graalvm::Gu.require_present().await?;
-    graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
-
     // Setup SBT
     goodies.require(&sbt::Sbt).await?;
     ide_ci::programs::Sbt.require_present().await?;
@@ -336,14 +323,6 @@ async fn main() -> anyhow::Result<()> {
         std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
     }
 
-    //
-
-
-
-    //
-
-
-
     // Disable TCP/UDP Offloading
 
 
@@ -369,12 +348,6 @@ async fn main() -> anyhow::Result<()> {
     };
     goodies.require(&graalvm).await?;
     graalvm::Gu.require_present().await?;
-
-    // Setup SBT
-    goodies.require(&sbt::Sbt).await?;
-    ide_ci::programs::Sbt.require_present().await?;
-
-
     graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
 
 
