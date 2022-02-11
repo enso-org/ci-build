@@ -137,6 +137,7 @@ pub fn version_from_legacy_repo(repo_root: impl AsRef<Path>) -> Result<Version> 
     crate::get_enso_version(&build_sbt_contents)
 }
 
+#[context("Deducing version using changelog file: {}", changelog_path.as_ref().display())]
 pub fn base_version(changelog_path: impl AsRef<Path>) -> Result<Version> {
     if let Ok(from_env) = version_from_env() {
         return Ok(from_env);

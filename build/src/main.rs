@@ -183,6 +183,8 @@ async fn main() -> anyhow::Result<()> {
     let octocrab = setup_octocrab()?;
     let enso_root = args.target.clone();
     println!("Repository location: {}", enso_root.display());
+    let enso_root = args.target.canonicalize()?;
+    println!("Canonical repository location: {}", enso_root.display());
 
     let repo = &args.repo;
 
@@ -301,6 +303,11 @@ async fn main() -> anyhow::Result<()> {
         std::env::set_var("CI_TEST_TIMEFACTOR", "2");
         std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
     }
+
+    // if TARGET_OS == OS::Linux {
+    //     let musl = ide_ci::goodies::musl::Musl;
+    //     goodies.require(&musl).await?;
+    // }
 
     let build_sbt_content = std::fs::read_to_string(paths.build_sbt())?;
     // Setup GraalVM
