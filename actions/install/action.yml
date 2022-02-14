@@ -31,7 +31,7 @@ runs:
           console.warn(process.env);
           console.warn(context);
           core.addPath(String.raw`${{ runner.temp }}/bin`);
-          let args = ['install', '--root', context.runner.temp, '--bins', '--path', os.path.join(context.github.action_path, '../../build')]; 
+          let args = ['install', '--root', ${{ runner.temp }}, '--bins', '--path', os.path.join(context.github.action_path, '../../build')]; 
           let opts = {'cwd': String.raw`${{ github.workspace }}/ci-build`};
           await exec.exec('cargo', args, opts);
           core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
