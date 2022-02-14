@@ -734,50 +734,50 @@ mod tests {
     use enso_build::paths::TargetTriple;
     use ide_ci::io::download_and_extract;
     use ide_ci::programs::Npm;
-    use regex::Regex;
+    // use regex::Regex;
     use tempfile::TempDir;
 
-    /// Workaround fix by wdanilo, see: https://github.com/rustwasm/wasm-pack/issues/790
-    pub fn js_workaround_patcher(code: impl Into<String>) -> Result<String> {
-        let replacements = [
-            (r"if \(\(typeof URL.*}\);", "return imports"),
-            (r"if \(typeof module.*let result;", "return imports"),
-            (r"export default init;", "export default init"),
-        ];
+    // /// Workaround fix by wdanilo, see: https://github.com/rustwasm/wasm-pack/issues/790
+    // pub fn js_workaround_patcher(code: impl Into<String>) -> Result<String> {
+    //     let replacements = [
+    //         (r"if \(\(typeof URL.*}\);", "return imports"),
+    //         (r"if \(typeof module.*let result;", "return imports"),
+    //         (r"export default init;", "export default init"),
+    //     ];
+    //
+    //     let mut ret = code.into();
+    //     for (regex, replacement) in replacements {
+    //         let regex = Regex::new(regex).unwrap();
+    //         ret = regex.replace_all(&ret, replacement).to_string();
+    //     }
+    //
+    //     ret.push_str(
+    //         "\nexport function after_load(w,m) { wasm = w; init.__wbindgen_wasm_module = m;}",
+    //     );
+    //     Ok(ret)
+    // }
+    //
+    // pub fn patch_file(
+    //     path: impl AsRef<Path>,
+    //     patcher: impl FnOnce(String) -> Result<String>,
+    // ) -> Result {
+    //     let original_content = std::fs::read_to_string(&path)?;
+    //     let patched_content = patcher(original_content)?;
+    //     std::fs::write(path, patched_content)?;
+    //     Ok(())
+    // }
 
-        let mut ret = code.into();
-        for (regex, replacement) in replacements {
-            let regex = Regex::new(regex).unwrap();
-            ret = regex.replace_all(&ret, replacement).to_string();
-        }
-
-        ret.push_str(
-            "\nexport function after_load(w,m) { wasm = w; init.__wbindgen_wasm_module = m;}",
-        );
-        Ok(ret)
-    }
-
-    pub fn patch_file(
-        path: impl AsRef<Path>,
-        patcher: impl FnOnce(String) -> Result<String>,
-    ) -> Result {
-        let original_content = std::fs::read_to_string(&path)?;
-        let patched_content = patcher(original_content)?;
-        std::fs::write(path, patched_content)?;
-        Ok(())
-    }
-
-    async fn download_js_assets(paths: &impl GuiPaths) -> Result {
-        let workdir = paths.root().join(".assets-temp");
-        ide_ci::io::reset_dir(&workdir)?;
-
-        let ide_assets_main_zip = "ide-assets-main.zip";
-        let ide_assets_url = "https://github.com/enso-org/ide-assets/archive/refs/heads/main.zip";
-        let unzipped_assets = workdir.join_many(["ide-assets-main", "content", "assets"]);
-        let js_lib_assets = paths.ide_desktop_lib_content().join("assets");
-        download_and_extract(ide_assets_url, workdir).await?;
-        Ok(())
-    }
+    // async fn download_js_assets(paths: &impl GuiPaths) -> Result {
+    //     let workdir = paths.root().join(".assets-temp");
+    //     ide_ci::io::reset_dir(&workdir)?;
+    //
+    //     // let ide_assets_main_zip = "ide-assets-main.zip";
+    //     let ide_assets_url = "https://github.com/enso-org/ide-assets/archive/refs/heads/main.zip";
+    //     // let unzipped_assets = workdir.join_many(["ide-assets-main", "content", "assets"]);
+    //     // let js_lib_assets = paths.ide_desktop_lib_content().join("assets");
+    //     download_and_extract(ide_assets_url, workdir).await?;
+    //     Ok(())
+    // }
 
     async fn init(paths: &impl GuiPaths) -> Result {
         if !paths.dist_build_init().exists() {
@@ -856,7 +856,7 @@ mod tests {
 
         // // JS PART
         Npm.args(["run", "install"])?.current_dir(paths.ide_desktop()).run_ok().await?;
-        download_js_assets(&paths).await?;
+        //download_js_assets(&paths).await?;
         enso_build::project_manager::ensure_present(paths.dist(), &target).await?;
 
         Npm.cmd()?.current_dir(paths.ide_desktop()).args(["run", "dist"]).run_ok().await?;
