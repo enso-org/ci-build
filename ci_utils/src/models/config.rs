@@ -113,8 +113,6 @@ impl std::str::FromStr for RepoContext {
     }
 }
 
-
-
 /// Description of the runners deployment for a specific GitHub repository.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]

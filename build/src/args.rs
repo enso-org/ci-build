@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use anyhow::Context;
 
 use ide_ci::models::config::RepoContext;
 use strum::EnumString;
@@ -70,8 +69,12 @@ pub fn default_kind() -> BuildKind {
     crate::env::build_kind().unwrap_or(BuildKind::Dev)
 }
 
-pub fn default_repo() -> RepoContext {
-    ide_ci::actions::env::repository().context("Fallback for the missing --repo argument.").unwrap()
+pub fn default_repo() -> Option<RepoContext> {
+    ide_ci::actions::env::repository().ok()
+}
+
+pub fn parse_repo_context(value: &str) -> std::result::Result<Option<RepoContext>, String> {
+    RepoContext::from_str(value).map(Some).map_err(|e| e.to_string())
 }
 
 /// Build, test and packave Enso Engine.
@@ -90,7 +93,7 @@ pub struct Args {
     #[argh(option)]
     pub bundle:     Option<bool>,
     /// repository that will be targeted for the release info purposes
-    #[argh(option)]
+    #[argh(option, from_str_fn(parse_repo_context), default = "default_repo()")]
     pub repo:       Option<RepoContext>,
     #[argh(subcommand)]
     pub command:    WhatToDo,

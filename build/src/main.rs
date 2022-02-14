@@ -13,6 +13,7 @@ pub use ide_ci::prelude;
 use ide_ci::prelude::*;
 
 use anyhow::Context;
+use enso_build::args::default_repo;
 use enso_build::args::Args;
 use enso_build::args::BuildKind;
 use enso_build::args::WhatToDo;
@@ -153,14 +154,15 @@ pub async fn deduce_versions(
     let version = Version {
         pre: match build_kind {
             BuildKind::Dev => Versions::local_prerelease()?,
-            BuildKind::Nightly =>
-                Versions::nightly_prerelease(
-                    octocrab,
-                    target_repo.ok_or_else(|| anyhow!(
-                        "Missing target repository designation in the release mode. Please provide `--repo` option or `GITHUB_REPOSITORY` repository." 
-                    ))?,
-                )
-                .await?,
+            BuildKind::Nightly => {
+                let repo = target_repo.cloned().or_else(|| default_repo()).ok_or_else(|| {
+                    anyhow!(
+                        "Missing target repository designation in the release mode. \
+                        Please provide `--repo` option or `GITHUB_REPOSITORY` repository."
+                    )
+                })?;
+                Versions::nightly_prerelease(octocrab, &repo).await?
+            }
         },
         ..enso_build::version::base_version(&changelog_path)?
     };
