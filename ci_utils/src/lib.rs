@@ -11,6 +11,7 @@
 #![feature(default_free_fn)]
 #![feature(trait_alias)]
 #![feature(io_error_other)]
+#![feature(bool_to_option)]
 
 pub mod actions;
 pub mod anyhow;

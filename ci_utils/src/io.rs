@@ -183,6 +183,15 @@ pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<
     }
 }
 
+pub fn expect_dir(path: impl AsRef<Path>) -> Result {
+    path.as_ref().is_dir().then_some(()).context(anyhow!("{} is not a directory.", path.as_ref().display()))
+}
+
+
+pub fn expect_file(path: impl AsRef<Path>) -> Result {
+    path.as_ref().is_file().then_some(()).context(anyhow!("{} is not a files.", path.as_ref().display()))
+}
+
 #[cfg(not(target_os = "windows"))]
 #[context("Failed to update permissions on `{}`", path.as_ref().display())]
 pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
