@@ -20,6 +20,10 @@ runs:
         update-conda: false
         conda-channels: anaconda, conda-forge
 
+    - uses: actions/checkout@v2
+      with:
+        path: enso
+
     # Runs a set of commands using the runners shell
     - uses: actions/github-script@v6
       with:
