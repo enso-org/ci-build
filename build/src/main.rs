@@ -222,7 +222,7 @@ async fn main() -> anyhow::Result<()> {
     let octocrab = setup_octocrab()?;
     let enso_root = args.target.clone();
     println!("Repository location: {}", enso_root.display());
-    let enso_root = args.target.absolutize()?;
+    let enso_root = args.target.absolutize()?.to_path_buf();
     println!("Canonical repository location: {}", enso_root.display());
 
     let release =
