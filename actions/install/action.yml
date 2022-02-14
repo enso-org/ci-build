@@ -5,10 +5,6 @@ inputs:
     description: Whether the local build script repository should be cleaned.
     required: true
     default: 'false'
-  ref:
-    description: Reference of the ci-build repository to use.
-    required: true
-    default: 'deployed'
 
 runs:
   using: "composite"

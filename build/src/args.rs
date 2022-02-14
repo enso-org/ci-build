@@ -35,19 +35,19 @@ pub struct Build {}
 
 /// Create a new draft release on GitHub and emit relevant information to the CI environment.
 #[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "prepare releaqse")]
+#[argh(subcommand, name = "create-release")]
 pub struct Create {}
 
 /// Build all the release packages and bundles and upload them to GitHub release. Must run with
 /// environment adjusted by the `prepare` command.
 #[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "upload")]
+#[argh(subcommand, name = "upload-asset")]
 pub struct Upload {}
 
 /// Publish the release.  Must run with environment adjusted by the `prepare` command. Typically
 /// called once after platform-specific `upload` commands are done.
 #[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "finish")]
+#[argh(subcommand, name = "publish-release")]
 pub struct Publish {}
 
 /// Run an arbitrary command with the build environment set (like `PATH`).

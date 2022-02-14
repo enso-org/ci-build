@@ -25,7 +25,7 @@ jobs:
 
       - name: Run a multi-line script
         id: prepare-step
-        run: cargo run --bin enso-build -- ../enso --kind nightly prepare
+        run: cargo run --bin enso-build -- ../enso --kind nightly create-release
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -54,7 +54,7 @@ jobs:
             core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
       - name: Run a multi-line script
         id: prepare-step
-        run: cargo run --bin enso-build -- ../enso --kind nightly finish
+        run: cargo run --bin enso-build -- ../enso --kind nightly publish-release
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -99,7 +99,7 @@ jobs:
             core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
             core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
       - name: Run a multi-line script
-        run: cargo run --bin enso-build -- ../enso --kind nightly upload
+        run: cargo run --bin enso-build -- ../enso --kind nightly upload-asset
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
