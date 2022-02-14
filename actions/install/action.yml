@@ -34,7 +34,7 @@ runs:
           core.addPath(String.raw`${{ runner.temp }}/bin`);
           let args = ['install', '--bins', 
             '--root', process.env["RUNNER_TEMP"], 
-            '--path', context.github.action_path + '/../../build')]; 
+            '--path', context.github.action_path + '/../../build']; 
           let opts = {'cwd': String.raw`${{ github.workspace }}/ci-build`};
           await exec.exec('cargo', args, opts);
           core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
