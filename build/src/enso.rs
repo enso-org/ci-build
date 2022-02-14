@@ -70,7 +70,8 @@ impl BuiltEnso {
         let _postgres = match TARGET_OS {
             OS::Linux => {
                 let runner_context_string = crate::env::runner_container_name()
-                    .unwrap_or_else(|_| crate::env::ide_ci::actions::env::runner_name())
+                    .map(|name| name.0)
+                    .or_else(|_| ide_ci::actions::env::runner_name())
                     .unwrap_or_else(|_| Uuid::new_v4().to_string());
                 // GH-hosted runners are named like "GitHub Actions 10". Spaces are not allowed in
                 // the container name.

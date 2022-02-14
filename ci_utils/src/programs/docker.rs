@@ -6,6 +6,7 @@ use shrinkwraprs::Shrinkwrap;
 use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::process::Stdio;
+use std::str::FromStr;
 
 #[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Hash)]
 pub enum NetworkDriver {
@@ -454,6 +455,14 @@ pub struct ImageId(pub String);
 
 #[derive(Clone, Debug, Display, Shrinkwrap)]
 pub struct ContainerId(pub String);
+
+impl FromStr for ContainerId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(ContainerId(s.into()))
+    }
+}
 
 #[cfg(test)]
 mod tests {
