@@ -18,6 +18,7 @@ impl Program for Npm {
 
 impl Npm {
     pub fn install(&self, path: impl AsRef<Path>) -> anyhow::Result<Command> {
+        println!("Got path: {}", path.as_ref().display());
         // We must strip any UNC prefix, because CMD does not support having it as a current
         // directory, and npm is effectively a CMD script wrapping the actual program. See:
         // https://github.com/npm/cli/issues/3349

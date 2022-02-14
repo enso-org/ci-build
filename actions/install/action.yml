@@ -32,11 +32,12 @@ runs:
           console.warn(process.env);
           console.warn(context);
           core.addPath(String.raw`${{ runner.temp }}/bin`);
+          let script_repo_root = path.join(process.env["GITHUB_ACTION_PATH"], '/../../')
           let args = ['install', '--bins', 
             '--root', process.env["RUNNER_TEMP"], 
-            '--path', path.join(process.env["GITHUB_ACTION_PATH"], '/../../build')
+            '--path', path.join(script_repo_root, 'build')
           ]; 
-          let opts = {'cwd': String.raw`${{ github.workspace }}/ci-build`};
+          let opts = {'cwd': script_repo_root};
           await exec.exec('cargo', args, opts);
           core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
           core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
