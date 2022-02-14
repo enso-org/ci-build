@@ -145,26 +145,65 @@ const NIGHTLY: BuildConfiguration = BuildConfiguration {
 pub async fn deduce_versions(
     octocrab: &Octocrab,
     build_kind: BuildKind,
-    target_repo: &RepoContext,
+    target_repo: Option<&RepoContext>,
     root_path: impl AsRef<Path>,
 ) -> Result<Versions> {
     println!("Deciding on version to target.");
     let changelog_path = enso_build::paths::root_to_changelog(&root_path);
-    let version = if let Ok(version) = enso_build::version::version_from_legacy_repo(root_path) {
-        println!("Using legacy version override from build.sbt: {}", version);
-        version
-    } else {
-        Version {
-            pre: match build_kind {
-                BuildKind::Dev => Versions::local_prerelease()?,
-                BuildKind::Nightly => Versions::nightly_prerelease(octocrab, target_repo).await?,
-            },
-            ..enso_build::version::base_version(&changelog_path)?
-        }
+    let version = Version {
+        pre: match build_kind {
+            BuildKind::Dev => Versions::local_prerelease()?,
+            BuildKind::Nightly =>
+                Versions::nightly_prerelease(
+                    octocrab,
+                    target_repo.ok_or_else(|| anyhow!(
+                        "Missing target repository designation in the release mode. Please provide `--repo` option or `GITHUB_REPOSITORY` repository." 
+                    ))?,
+                )
+                .await?,
+        },
+        ..enso_build::version::base_version(&changelog_path)?
     };
     Ok(Versions::new(version))
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub enum ReleaseCommand {
+    Create,
+    Upload,
+    Publish,
+}
+
+impl TryFrom<WhatToDo> for ReleaseCommand {
+    type Error = anyhow::Error;
+
+    fn try_from(value: WhatToDo) -> Result<Self> {
+        Ok(match value {
+            WhatToDo::Create(_) => ReleaseCommand::Create,
+            WhatToDo::Upload(_) => ReleaseCommand::Upload,
+            WhatToDo::Publish(_) => ReleaseCommand::Publish,
+            _ => bail!("Not a release command: {}", value),
+        })
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct ReleaseOperation {
+    pub command: ReleaseCommand,
+    pub repo:    RepoContext,
+}
+
+impl ReleaseOperation {
+    pub fn new(args: &Args) -> Result<Self> {
+        let command = args.command.clone().try_into()?;
+        let repo = match args.repo.clone() {
+            Some(repo) => repo,
+            None => ide_ci::actions::env::repository()?,
+        };
+
+        Ok(Self { command, repo })
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -186,53 +225,57 @@ async fn main() -> anyhow::Result<()> {
     let enso_root = args.target.canonicalize()?;
     println!("Canonical repository location: {}", enso_root.display());
 
-    let repo = &args.repo;
+    let release =
+        if args.command.is_release_command() { Some(ReleaseOperation::new(&args)?) } else { None };
 
-    let versions = deduce_versions(&octocrab, args.kind, &repo, &enso_root).await?;
+    let versions =
+        deduce_versions(&octocrab, args.kind, release.as_ref().map(|r| &r.repo), &enso_root)
+            .await?;
     versions.publish()?;
     println!("Target version: {versions:?}.");
     let paths = Paths::new_version(&enso_root, versions.version.clone())?;
 
-    match args.command {
-        WhatToDo::Prepare(_) => {
-            let commit = ide_ci::actions::env::commit()?;
-            let latest_changelog_body =
-                enso_build::changelog::retrieve_unreleased_release_notes(paths.changelog())?;
+    match release.as_ref() {
+        Some(ReleaseOperation { command, repo }) => match command {
+            ReleaseCommand::Create => {
+                let commit = ide_ci::actions::env::commit()?;
+                let latest_changelog_body =
+                    enso_build::changelog::retrieve_unreleased_release_notes(paths.changelog())?;
 
-            println!("Preparing release {} for commit {}", versions.version, commit);
+                println!("Preparing release {} for commit {}", versions.version, commit);
 
-            let release = repo
-                .repos(&octocrab)
-                .releases()
-                .create(&versions.tag())
-                .target_commitish(&commit)
-                .name(&versions.pretty_name())
-                .body(&latest_changelog_body.contents)
-                .prerelease(true)
-                .draft(true)
-                .send()
-                .await?;
+                let release = repo
+                    .repos(&octocrab)
+                    .releases()
+                    .create(&versions.tag())
+                    .target_commitish(&commit)
+                    .name(&versions.pretty_name())
+                    .body(&latest_changelog_body.contents)
+                    .prerelease(true)
+                    .draft(true)
+                    .send()
+                    .await?;
 
-            enso_build::env::emit_release_id(release.id);
-            return Ok(());
-        }
-        WhatToDo::Finish(_) => {
-            let release_id = enso_build::env::release_id()?;
-            println!("Looking for release with id {release_id} on github.");
-            let release = repo.repos(&octocrab).releases().get_by_id(release_id).await?;
-            println!("Found the target release, will publish it.");
-            repo.repos(&octocrab).releases().update(release.id.0).draft(false).send().await?;
-            iprintln!("Done. Release URL: {release.url}");
+                enso_build::env::emit_release_id(release.id);
+                return Ok(());
+            }
+            ReleaseCommand::Publish => {
+                let release_id = enso_build::env::release_id()?;
+                println!("Looking for release with id {release_id} on github.");
+                let release = repo.repos(&octocrab).releases().get_by_id(release_id).await?;
+                println!("Found the target release, will publish it.");
+                repo.repos(&octocrab).releases().update(release.id.0).draft(false).send().await?;
+                iprintln!("Done. Release URL: {release.url}");
 
-            paths.download_edition_file_artifact().await?;
-            println!("Updating edition in the AWS S3.");
-            enso_build::aws::update_manifest(repo, &paths).await?;
+                paths.download_edition_file_artifact().await?;
+                println!("Updating edition in the AWS S3.");
+                enso_build::aws::update_manifest(repo, &paths).await?;
 
-            return Ok(());
-        }
-        // We don't use catch-all `_` arm, as we want to consider this point each time a new variant
-        // is added.
-        WhatToDo::Build(_) | WhatToDo::Upload(_) | WhatToDo::Run(_) => {}
+                return Ok(());
+            }
+            ReleaseCommand::Upload => {}
+        },
+        None => {}
     };
 
     if ide_ci::run_in_ci() {
@@ -569,34 +612,38 @@ async fn main() -> anyhow::Result<()> {
         // Launcher bundle
         let bundles = create_bundles(&paths).await?;
 
-        if matches!(args.command, WhatToDo::Upload(_)) {
-            // Make packages.
-            let packages = create_packages(&paths).await?;
+        match release.as_ref() {
+            Some(ReleaseOperation { command, repo }) if *command == ReleaseCommand::Upload => {
+                // Make packages.
+                let packages = create_packages(&paths).await?;
 
-            let release_id = enso_build::env::release_id()?;
-            let repo_handler = repo.repos(&octocrab);
+                let release_id = enso_build::env::release_id()?;
+                let repo_handler = repo.repos(&octocrab);
 
-            // let release_name = format!("Enso {}", paths.triple.version);
-            let tag_name = versions.to_string();
+                // let release_name = format!("Enso {}", paths.triple.version);
+                let tag_name = versions.to_string();
 
-            let releases_handler = repo_handler.releases();
-            // let triple = paths.triple.clone();
-            let release = releases_handler
-                .get_by_id(release_id)
-                .await
-                .context(format!("Failed to find release by tag {tag_name}."))?;
+                let releases_handler = repo_handler.releases();
+                // let triple = paths.triple.clone();
+                let release = releases_handler
+                    .get_by_id(release_id)
+                    .await
+                    .context(format!("Failed to find release by tag {tag_name}."))?;
 
-            let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
-            for package in packages {
-                ide_ci::github::release::upload_asset(repo, &client, release.id, package).await?;
+                let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
+                for package in packages {
+                    ide_ci::github::release::upload_asset(repo, &client, release.id, package)
+                        .await?;
+                }
+                for bundle in bundles {
+                    ide_ci::github::release::upload_asset(repo, &client, release.id, bundle)
+                        .await?;
+                }
             }
-            for bundle in bundles {
-                ide_ci::github::release::upload_asset(repo, &client, release.id, bundle).await?;
+            _ => {
+                package_component(&paths.engine).await?;
             }
         }
-    } else {
-        // Perhaps won't be needed with the new artifact API.
-        package_component(&paths.engine).await?;
     }
 
     Ok(())

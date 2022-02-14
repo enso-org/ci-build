@@ -4,16 +4,29 @@ use anyhow::Context;
 use ide_ci::models::config::RepoContext;
 use strum::EnumString;
 
-#[derive(FromArgs, Clone, PartialEq, Debug)]
+#[derive(FromArgs, Clone, PartialEq, Debug, strum::Display)]
 #[argh(subcommand)]
 pub enum WhatToDo {
     Build(Build),
     // Three release-related commands below.
-    Prepare(Prepare),
+    Create(Create),
     Upload(Upload),
-    Finish(Finish),
+    Publish(Publish),
     // Utilities
     Run(Run),
+}
+
+impl WhatToDo {
+    pub fn is_release_command(&self) -> bool {
+        use WhatToDo::*;
+        // Not using matches! to force manual check when extending enum.
+        match self {
+            Create(_) => true,
+            Upload(_) => true,
+            Publish(_) => true,
+            Build(_) | Run(_) => false,
+        }
+    }
 }
 
 /// Just build the packages.
@@ -23,8 +36,8 @@ pub struct Build {}
 
 /// Create a new draft release on GitHub and emit relevant information to the CI environment.
 #[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "prepare")]
-pub struct Prepare {}
+#[argh(subcommand, name = "prepare releaqse")]
+pub struct Create {}
 
 /// Build all the release packages and bundles and upload them to GitHub release. Must run with
 /// environment adjusted by the `prepare` command.
@@ -36,7 +49,7 @@ pub struct Upload {}
 /// called once after platform-specific `upload` commands are done.
 #[derive(FromArgs, Clone, PartialEq, Debug)]
 #[argh(subcommand, name = "finish")]
-pub struct Finish {}
+pub struct Publish {}
 
 /// Run an arbitrary command with the build environment set (like `PATH`).
 #[derive(FromArgs, Clone, PartialEq, Debug)]
@@ -77,8 +90,8 @@ pub struct Args {
     #[argh(option)]
     pub bundle:     Option<bool>,
     /// repository that will be targeted for the release info purposes
-    #[argh(option, default = "default_repo()")]
-    pub repo:       RepoContext,
+    #[argh(option)]
+    pub repo:       Option<RepoContext>,
     #[argh(subcommand)]
     pub command:    WhatToDo,
     /* #[argh(subcommand)]
