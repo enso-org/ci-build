@@ -13,13 +13,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v2
-      with:
-        clean: ${{ inputs.clean }}
-        path: ci-build
-        ref: ${{ inputs.ref }}
-        repository: enso-org/ci-build
-
     - name: Setup conda
       uses: s-weigand/setup-conda@v1.0.5
       if: startsWith(runner.name, 'GitHub Actions') # GitHub-hosted runner.
@@ -33,7 +26,9 @@ runs:
         script: |
           console.warn(process.env)
           core.addPath(String.raw`${{ runner.temp }}/bin`);
-          await exec.exec('cargo', ['install', '--root', String.raw`${{ runner.temp }}`, '--bins', '--path', './build'], {'cwd': String.raw`${{ github.workspace }}/ci-build`});
+          let args = ['install', '--root', context.runner.temp`, '--bins', '--path', os.path.join(context.github.action_path, '../../build')] 
+          let opts = {'cwd': String.raw`${{ github.workspace }}/ci-build`} 
+          await exec.exec('cargo', args, opts);
           core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
           core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
           core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
