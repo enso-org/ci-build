@@ -630,7 +630,7 @@ async fn main() -> anyhow::Result<()> {
                 let release = releases_handler
                     .get_by_id(release_id)
                     .await
-                    .context(format!("Failed to find release by tag {tag_name}."))?;
+                    .context(format!("Failed to find release by tag `{tag_name}`."))?;
 
                 let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
                 for package in packages {
