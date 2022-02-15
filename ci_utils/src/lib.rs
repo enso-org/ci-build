@@ -25,6 +25,7 @@ pub mod goodie;
 pub mod goodies;
 pub mod io;
 pub mod models;
+pub mod paths;
 pub mod platform;
 pub mod program;
 pub mod programs;

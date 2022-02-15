@@ -10,7 +10,7 @@ async fn main() -> Result {
     let handler = repo.repos(&octo);
     let releases = handler.releases();
 
-    let release = releases.get_by_id(ReleaseId(59554885)).await?;
+    let release = releases.get_by_id(ReleaseId(59585385)).await?;
     dbg!(&release);
 
     Ok(())
