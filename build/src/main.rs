@@ -288,13 +288,6 @@ async fn main() -> anyhow::Result<()> {
         ide_ci::io::remove_dir_if_exists(paths::cache_directory())?;
     }
 
-    let git = Git::new(&enso_root);
-    if config.clean_repo {
-        git.clean_xfd().await?;
-        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
-        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
-    }
-
     // Build environment preparations.
     let goodies = GoodieDatabase::new()?;
 
@@ -385,17 +378,6 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Install Dependencies of the Simple Library Server
-    ide_ci::programs::Npm
-        .install(enso_root.join_many(["tools", "simple-library-server"]))?
-        .run_ok()
-        .await?;
-
-
-    // Download Project Template Files
-    let client = reqwest::Client::new();
-    download_project_templates(client.clone(), enso_root.clone()).await?;
-
     let git = Git::new(&enso_root);
     if config.clean_repo {
         git.clean_xfd().await?;
@@ -403,8 +385,17 @@ async fn main() -> anyhow::Result<()> {
         git.args(["checkout"])?.arg(lib_src).run_ok().await?;
     }
 
-    let sbt = WithCwd::new(Sbt, &enso_root);
+    // Install Dependencies of the Simple Library Server
+    ide_ci::programs::Npm
+        .install(enso_root.join_many(["tools", "simple-library-server"]))?
+        .run_ok()
+        .await?;
 
+    // Download Project Template Files
+    let client = reqwest::Client::new();
+    download_project_templates(client.clone(), enso_root.clone()).await?;
+
+    let sbt = WithCwd::new(Sbt, &enso_root);
 
     let mut system = sysinfo::System::new();
     system.refresh_memory();
