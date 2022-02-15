@@ -622,15 +622,11 @@ async fn main() -> anyhow::Result<()> {
                 let release_id = enso_build::env::release_id()?;
                 let repo_handler = repo.repos(&octocrab);
 
-                // let release_name = format!("Enso {}", paths.triple.version);
-                let tag_name = versions.to_string();
-
                 let releases_handler = repo_handler.releases();
-                // let triple = paths.triple.clone();
                 let release = releases_handler
                     .get_by_id(release_id)
                     .await
-                    .context(format!("Failed to find release by tag `{tag_name}`."))?;
+                    .context(format!("Failed to find release by id `{release_id}` in `{repo}`."))?;
 
                 let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
                 for package in packages {
