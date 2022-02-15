@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use anyhow::Context;
 use fs_extra::dir::CopyOptions;
 use platforms::TARGET_OS;
 
@@ -101,15 +102,18 @@ pub async fn download_and_extract(
     output_dir: impl AsRef<Path>,
 ) -> anyhow::Result<()> {
     let url = url.into_url()?;
+    let url_text = url.to_string();
     let filename = filename_from_url(&url)?;
 
-    println!("Downloading {}", url);
+    println!("Downloading {}", url_text);
     let contents = download(url).await?;
     let buffer = std::io::Cursor::new(contents);
 
     println!("Extracting {} to {}", filename.display(), output_dir.as_ref().display());
     let format = Format::from_filename(&PathBuf::from(filename))?;
-    format.extract(buffer, output_dir)
+    format.extract(buffer, output_dir.as_ref()).with_context(|| {
+        format!("Failed to extract data from {} to {}.", url_text, output_dir.as_ref().display(),)
+    })
 }
 
 /// Download file at base_url/subpath to output_dir_base/subpath.
@@ -179,6 +183,15 @@ pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<
     }
 }
 
+pub fn expect_dir(path: impl AsRef<Path>) -> Result {
+    path.as_ref().is_dir().then_some(()).context(anyhow!("{} is not a directory.", path.as_ref().display()))
+}
+
+
+pub fn expect_file(path: impl AsRef<Path>) -> Result {
+    path.as_ref().is_file().then_some(()).context(anyhow!("{} is not a files.", path.as_ref().display()))
+}
+
 #[cfg(not(target_os = "windows"))]
 #[context("Failed to update permissions on `{}`", path.as_ref().display())]
 pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
@@ -191,6 +204,13 @@ pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
     let owner_can_execute = 0o0100;
     permissions.set_mode(mode | owner_can_execute);
     std::fs::set_permissions(path.as_ref(), permissions).anyhow_err()
+}
+
+#[cfg(target_os = "windows")]
+#[context("Failed to update permissions on `{}`", path.as_ref().display())]
+pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
+    // No-op on Windows.
+    Ok(())
 }
 
 

@@ -1,12 +1,16 @@
 use crate::prelude::*;
+
+use crate::actions::env::EnvFile;
+use crate::env::Variable;
 use std::io::Write;
 
 /// Sets an action's output parameter.
 ///
 /// See: <https://docs.github.com/en/actions/learn-github-actions/workflow-commands-for-github-actions#setting-an-output-parameter>
-pub fn set_output(name: &str, value: impl Display) {
-    iprintln!("Setting GitHub Actions step output {name} to {value}");
-    iprintln!("::set-output name={name}::{value}");
+pub fn set_output(name: &str, value: &impl ToString) {
+    let value = value.to_string();
+    println!("Setting GitHub Actions step output {name} to {value}");
+    println!("::set-output name={name}::{value}");
 }
 
 /// Prints a debug message to the log.
@@ -16,7 +20,7 @@ pub fn set_output(name: &str, value: impl Display) {
 ///
 /// See: <https://docs.github.com/en/actions/learn-github-actions/workflow-commands-for-github-actions#setting-a-debug-message>
 pub fn debug(message: &str) {
-    iprintln!("::debug::{message}")
+    println!("::debug::{message}")
 }
 
 /// Creates or updates an environment variable for any steps running next in a job.
@@ -24,18 +28,15 @@ pub fn debug(message: &str) {
 /// This step and all subsequent steps in a job will have access to the variable. Environment
 /// variables are case-sensitive and you can include punctuation.
 ///
-/// Does nothing (except for log) when not being run under CI. Fails if used under non-GH CI.
-pub fn set_env(name: &str, value: impl Display) -> Result {
-    iprintln!("Will try writing Github Actions environment variable: {name}={value}");
+/// Just logs and sets variable locally if used under non-GH CI.
+pub fn set_env(name: &str, value: &impl ToString) -> Result {
+    let value_string = value.to_string();
+    println!("Will try writing Github Actions environment variable: {name}={value_string}");
     std::env::set_var(name, value.to_string());
     if crate::run_in_ci() {
-        let env_file = crate::env::expect_var_os("GITHUB_ENV")?;
-        let line = iformat!("{name}={value}\n");
-        std::fs::OpenOptions::new()
-            .create_new(false)
-            .append(true)
-            .open(env_file)?
-            .write_all(line.as_bytes())?;
+        let env_file = EnvFile.fetch()?;
+        let mut file = std::fs::OpenOptions::new().create_new(false).append(true).open(env_file)?;
+        writeln!(file, "{name}={value_string}")?;
     }
     Ok(())
 }

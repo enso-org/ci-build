@@ -10,6 +10,8 @@
 #![feature(type_alias_impl_trait)]
 #![feature(default_free_fn)]
 #![feature(trait_alias)]
+#![feature(io_error_other)]
+#![feature(bool_to_option)]
 
 pub mod actions;
 pub mod anyhow;
@@ -26,6 +28,7 @@ pub mod models;
 pub mod platform;
 pub mod program;
 pub mod programs;
+pub mod reqwest;
 pub mod serde;
 
 pub mod prelude {

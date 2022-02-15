@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use std::env::consts::EXE_EXTENSION;
 use std::fmt::Formatter;
 
 use crate::version::Versions;
@@ -56,14 +57,14 @@ impl ComponentPaths {
         for (what, path) in paths {
             ide_ci::actions::workflow::set_env(
                 &iformat!("{prefix}_DIST_{what}"),
-                path.to_string_lossy(),
+                &path.to_string_lossy(),
             )?;
         }
         Ok(())
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct TargetTriple {
     pub os:       OS,
     pub arch:     Arch,
@@ -148,7 +149,7 @@ impl Paths {
             paths.emit_to_actions(prefix)?;
         }
 
-        ide_ci::actions::workflow::set_env("TARGET_DIR", self.target.to_string_lossy())?;
+        ide_ci::actions::workflow::set_env("TARGET_DIR", &self.target.to_string_lossy())?;
         Ok(())
     }
 
@@ -173,6 +174,18 @@ impl Paths {
         self.distribution()
             .join_many(["editions", &self.edition_name()])
             .with_appended_extension("yaml")
+    }
+
+    pub async fn upload_edition_file_artifact(&self) -> Result {
+        ide_ci::actions::artifacts::upload_single_file(self.edition_file(), "Edition File").await
+    }
+
+    pub async fn download_edition_file_artifact(&self) -> Result {
+        ide_ci::actions::artifacts::download_single_file_artifact(
+            "Edition File",
+            self.edition_file(),
+        )
+        .await
     }
 
     pub fn version(&self) -> &Version {
@@ -215,4 +228,130 @@ pub fn data_directory() -> PathBuf {
 /// Get the place where global IR caches are stored.
 pub fn cache_directory() -> PathBuf {
     data_directory().join("cache")
+}
+
+pub trait GuiPaths {
+    fn root(&self) -> &Path;
+    fn temp(&self) -> &Path;
+
+
+    fn github(&self) -> PathBuf {
+        self.root().join(".github")
+    }
+    fn github_workflows(&self) -> PathBuf {
+        self.github().join("workflows")
+    }
+
+    fn dist(&self) -> PathBuf {
+        self.root().join("dist")
+    }
+
+    fn dist_client(&self) -> PathBuf {
+        self.dist().join("client")
+    }
+
+    fn dist_content(&self) -> PathBuf {
+        self.dist().join("content")
+    }
+
+    fn dist_assets(&self) -> PathBuf {
+        self.dist_content().join("assets")
+    }
+
+    fn dist_package_json(&self) -> PathBuf {
+        self.dist_content().join("package.json")
+    }
+
+    fn dist_preload_js(&self) -> PathBuf {
+        self.dist_content().join("preload.js")
+    }
+
+    fn dist_bin(&self) -> PathBuf {
+        self.dist().join("bin")
+    }
+
+    fn dist_init(&self) -> PathBuf {
+        self.dist().join("init")
+    }
+
+    fn dist_build_init(&self) -> PathBuf {
+        self.dist().join("build-init")
+    }
+
+    fn dist_build_info(&self) -> PathBuf {
+        self.dist().join("build.json")
+    }
+
+    fn dist_tmp(&self) -> PathBuf {
+        self.dist().join("tmp")
+    }
+
+    const WASM_MAIN: &'static str = "ide.wasm";
+    const WASM_MAIN_RAW: &'static str = "ide_bg.wasm";
+    const WASM_GLUE: &'static str = "ide.js";
+
+    // Final WASM artifacts in `dist` directory.
+    fn dist_wasm(&self) -> PathBuf {
+        self.dist().join("wasm")
+    }
+
+    fn dist_wasm_main(&self) -> PathBuf {
+        self.dist().join(Self::WASM_MAIN)
+    }
+
+    fn dist_wasm_main_raw(&self) -> PathBuf {
+        self.dist().join(Self::WASM_MAIN_RAW)
+    }
+
+    fn dist_wasm_glue(&self) -> PathBuf {
+        self.dist().join(Self::WASM_GLUE)
+    }
+
+    // Intermediate WASM artifacts.
+    fn wasm(&self) -> PathBuf {
+        self.temp().join("enso-wasm")
+    }
+
+    fn wasm_main(&self) -> PathBuf {
+        self.wasm().join(Self::WASM_MAIN)
+    }
+
+    fn wasm_main_raw(&self) -> PathBuf {
+        self.wasm().join(Self::WASM_MAIN_RAW)
+    }
+
+    fn wasm_glue(&self) -> PathBuf {
+        self.wasm().join(Self::WASM_GLUE)
+    }
+
+    fn wasm_main_gz(&self) -> PathBuf {
+        self.wasm().join("ide.wasm.gz")
+    }
+
+    fn ide_desktop(&self) -> PathBuf {
+        self.root().join_many(["app", "ide-desktop"])
+    }
+
+    fn ide_desktop_lib_project_manager(&self) -> PathBuf {
+        self.ide_desktop().join_many(["lib", "project-manager"])
+    }
+
+    fn ide_desktop_lib_content(&self) -> PathBuf {
+        self.ide_desktop().join_many(["lib", "content"])
+    }
+
+    fn gui(&self) -> PathBuf {
+        self.root().join_many(["app", "gui"])
+    }
+
+    fn script(&self) -> PathBuf {
+        self.root().join("build")
+    }
+}
+
+pub fn project_manager(base_path: impl AsRef<Path>) -> PathBuf {
+    base_path
+        .as_ref()
+        .join_many(["enso", "bin", "project-manager"])
+        .with_appended_extension(EXE_EXTENSION)
 }

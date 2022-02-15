@@ -1,0 +1,40 @@
+name: 'Install Enso Build'
+description: 'Installs enso-build tool.'
+inputs:
+  clean:
+    description: Whether the local build script repository should be cleaned.
+    required: true
+    default: 'false'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup conda
+      uses: s-weigand/setup-conda@v1.0.5
+      if: startsWith(runner.name, 'GitHub Actions') # GitHub-hosted runner.
+      with:
+        update-conda: false
+        conda-channels: anaconda, conda-forge
+
+    - uses: actions/checkout@v2
+      with:
+        path: enso
+
+    # Runs a set of commands using the runners shell
+    - uses: actions/github-script@v6
+      with:
+        script: |
+          const path = require('path');
+          console.warn(process.env);
+          console.warn(context);
+          core.addPath(String.raw`${{ runner.temp }}/bin`);
+          let script_repo_root = path.join(process.env["GITHUB_ACTION_PATH"], '/../../')
+          let args = ['install', '--bins', 
+            '--root', process.env["RUNNER_TEMP"], 
+            '--path', path.join(script_repo_root, 'build')
+          ]; 
+          let opts = {'cwd': script_repo_root};
+          await exec.exec('cargo', args, opts);
+          core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
+          core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
+          core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])

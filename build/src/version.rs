@@ -30,10 +30,10 @@ pub fn is_nightly_release(release: &Release) -> bool {
 
 
 
-#[derive(Clone, Debug, Serialize, Deserialize, Shrinkwrap)]
+#[derive(Clone, Debug, Serialize, Deserialize, Shrinkwrap, PartialEq)]
 pub struct Versions {
-    pub version:      Version,
     #[shrinkwrap(main_field)]
+    pub version:      Version,
     pub release_mode: bool,
 }
 
@@ -113,10 +113,11 @@ impl Versions {
         let edition = self.edition_name();
         ide_ci::actions::workflow::set_output(VERSION_VAR_NAME, &name);
         ide_ci::actions::workflow::set_output(EDITION_VAR_NAME, &edition);
+        ide_ci::actions::workflow::set_output(RELEASE_MODE_VAR_NAME, &self.release_mode);
 
         ide_ci::actions::workflow::set_env(VERSION_VAR_NAME, &name)?;
         ide_ci::actions::workflow::set_env(EDITION_VAR_NAME, &edition)?;
-        ide_ci::actions::workflow::set_env(RELEASE_MODE_VAR_NAME, self.release_mode)?;
+        ide_ci::actions::workflow::set_env(RELEASE_MODE_VAR_NAME, &self.release_mode)?;
         Ok(())
     }
 
@@ -137,6 +138,7 @@ pub fn version_from_legacy_repo(repo_root: impl AsRef<Path>) -> Result<Version> 
     crate::get_enso_version(&build_sbt_contents)
 }
 
+#[context("Deducing version using changelog file: {}", changelog_path.as_ref().display())]
 pub fn base_version(changelog_path: impl AsRef<Path>) -> Result<Version> {
     if let Ok(from_env) = version_from_env() {
         return Ok(from_env);

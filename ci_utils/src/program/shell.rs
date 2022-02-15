@@ -3,6 +3,7 @@ use crate::prelude::*;
 pub trait Shell: Program {
     fn run_command(&self) -> Result<Command>;
     fn run_script(&self, script_path: impl AsRef<Path>) -> Result<Command>;
+    fn run_shell(&self) -> Result<Command>;
 }
 
 // Deduces shell from file extension.

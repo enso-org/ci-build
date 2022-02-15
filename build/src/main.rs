@@ -7,11 +7,13 @@
 #![feature(async_stream)]
 #![feature(default_free_fn)]
 #![feature(map_first_last)]
+#![feature(bool_to_option)]
 
 pub use ide_ci::prelude;
 use ide_ci::prelude::*;
 
 use anyhow::Context;
+use enso_build::args::default_repo;
 use enso_build::args::Args;
 use enso_build::args::BuildKind;
 use enso_build::args::WhatToDo;
@@ -25,20 +27,24 @@ use enso_build::paths::Paths;
 use enso_build::retrieve_github_access_token;
 use enso_build::setup_octocrab;
 use enso_build::version::Versions;
+use ide_ci::env::Variable;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies::graalvm;
 use ide_ci::goodies::sbt;
 use ide_ci::models::config::RepoContext;
+use ide_ci::platform::default_shell;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::git::Git;
 use ide_ci::programs::Flatc;
 use ide_ci::programs::Sbt;
+use ide_ci::run_in_ci;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
 use std::env::consts::EXE_EXTENSION;
 use sysinfo::SystemExt;
+
 
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
 // const GRAAL_VERSION: Version = Version::new(21, 1, 0);
@@ -103,6 +109,21 @@ pub struct BuildConfiguration {
     build_bundles:         bool,
 }
 
+impl BuildConfiguration {
+    pub fn new(args: &Args) -> Self {
+        let mut config = match args.kind {
+            BuildKind::Dev => LOCAL,
+            BuildKind::Nightly => NIGHTLY,
+        };
+
+        // Update build configuration with a custom arg overrides.
+        if matches!(args.command, WhatToDo::Upload(_)) || args.bundle.contains(&true) {
+            config.build_bundles = true;
+        }
+        config
+    }
+}
+
 const LOCAL: BuildConfiguration = BuildConfiguration {
     clean_repo:            true,
     mode:                  BuildMode::Development,
@@ -123,93 +144,142 @@ const NIGHTLY: BuildConfiguration = BuildConfiguration {
     build_bundles:         false,
 };
 
+pub async fn deduce_versions(
+    octocrab: &Octocrab,
+    build_kind: BuildKind,
+    target_repo: Option<&RepoContext>,
+    root_path: impl AsRef<Path>,
+) -> Result<Versions> {
+    println!("Deciding on version to target.");
+    let changelog_path = enso_build::paths::root_to_changelog(&root_path);
+    let version = Version {
+        pre: match build_kind {
+            BuildKind::Dev => Versions::local_prerelease()?,
+            BuildKind::Nightly => {
+                let repo = target_repo.cloned().or_else(|| default_repo()).ok_or_else(|| {
+                    anyhow!(
+                        "Missing target repository designation in the release mode. \
+                        Please provide `--repo` option or `GITHUB_REPOSITORY` repository."
+                    )
+                })?;
+                Versions::nightly_prerelease(octocrab, &repo).await?
+            }
+        },
+        ..enso_build::version::base_version(&changelog_path)?
+    };
+    Ok(Versions::new(version))
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum ReleaseCommand {
+    Create,
+    Upload,
+    Publish,
+}
+
+impl TryFrom<WhatToDo> for ReleaseCommand {
+    type Error = anyhow::Error;
+
+    fn try_from(value: WhatToDo) -> Result<Self> {
+        Ok(match value {
+            WhatToDo::Create(_) => ReleaseCommand::Create,
+            WhatToDo::Upload(_) => ReleaseCommand::Upload,
+            WhatToDo::Publish(_) => ReleaseCommand::Publish,
+            _ => bail!("Not a release command: {}", value),
+        })
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct ReleaseOperation {
+    pub command: ReleaseCommand,
+    pub repo:    RepoContext,
+}
+
+impl ReleaseOperation {
+    pub fn new(args: &Args) -> Result<Self> {
+        let command = args.command.clone().try_into()?;
+        let repo = match args.repo.clone() {
+            Some(repo) => repo,
+            None => ide_ci::actions::env::Repository.fetch()?,
+        };
+
+        Ok(Self { command, repo })
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // We want arg parsing to be the very first thing, so when user types wrong arguments, the error
+    // diagnostics will be first and only thing that is output.
+    let args: Args = argh::from_env();
+
     println!("Initial environment:");
     for (key, value) in std::env::vars() {
-        // The below should not be needed - any secrets should be passed to us from the GitHub
-        // Actions as secrets already. However, as a failsafe, we'll mask anythinh that looks
-        // secretive.
-        if key.contains("SECRET") || key.contains("TOKEN") || key.contains("KEY") {
-            ide_ci::actions::workflow::mask_value(&value);
-        }
-
-        iprintln!("\t{key}={value}");
+        println!("\t{key}={value}");
     }
+    println!("\n===End of the environment dump===\n");
 
-    let args: Args = argh::from_env();
-    let mut config = match args.kind {
-        BuildKind::Dev => LOCAL,
-        BuildKind::Nightly => NIGHTLY,
-    };
-    if args.command == WhatToDo::Upload || args.bundle.contains(&true) {
-        config.build_bundles = true;
-    }
-
+    // Get default build configuration for a given build kind.
+    let config = BuildConfiguration::new(&args);
     let octocrab = setup_octocrab()?;
-    let enso_root = args.repository.clone();
+    let enso_root = args.target.clone();
     println!("Repository location: {}", enso_root.display());
+    let enso_root = args.target.absolutize()?.to_path_buf();
+    println!("Canonical repository location: {}", enso_root.display());
 
+    let release =
+        if args.command.is_release_command() { Some(ReleaseOperation::new(&args)?) } else { None };
 
-    let repo = ide_ci::actions::env::repository()
-        .unwrap_or(RepoContext { owner: "enso-org".into(), name: "ci-build".into() });
-
-    println!("Deciding on version to target.");
-    let changelog_path = enso_build::paths::root_to_changelog(&enso_root);
-    let version = if let Ok(version) = enso_build::version::version_from_legacy_repo(&enso_root) {
-        println!("Using legacy version override from build.sbt: {}", version);
-        version
-    } else {
-        Version {
-            pre: match args.kind {
-                BuildKind::Dev => Versions::local_prerelease()?,
-                BuildKind::Nightly => Versions::nightly_prerelease(&octocrab, &repo).await?,
-            },
-            ..enso_build::version::base_version(&changelog_path)?
-        }
-    };
-
-    let versions = Versions::new(version);
+    let versions =
+        deduce_versions(&octocrab, args.kind, release.as_ref().map(|r| &r.repo), &enso_root)
+            .await?;
     versions.publish()?;
     println!("Target version: {versions:?}.");
     let paths = Paths::new_version(&enso_root, versions.version.clone())?;
 
-    match args.command {
-        WhatToDo::Prepare => {
-            let commit = ide_ci::actions::env::commit()?;
-            let latest_changelog_body =
-                enso_build::changelog::retrieve_unreleased_release_notes(paths.changelog())?;
+    match release.as_ref() {
+        Some(ReleaseOperation { command, repo }) => match command {
+            ReleaseCommand::Create => {
+                let commit = ide_ci::actions::env::Sha.fetch()?;
+                let latest_changelog_body =
+                    enso_build::changelog::retrieve_unreleased_release_notes(paths.changelog())?;
 
-            println!("Preparing release {} for commit {}", versions.version, commit);
+                println!("Preparing release {} for commit {}", versions.version, commit);
 
-            let release = repo
-                .repos(&octocrab)
-                .releases()
-                .create(&versions.tag())
-                .target_commitish(&commit)
-                .name(&versions.pretty_name())
-                .body(&latest_changelog_body.contents)
-                .prerelease(true)
-                .draft(true)
-                .send()
-                .await?;
+                let release = repo
+                    .repos(&octocrab)
+                    .releases()
+                    .create(&versions.tag())
+                    .target_commitish(&commit)
+                    .name(&versions.pretty_name())
+                    .body(&latest_changelog_body.contents)
+                    .prerelease(true)
+                    .draft(true)
+                    .send()
+                    .await?;
 
-            enso_build::env::emit_release_id(release.id);
+                enso_build::env::ReleaseId.emit(&release.id)?;
+                return Ok(());
+            }
+            ReleaseCommand::Publish => {
+                let release_id = enso_build::env::ReleaseId.fetch()?;
+                println!("Looking for release with id {release_id} on github.");
+                let release = repo.repos(&octocrab).releases().get_by_id(release_id).await?;
+                println!("Found the target release, will publish it.");
+                repo.repos(&octocrab).releases().update(release.id.0).draft(false).send().await?;
+                iprintln!("Done. Release URL: {release.url}");
 
-            return Ok(());
-        }
-        WhatToDo::Finish => {
-            let release_id = enso_build::env::release_id()?;
-            println!("Looking for release with id {release_id} on github.");
-            let release = repo.repos(&octocrab).releases().get_by_id(release_id).await?;
-            println!("Found the target release, will publish it.");
-            repo.repos(&octocrab).releases().update(release.id.0).draft(false).send().await?;
-            iprintln!("Done. Release URL: {release.url}");
-            return Ok(());
-        }
-        WhatToDo::Build | WhatToDo::Upload => {}
-    }
+                paths.download_edition_file_artifact().await?;
+                println!("Updating edition in the AWS S3.");
+                enso_build::aws::update_manifest(repo, &paths).await?;
+
+                return Ok(());
+            }
+            ReleaseCommand::Upload => {}
+        },
+        None => {}
+    };
 
     if ide_ci::run_in_ci() {
         // On CI we remove IR caches. They might contain invalid or outdated data, as are using
@@ -219,18 +289,8 @@ async fn main() -> anyhow::Result<()> {
         ide_ci::io::remove_dir_if_exists(paths::cache_directory())?;
     }
 
-    let git = Git::new(&enso_root);
-    if config.clean_repo {
-        git.clean_xfd().await?;
-        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
-        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
-    }
-
-    let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
-    println!("Build configuration: {:#?}", config);
-
+    // Build environment preparations.
     let goodies = GoodieDatabase::new()?;
-    let client = reqwest::Client::new();
 
     // Building native images with Graal on Windows requires Microsoft Visual C++ Build Tools
     // available in the environment. If it is not visible, we need to add it.
@@ -238,20 +298,16 @@ async fn main() -> anyhow::Result<()> {
         ide_ci::programs::vs::apply_dev_environment().await?;
     }
 
-    // Setup Tests on Windows
-    if TARGET_OS == OS::Windows {
-        std::env::set_var("CI_TEST_TIMEFACTOR", "2");
-        std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
-    }
+    // Setup SBT
+    goodies.require(&sbt::Sbt).await?;
+    ide_ci::programs::Sbt.require_present().await?;
 
-    // ide_ci::actions::workflow::set_env("ENSO_RELEASE_MODE", args.release_mode.to_string()).ok();
+    // Other programs.
+    ide_ci::programs::Git::default().require_present().await?;
     ide_ci::programs::Go.require_present().await?;
     ide_ci::programs::Cargo.require_present().await?;
     ide_ci::programs::Node.require_present().await?;
     ide_ci::programs::Npm.require_present().await?;
-
-
-    // Disable TCP/UDP Offloading
 
     // Setup Conda Environment
     // Install FlatBuffers Compiler
@@ -278,15 +334,19 @@ async fn main() -> anyhow::Result<()> {
         ide_ci::programs::Flatc.lookup()?;
     }
 
-    // Install Dependencies of the Simple Library Server
-    ide_ci::programs::Npm
-        .install(enso_root.join_many(["tools", "simple-library-server"]))?
-        .status()
-        .await?
-        .exit_ok()?;
+    let _ = paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
+    println!("Build configuration: {:#?}", config);
 
-    // Download Project Template Files
-    download_project_templates(client.clone(), enso_root.clone()).await?;
+    // Setup Tests on Windows
+    if TARGET_OS == OS::Windows {
+        std::env::set_var("CI_TEST_TIMEFACTOR", "2");
+        std::env::set_var("CI_TEST_FLAKY_ENABLE", "true");
+    }
+
+    // if TARGET_OS == OS::Linux {
+    //     let musl = ide_ci::goodies::musl::Musl;
+    //     goodies.require(&musl).await?;
+    // }
 
     let build_sbt_content = std::fs::read_to_string(paths.build_sbt())?;
     // Setup GraalVM
@@ -299,21 +359,51 @@ async fn main() -> anyhow::Result<()> {
     };
     goodies.require(&graalvm).await?;
     graalvm::Gu.require_present().await?;
-
-    // Setup SBT
-    goodies.require(&sbt::Sbt).await?;
-    ide_ci::programs::Sbt.require_present().await?;
-
-
     graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
 
+    if let WhatToDo::Run(run) = args.command {
+        let mut run = run.command_pieces.iter();
+        if let Some(program) = run.next() {
+            println!("Spawning program {}.", program.to_str().unwrap());
+            tokio::process::Command::new(program)
+                .args(run)
+                .current_dir(paths.repo_root)
+                .spawn()?
+                .wait()
+                .await?
+                .exit_ok()?;
+        } else {
+            println!("Spawning default shell.");
+            default_shell().run_shell()?.current_dir(paths.repo_root).run_ok().await?;
+        }
+        return Ok(());
+    }
+
+    let git = Git::new(&enso_root);
+    if config.clean_repo {
+        git.clean_xfd().await?;
+        let lib_src = PathBuf::from_iter(["distribution", "lib"]);
+        git.args(["checkout"])?.arg(lib_src).run_ok().await?;
+    }
+
+    // Install Dependencies of the Simple Library Server
+    ide_ci::programs::Npm
+        .install(enso_root.join_many(["tools", "simple-library-server"]))?
+        .run_ok()
+        .await?;
+
+    // Download Project Template Files
+    let client = reqwest::Client::new();
+    download_project_templates(client.clone(), enso_root.clone()).await?;
 
     let sbt = WithCwd::new(Sbt, &enso_root);
-
 
     let mut system = sysinfo::System::new();
     system.refresh_memory();
     dbg!(system.total_memory());
+    dbg!(system.available_memory());
+    dbg!(system.used_memory());
+    dbg!(system.free_memory());
 
     // Build packages.
     println!("Bootstrapping Enso project.");
@@ -332,7 +422,8 @@ async fn main() -> anyhow::Result<()> {
         sbt.call_arg("verifyLicensePackages").await?;
     }
 
-    if system.total_memory() > 10_000_000 {
+    let github_hosted_macos_memory = 15032385;
+    if system.total_memory() > github_hosted_macos_memory {
         let mut tasks = vec![
             "engine-runner/assembly",
             "launcher/buildNativeImage",
@@ -510,39 +601,42 @@ async fn main() -> anyhow::Result<()> {
     //     .await?;
 
 
+    if TARGET_OS == OS::Linux && run_in_ci() {
+        paths.upload_edition_file_artifact().await?;
+    }
 
     if config.build_bundles {
         // Launcher bundle
         let bundles = create_bundles(&paths).await?;
 
-        if args.command == WhatToDo::Upload {
-            // Make packages.
-            let packages = create_packages(&paths).await?;
+        match release.as_ref() {
+            Some(ReleaseOperation { command, repo }) if *command == ReleaseCommand::Upload => {
+                // Make packages.
+                let packages = create_packages(&paths).await?;
 
-            let release_id = enso_build::env::release_id()?;
-            let repo_handler = repo.repos(&octocrab);
+                let release_id = enso_build::env::ReleaseId.fetch()?;
+                let repo_handler = repo.repos(&octocrab);
 
-            // let release_name = format!("Enso {}", paths.triple.version);
-            let tag_name = versions.to_string();
+                let releases_handler = repo_handler.releases();
+                let release = releases_handler
+                    .get_by_id(release_id)
+                    .await
+                    .context(format!("Failed to find release by id `{release_id}` in `{repo}`."))?;
 
-            let releases_handler = repo_handler.releases();
-            // let triple = paths.triple.clone();
-            let release = releases_handler
-                .get_by_id(release_id)
-                .await
-                .context(format!("Failed to find release by tag {tag_name}."))?;
-
-            let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
-            for package in packages {
-                ide_ci::github::release::upload_asset(&repo, &client, release.id, package).await?;
+                let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
+                for package in packages {
+                    ide_ci::github::release::upload_asset(repo, &client, release.id, package)
+                        .await?;
+                }
+                for bundle in bundles {
+                    ide_ci::github::release::upload_asset(repo, &client, release.id, bundle)
+                        .await?;
+                }
             }
-            for bundle in bundles {
-                ide_ci::github::release::upload_asset(&repo, &client, release.id, bundle).await?;
+            _ => {
+                package_component(&paths.engine).await?;
             }
         }
-    } else {
-        // Perhaps won't be needed with the new artifact API.
-        package_component(&paths.engine).await?;
     }
 
     Ok(())
@@ -678,4 +772,144 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
 
     ide_ci::archive::create(&paths.artifact_archive, [&paths.root]).await?;
     Ok(paths.artifact_archive.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use enso_build::paths::GuiPaths;
+    use enso_build::paths::TargetTriple;
+    use ide_ci::io::download_and_extract;
+    use ide_ci::programs::Npm;
+    // use regex::Regex;
+    use tempfile::TempDir;
+
+    // /// Workaround fix by wdanilo, see: https://github.com/rustwasm/wasm-pack/issues/790
+    // pub fn js_workaround_patcher(code: impl Into<String>) -> Result<String> {
+    //     let replacements = [
+    //         (r"if \(\(typeof URL.*}\);", "return imports"),
+    //         (r"if \(typeof module.*let result;", "return imports"),
+    //         (r"export default init;", "export default init"),
+    //     ];
+    //
+    //     let mut ret = code.into();
+    //     for (regex, replacement) in replacements {
+    //         let regex = Regex::new(regex).unwrap();
+    //         ret = regex.replace_all(&ret, replacement).to_string();
+    //     }
+    //
+    //     ret.push_str(
+    //         "\nexport function after_load(w,m) { wasm = w; init.__wbindgen_wasm_module = m;}",
+    //     );
+    //     Ok(ret)
+    // }
+    //
+    // pub fn patch_file(
+    //     path: impl AsRef<Path>,
+    //     patcher: impl FnOnce(String) -> Result<String>,
+    // ) -> Result {
+    //     let original_content = std::fs::read_to_string(&path)?;
+    //     let patched_content = patcher(original_content)?;
+    //     std::fs::write(path, patched_content)?;
+    //     Ok(())
+    // }
+
+    // async fn download_js_assets(paths: &impl GuiPaths) -> Result {
+    //     let workdir = paths.root().join(".assets-temp");
+    //     ide_ci::io::reset_dir(&workdir)?;
+    //
+    //     // let ide_assets_main_zip = "ide-assets-main.zip";
+    //     let ide_assets_url = "https://github.com/enso-org/ide-assets/archive/refs/heads/main.zip";
+    //     // let unzipped_assets = workdir.join_many(["ide-assets-main", "content", "assets"]);
+    //     // let js_lib_assets = paths.ide_desktop_lib_content().join("assets");
+    //     download_and_extract(ide_assets_url, workdir).await?;
+    //     Ok(())
+    // }
+
+    async fn init(paths: &impl GuiPaths) -> Result {
+        if !paths.dist_build_init().exists() {
+            println!("Initialization");
+            println!("Installing build script dependencies.");
+            Npm.cmd()?.current_dir(paths.script()).arg("install").run_ok().await?;
+            ide_ci::io::create_dir_if_missing(paths.dist())?;
+            std::fs::write(paths.dist_build_init(), "")?;
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn build_ide() -> Result {
+        #[derive(Debug, Shrinkwrap)]
+        pub struct GuiPathsData {
+            #[shrinkwrap(main_field)]
+            pub root: PathBuf,
+            pub temp: TempDir,
+        }
+
+        impl GuiPaths for GuiPathsData {
+            fn root(&self) -> &Path {
+                &self.root
+            }
+
+            fn temp(&self) -> &Path {
+                self.temp.path()
+            }
+        }
+
+        let root_path = PathBuf::from("H:/NBO/enso5");
+        let paths = GuiPathsData { root: root_path.clone(), temp: TempDir::new()? };
+        let versions = Versions::new(Version::parse("2022.1.1-nightly.2022-02-03")?);
+        let target = TargetTriple::new(versions);
+        let is_dev = false;
+
+        init(&paths).await?;
+
+        let target_crate = "app/gui";
+        let env = std::env::vars().filter(|(name, _val)| !name.starts_with("CARGO"));
+
+        // let mut cmd = tokio::process::Command::new("wasm-pack");
+        // cmd.env_remove("RUSTUP_TOOLCHAIN");
+        // cmd.args([
+        //     "build",
+        //     "--target",
+        //     "web",
+        //     "--out-dir",
+        //     &paths.wasm().as_os_str().to_str().unwrap(),
+        //     "--out-name",
+        //     "ide",
+        //     target_crate,
+        // ])
+        // .current_dir(root_path)
+        // .spawn()?
+        // .wait()
+        // .await?
+        // .exit_ok()?;
+        //
+        //
+        // patch_file(paths.wasm_glue(), js_workaround_patcher)?;
+        // std::fs::rename(paths.wasm_main_raw(), paths.wasm_main())?;
+
+        // if (!argv.dev) {
+        //     console.log('Minimizing the WASM binary.')
+        //                 await gzip(paths.wasm.main, paths.wasm.mainGz)
+        //
+        //     const limitMb = 4.6
+        //     await checkWasmSize(paths.wasm.mainGz, limitMb)
+        // }
+        // Copy WASM files from temporary directory to Webpack's `dist` directory.
+        // ide_ci::io::copy(paths.wasm(), paths.dist_wasm())?;
+
+
+
+        // // JS PART
+        Npm.args(["run", "install"])?.current_dir(paths.ide_desktop()).run_ok().await?;
+        //download_js_assets(&paths).await?;
+        enso_build::project_manager::ensure_present(paths.dist(), &target).await?;
+
+        Npm.cmd()?.current_dir(paths.ide_desktop()).args(["run", "dist"]).run_ok().await?;
+
+        println!("{}", paths.temp.path().display());
+        std::mem::forget(paths.temp);
+        Ok(())
+    }
 }

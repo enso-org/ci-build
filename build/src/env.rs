@@ -1,19 +1,29 @@
-use crate::args::BuildKind;
+#[allow(unused_imports)]
 use crate::prelude::*;
-use ide_ci::env::expect_var;
-use octocrab::models::ReleaseId;
 
-pub const ENSO_RELEASE_ID: &str = "ENSO_RELEASE_ID";
-pub const ENSO_BUILD_KIND: &str = "ENSO_BUILD_KIND";
+use ide_ci::env::Variable;
+use ide_ci::programs::docker::ContainerId;
 
-pub fn release_id() -> Result<ReleaseId> {
-    u64::parse_into(expect_var(ENSO_RELEASE_ID)?)
+pub struct ReleaseId;
+impl Variable for ReleaseId {
+    const NAME: &'static str = "ENSO_RELEASE_ID";
+    type Value = octocrab::models::ReleaseId;
 }
 
-pub fn emit_release_id(id: ReleaseId) {
-    ide_ci::actions::workflow::set_output(ENSO_RELEASE_ID, id)
+pub struct RunnerContainerName;
+impl Variable for RunnerContainerName {
+    const NAME: &'static str = "ENSO_RUNNER_CONTAINER_NAME";
+    type Value = ContainerId;
 }
 
-pub fn build_kind() -> Result<BuildKind> {
-    Ok(expect_var(ENSO_BUILD_KIND)?.parse()?)
+pub struct NightlyEditionsLimit;
+impl Variable for NightlyEditionsLimit {
+    const NAME: &'static str = "ENSO_NIGHTLY_EDITIONS_LIMIT";
+    type Value = usize;
+}
+
+pub struct BuildKind;
+impl Variable for BuildKind {
+    const NAME: &'static str = "ENSO_BUILD_KIND";
+    type Value = crate::args::BuildKind;
 }

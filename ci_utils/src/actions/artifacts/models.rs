@@ -1,4 +1,6 @@
 use crate::prelude::*;
+use chrono::DateTime;
+use chrono::Utc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")] // Sic!
@@ -60,4 +62,76 @@ pub struct PatchArtifactSizeResponse {
     pub url:            Url,
     // This is not actually present, despite what GH sources say.
     // pub upload_url:     Url,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ListArtifactsResponse {
+    pub count: i64,
+    pub value: Vec<ArtifactResponse>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactResponse {
+    pub container_id: u64,
+    pub size: i64,
+    pub signed_content: Option<String>,
+    pub file_container_resource_url: Url,
+    pub r#type: String,
+    pub name: String,
+    pub url: Url,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct QueryArtifactResponse {
+    pub count: i64,
+    pub value: Vec<ContainerEntry>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerEntry {
+    pub container_id:       u64,
+    pub scope_identifier:   Uuid,
+    pub path:               PathBuf,
+    pub item_type:          ItemType,
+    pub status:             EntryStatus,
+    pub file_length:        Option<i64>,
+    pub file_encoding:      Option<i64>,
+    pub file_type:          Option<i64>,
+    pub date_created:       DateTime<Utc>,
+    pub date_last_modified: DateTime<Utc>,
+    pub created_by:         Uuid,
+    pub last_modified_by:   Uuid,
+    pub item_location:      Url,
+    pub content_location:   Url,
+    pub file_id:            Option<usize>,
+    pub content_id:         String,
+}
+
+impl ContainerEntry {
+    pub fn relative_path(&self) -> PathBuf {
+        //ensure!(self.path.is_relative(), "Path {} is not relative.", self.path.display());
+        // First part is artifact name.
+        let path_iter = self.path.iter().skip(1);
+        // ensure!(
+        //     path_iter.next() == Some(&OsStr::new(artifact_name)),
+        //     "Entry path does not start with an artifact name."
+        // );
+        PathBuf::from_iter(path_iter)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EntryStatus {
+    Created,
+    // No other values known at this point.
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ItemType {
+    File,
+    Folder,
 }

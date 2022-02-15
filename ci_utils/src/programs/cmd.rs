@@ -38,6 +38,10 @@ impl Shell for Cmd {
         command.arg(script_path.as_ref());
         Ok(command)
     }
+
+    fn run_shell(&self) -> Result<Command> {
+        self.cmd()
+    }
 }
 
 pub fn run_commands<'a, Cmds, Arg>(commands: Cmds) -> anyhow::Result<Command>
@@ -119,7 +123,7 @@ pub async fn compare_env(
         variable_name: variable_name.into(),
         action:        env::Action::Remove,
     }));
-    dbg!(&changes);
+    // dbg!(&changes);
 
     Ok(changes)
 }
@@ -132,7 +136,7 @@ pub fn is_path_like(variable_name: impl AsRef<str>) -> bool {
 }
 
 pub fn parse_dumped_env(output: &str) -> Result<BTreeMap<UniCase<String>, String>> {
-    println!("Got env:\n{}\n\n\n", output);
+    // println!("Got env:\n{}\n\n\n", output);
     let non_empty_lines = output.lines().map(|line| line.trim()).filter(|line| !line.is_empty());
     non_empty_lines
         .map(|line| match line.split_once('=') {

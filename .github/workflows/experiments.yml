@@ -1,7 +1,10 @@
-name: Manual command run
+name: Experimental command
 
 # Controls when the workflow will run
 on:
+  push:
+    branches:
+      - "*"
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
     inputs:
@@ -9,24 +12,34 @@ on:
         description: "Command to be run."
         required: true
         type: string
-      target:
-        description: "What runner should be used."
-        required: true
-        type: choice
-        options:
-          - "[self-hosted, Linux]"
-          - "[ubuntu-latest]"
-          - "[self-hosted, Windows]"
-          - "[windows-latest]"
-          - "[self-hosted, macOS]"
-          - "[macos-latest]"
-
 
           # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
   build:
-    runs-on: ${{ fromJSON(github.event.inputs.target) }}
+    runs-on:
+#      - Linux
+      - Windows
+      - self-hosted
 
     steps:
-      - run: ${{ github.event.inputs.command }}
+      - run: echo "foo content" > foo.txt
+      - uses: actions/upload-artifact@v2
+        with:
+          name: Cergo.toml
+          path: foo.txt
+      - uses: actions/checkout@v2
+        with:
+          clean: false
+      - uses: actions/github-script@v5
+        with:
+          script: |
+            core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
+            core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
+            core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
+      - run: cargo run --example s3
+        env:
+          RUST_BACKTRACE: 1
+          AWS_ACCESS_KEY_ID: ${{ secrets.ARTEFACT_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARTEFACT_S3_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-west-1

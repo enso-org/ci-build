@@ -35,9 +35,11 @@ impl<T: Into<String>> From<T> for Edition {
 
 impl Edition {
     pub fn is_nightly(&self) -> bool {
-        ide_ci::program::version::find_in_text(self)
-            .as_ref()
-            .map_or(false, crate::version::is_nightly)
+        // TRANSITION: old nightlies
+        self.0.contains("nightly")
+            || ide_ci::program::version::find_in_text(self)
+                .as_ref()
+                .map_or(false, crate::version::is_nightly)
     }
 }
 
@@ -57,7 +59,12 @@ impl Manifest {
     ) -> (Manifest, Vec<&Edition>) {
         let (nightlies, non_nightlies) =
             self.editions.iter().partition::<Vec<_>, _>(|e| e.is_nightly());
-        let nightlies_count_to_remove = 1 + nightlies.len().saturating_sub(nightlies_count_limit);
+        let nightlies_count_to_remove = (1 + nightlies.len()).saturating_sub(nightlies_count_limit);
+        println!(
+            "Will remove {} nightly editions from {} found.",
+            nightlies_count_to_remove,
+            nightlies.len()
+        );
         let (nightlies_to_remove, nightlies_to_keep) =
             nightlies.split_at(nightlies_count_to_remove);
 
@@ -91,15 +98,16 @@ impl BucketContext {
     }
 
     pub async fn put(&self, path: &str, data: ByteStream) -> Result<PutObjectOutput> {
-        self.client
+        dbg!(self
+            .client
             .put_object()
             .bucket(&self.bucket)
             .acl(self.upload_acl.clone())
             .key(format!("{}/{}", self.key_prefix, path))
-            .body(data)
-            .send()
-            .await
-            .anyhow_err()
+            .body(data))
+        .send()
+        .await
+        .anyhow_err()
     }
 
     pub async fn get_yaml<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
@@ -130,6 +138,7 @@ pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Resul
     );
 
     let manifest = bucket_context.get_yaml::<Manifest>(MANIFEST_FILENAME).await?;
+    println!("Got manifest index from S3: {:#?}", manifest);
 
 
     let (new_manifest, nightlies_to_remove) =
@@ -144,14 +153,41 @@ pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Resul
         .put(new_edition_filename, ByteStream::from_path(&new_edition_path).await?)
         .await?;
 
-    bucket_context.put_yaml("manifest2.yaml", &new_manifest).await?;
+    bucket_context.put_yaml("manifest.yaml", &new_manifest).await?;
     Ok(())
 }
 
-#[tokio::test]
-async fn aaa() -> Result {
-    let repo = RepoContext::from_str("enso-org/enso")?;
-    let paths = Paths::new_version(r"H:\NBO\enso", Version::parse("2022.1.1-nightly.2022-01-28")?)?;
-    update_manifest(&repo, &paths).await?;
-    Ok(())
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+
+    #[tokio::test]
+    async fn aaa() -> Result {
+        let repo = RepoContext::from_str("enso-org/enso")?;
+        let paths =
+            Paths::new_version(r"H:\NBO\enso", Version::parse("2022.1.1-nightly.2022-01-28")?)?;
+        update_manifest(&repo, &paths).await?;
+        Ok(())
+    }
+
+    #[test]
+    fn updating_manifest() -> Result {
+        let old_nightly = serde_yaml::from_str::<Manifest>(
+            r"editions:
+- '2021.11'
+- 2021.13-SNAPSHOT
+- 2021.14-SNAPSHOT
+- 2021.15-SNAPSHOT
+- 2021.12-SNAPSHOT
+- nightly-2021-08-12
+- nightly-2021-08-12.1
+- nightly-2021-08-16
+- nightly-2021-09-03
+",
+        )?;
+        old_nightly.with_new_nightly(Edition("foo_bar".into()), 20);
+
+        Ok(())
+    }
 }

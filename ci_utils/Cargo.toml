@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.44"
 argh = "0.1.6"
+async-compression = {version = "0.3.12", features = ["tokio", "gzip"]}
 async-trait = "0.1.51"
 bytes = "1.0.0"
 cached = "0.26.2"
@@ -30,6 +31,7 @@ ifmt = "0.3.3"
 indexmap = "1.7.0"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
+mime = "0.3.16"
 new_mime_guess = "4.0.0"
 nix = "0.23.0"
 octocrab = { git = "https://github.com/enso-org/octocrab" }
@@ -57,7 +59,7 @@ tokio = { version = "1.15.0", features = ["full"] }
 tokio-util = {version = "0.6.9", features = ["full"] }
 unicase = "2.6.0"
 url = "2.2.2"
-uuid = { version = "0.8.2", features= ["v4"] }
+uuid = { version = "0.8.2", features= ["v4", "serde"] }
 walkdir = "2.3.2"
 which = "4.2.2"
 wiremock = "0.5.10"
