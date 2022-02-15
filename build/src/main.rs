@@ -601,7 +601,7 @@ async fn main() -> anyhow::Result<()> {
     //     .await?;
 
 
-    if TARGET_OS == OS::Linux && run_in_ci() {
+    if release.is_some() && TARGET_OS == OS::Linux && run_in_ci() {
         paths.upload_edition_file_artifact().await?;
     }
 
