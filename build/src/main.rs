@@ -388,9 +388,8 @@ async fn main() -> anyhow::Result<()> {
     // Install Dependencies of the Simple Library Server
     ide_ci::programs::Npm
         .install(enso_root.join_many(["tools", "simple-library-server"]))?
-        .status()
-        .await?
-        .exit_ok()?;
+        .run_ok()
+        .await?;
 
 
     // Download Project Template Files
