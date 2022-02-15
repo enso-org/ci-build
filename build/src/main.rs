@@ -27,6 +27,7 @@ use enso_build::paths::Paths;
 use enso_build::retrieve_github_access_token;
 use enso_build::setup_octocrab;
 use enso_build::version::Versions;
+use ide_ci::env::Variable;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
 use ide_ci::goodie::GoodieDatabase;
@@ -200,7 +201,7 @@ impl ReleaseOperation {
         let command = args.command.clone().try_into()?;
         let repo = match args.repo.clone() {
             Some(repo) => repo,
-            None => ide_ci::actions::env::repository()?,
+            None => ide_ci::actions::env::Repository.fetch()?,
         };
 
         Ok(Self { command, repo })
@@ -240,7 +241,7 @@ async fn main() -> anyhow::Result<()> {
     match release.as_ref() {
         Some(ReleaseOperation { command, repo }) => match command {
             ReleaseCommand::Create => {
-                let commit = ide_ci::actions::env::commit()?;
+                let commit = ide_ci::actions::env::Sha.fetch()?;
                 let latest_changelog_body =
                     enso_build::changelog::retrieve_unreleased_release_notes(paths.changelog())?;
 
@@ -258,11 +259,11 @@ async fn main() -> anyhow::Result<()> {
                     .send()
                     .await?;
 
-                enso_build::env::emit_release_id(release.id);
+                enso_build::env::ReleaseId.emit(&release.id)?;
                 return Ok(());
             }
             ReleaseCommand::Publish => {
-                let release_id = enso_build::env::release_id()?;
+                let release_id = enso_build::env::ReleaseId.fetch()?;
                 println!("Looking for release with id {release_id} on github.");
                 let release = repo.repos(&octocrab).releases().get_by_id(release_id).await?;
                 println!("Found the target release, will publish it.");
@@ -613,7 +614,7 @@ async fn main() -> anyhow::Result<()> {
                 // Make packages.
                 let packages = create_packages(&paths).await?;
 
-                let release_id = enso_build::env::release_id()?;
+                let release_id = enso_build::env::ReleaseId.fetch()?;
                 let repo_handler = repo.repos(&octocrab);
 
                 let releases_handler = repo_handler.releases();

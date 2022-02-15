@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+use ide_ci::env::Variable;
 use ide_ci::models::config::RepoContext;
 use strum::EnumString;
 
@@ -66,11 +67,11 @@ pub enum BuildKind {
 }
 
 pub fn default_kind() -> BuildKind {
-    crate::env::build_kind().unwrap_or(BuildKind::Dev)
+    crate::env::BuildKind.fetch().unwrap_or(BuildKind::Dev)
 }
 
 pub fn default_repo() -> Option<RepoContext> {
-    ide_ci::actions::env::repository().ok()
+    ide_ci::actions::env::Repository.fetch().ok()
 }
 
 pub fn parse_repo_context(value: &str) -> std::result::Result<Option<RepoContext>, String> {

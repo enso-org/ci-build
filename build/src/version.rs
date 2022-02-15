@@ -117,7 +117,7 @@ impl Versions {
 
         ide_ci::actions::workflow::set_env(VERSION_VAR_NAME, &name)?;
         ide_ci::actions::workflow::set_env(EDITION_VAR_NAME, &edition)?;
-        ide_ci::actions::workflow::set_env(RELEASE_MODE_VAR_NAME, self.release_mode)?;
+        ide_ci::actions::workflow::set_env(RELEASE_MODE_VAR_NAME, &self.release_mode)?;
         Ok(())
     }
 

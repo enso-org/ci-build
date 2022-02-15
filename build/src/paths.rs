@@ -57,7 +57,7 @@ impl ComponentPaths {
         for (what, path) in paths {
             ide_ci::actions::workflow::set_env(
                 &iformat!("{prefix}_DIST_{what}"),
-                path.to_string_lossy(),
+                &path.to_string_lossy(),
             )?;
         }
         Ok(())
@@ -149,7 +149,7 @@ impl Paths {
             paths.emit_to_actions(prefix)?;
         }
 
-        ide_ci::actions::workflow::set_env("TARGET_DIR", self.target.to_string_lossy())?;
+        ide_ci::actions::workflow::set_env("TARGET_DIR", &self.target.to_string_lossy())?;
         Ok(())
     }
 

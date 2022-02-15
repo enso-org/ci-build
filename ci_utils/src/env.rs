@@ -6,6 +6,41 @@ use std::env::set_var;
 use std::env::split_paths;
 use unicase::UniCase;
 
+pub trait Variable {
+    const NAME: &'static str;
+    type Value: FromString = String;
+
+    fn fetch(&self) -> Result<Self::Value> {
+        self.fetch_as()
+    }
+
+    fn fetch_as<T: FromString>(&self) -> Result<T> {
+        self.fetch_string()?.parse2()
+    }
+
+    fn fetch_string(&self) -> Result<String> {
+        expect_var(Self::NAME)
+    }
+
+    fn fetch_os_string(&self) -> Result<OsString> {
+        expect_var_os(Self::NAME)
+    }
+
+    fn set(&self, value: Self::Value)
+    where Self::Value: AsRef<OsStr> {
+        std::env::set_var(Self::NAME, value)
+    }
+
+    fn emit(&self, value: &Self::Value) -> Result
+    where Self::Value: ToString {
+        crate::actions::workflow::set_env(Self::NAME, value)
+    }
+
+    fn is_set(&self) -> bool {
+        self.fetch_os_string().is_ok()
+    }
+}
+
 const PATH_ENVIRONMENT_NAME: &str = "PATH";
 
 pub fn expect_var(name: impl AsRef<str>) -> Result<String> {
