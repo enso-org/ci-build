@@ -410,6 +410,9 @@ async fn main() -> anyhow::Result<()> {
     let mut system = sysinfo::System::new();
     system.refresh_memory();
     dbg!(system.total_memory());
+    dbg!(system.available_memory());
+    dbg!(system.used_memory());
+    dbg!(system.free_memory());
 
     // Build packages.
     println!("Bootstrapping Enso project.");
@@ -428,7 +431,8 @@ async fn main() -> anyhow::Result<()> {
         sbt.call_arg("verifyLicensePackages").await?;
     }
 
-    if system.total_memory() > 10_000_000 {
+    let github_hosted_macos_memory = 15032385;
+    if system.total_memory() > github_hosted_macos_memory {
         let mut tasks = vec![
             "engine-runner/assembly",
             "launcher/buildNativeImage",
