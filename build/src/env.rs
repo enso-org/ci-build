@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use crate::prelude::*;
 
 use ide_ci::env::Variable;

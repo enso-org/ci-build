@@ -31,9 +31,16 @@ pub trait Variable {
         std::env::set_var(Self::NAME, value)
     }
 
-    fn emit(&self, value: &Self::Value) -> Result
+    fn emit_env(&self, value: &Self::Value) -> Result
     where Self::Value: ToString {
         crate::actions::workflow::set_env(Self::NAME, value)
+    }
+
+    fn emit(&self, value: &Self::Value) -> Result
+    where Self::Value: ToString {
+        self.emit_env(value)?;
+        crate::actions::workflow::set_output(Self::NAME, value);
+        Ok(())
     }
 
     fn is_set(&self) -> bool {
