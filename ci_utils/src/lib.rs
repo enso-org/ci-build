@@ -12,6 +12,7 @@
 #![feature(trait_alias)]
 #![feature(io_error_other)]
 #![feature(bool_to_option)]
+#![feature(string_remove_matches)]
 
 pub mod actions;
 pub mod anyhow;
@@ -71,6 +72,7 @@ pub mod prelude {
     pub use std::default::default;
     pub use std::ffi::OsStr;
     pub use std::ffi::OsString;
+    pub use std::fmt::Debug;
     pub use std::fmt::Display;
     pub use std::fmt::Formatter;
     pub use std::future::ready;

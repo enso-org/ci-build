@@ -2,9 +2,16 @@ use crate::prelude::*;
 use anyhow::Context;
 use fs_extra::dir::CopyOptions;
 use platforms::TARGET_OS;
+use std::fs::File;
 
 use crate::archive::Format;
 use reqwest::IntoUrl;
+
+#[context("Failed to open path for writing: {}", path.as_ref().display())]
+pub fn create(path: impl AsRef<Path>) -> Result<File> {
+    create_parent_dir_if_missing(&path)?;
+    std::fs::File::create(&path).anyhow_err()
+}
 
 /// Create a directory (and all missing parent directories),
 ///
@@ -73,8 +80,13 @@ pub fn reset_dir(path: impl AsRef<Path>) -> Result {
     Ok(())
 }
 
+/// Get the the response body as a byte stream.
+pub async fn download(url: impl IntoUrl) -> Result<impl Stream<Item = reqwest::Result<Bytes>>> {
+    Ok(reqwest::get(url).await?.bytes_stream())
+}
+
 /// Get the full response body from URL as bytes.
-pub async fn download(url: impl IntoUrl) -> anyhow::Result<Bytes> {
+pub async fn download_all(url: impl IntoUrl) -> anyhow::Result<Bytes> {
     reqwest::get(url).await?.bytes().await.map_err(Into::into)
 }
 
@@ -106,7 +118,7 @@ pub async fn download_and_extract(
     let filename = filename_from_url(&url)?;
 
     println!("Downloading {}", url_text);
-    let contents = download(url).await?;
+    let contents = download_all(url).await?;
     let buffer = std::io::Cursor::new(contents);
 
     println!("Extracting {} to {}", filename.display(), output_dir.as_ref().display());
@@ -163,7 +175,7 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
         if source_file.is_dir() {
             let mut options = fs_extra::dir::CopyOptions::new();
             options.overwrite = true;
-            options.copy_inside = true;
+            options.content_only = true;
             fs_extra::dir::copy(source_file, destination_file, &options)?;
         } else {
             std::fs::copy(source_file, destination_file)?;
@@ -184,12 +196,18 @@ pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<
 }
 
 pub fn expect_dir(path: impl AsRef<Path>) -> Result {
-    path.as_ref().is_dir().then_some(()).context(anyhow!("{} is not a directory.", path.as_ref().display()))
+    path.as_ref()
+        .is_dir()
+        .then_some(())
+        .context(anyhow!("{} is not a directory.", path.as_ref().display()))
 }
 
 
 pub fn expect_file(path: impl AsRef<Path>) -> Result {
-    path.as_ref().is_file().then_some(()).context(anyhow!("{} is not a files.", path.as_ref().display()))
+    path.as_ref()
+        .is_file()
+        .then_some(())
+        .context(anyhow!("{} is not a files.", path.as_ref().display()))
 }
 
 #[cfg(not(target_os = "windows"))]

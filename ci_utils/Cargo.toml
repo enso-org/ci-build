@@ -12,6 +12,7 @@ async-compression = {version = "0.3.12", features = ["tokio", "gzip"]}
 async-trait = "0.1.51"
 bytes = "1.0.0"
 cached = "0.26.2"
+convert_case = "0.5.0"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 command-group = { version = "1.0.8", features = ["with-tokio"] }
@@ -41,6 +42,8 @@ path-slash = "0.1.4"
 platforms = "2.0.0"
 pin-project = "1.0.8"
 port_check = "0.1.5"
+proc-macro2 = "1.0.36"
+quote = "1.0.15"
 rand = "0.8.4"
 regex = "1.5.4"
 reqwest = { version = "0.11.5", features = ["stream"] }
@@ -52,6 +55,7 @@ serde_yaml = "0.8.21"
 scopeguard = "1.1.0"
 shrinkwraprs = "0.3.0"
 strum = { version = "0.23", features = ["derive"] }
+syn = "1.0.86"
 sysinfo = "0.22.2"
 tar = "0.4.37"
 tempfile = "3.2.0"

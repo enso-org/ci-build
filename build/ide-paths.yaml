@@ -1,0 +1,30 @@
+<repo_root>/:
+  .github/:
+    workflows/:
+  app/:
+    gui/:
+    ide-desktop/:
+      lib/:
+        content/:
+        project-manager/:
+  build/:
+  dist/:
+    bin/:
+    client/:
+    content/:
+      assets/:
+      package.json:
+      preload.js:
+    project-manager/:
+    tmp/:
+    # Final WASM artifacts in `dist` directory.
+    wasm/: &WASM
+      &WASM_MAIN ide.wasm:
+      &WASM_MAIN_RAW ide_bg.wasm:
+      &WASM_GLUE ide.js:
+    init:
+    build-init:
+    build.json:
+  run:
+<temp>:
+  enso-wasm/: *WASM

@@ -60,3 +60,7 @@ walkdir = "2.3.2"
 which = "4.2.2"
 whoami = "1.2.1"
 zip = "0.5.13"
+
+[build-dependencies]
+ide-ci = {path = "../ci_utils"}
+serde_yaml = "0.8.21"

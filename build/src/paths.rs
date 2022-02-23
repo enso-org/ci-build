@@ -6,6 +6,10 @@ use crate::version::Versions;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
 
+pub mod generated {
+    include!(concat!(env!("OUT_DIR"), "/paths.rs"));
+}
+
 #[cfg(target_os = "linux")]
 pub const LIBRARIES_TO_TEST: [&str; 6] =
     ["Tests", "Table_Tests", "Database_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
