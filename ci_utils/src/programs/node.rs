@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Node;
 
 impl Program for Node {
@@ -8,6 +9,7 @@ impl Program for Node {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Npm;
 
 impl Program for Npm {

@@ -35,7 +35,13 @@ impl Debug for Command {
 }
 
 impl Command {
-    pub fn new<P: Program + 'static>(inner: tokio::process::Command) -> Self {
+    pub fn new<S: AsRef<OsStr>>(program: S) -> Command {
+        let inner = tokio::process::Command::new(program);
+        let status_checker = Arc::new(|status: ExitStatus| status.exit_ok().anyhow_err());
+        Self { inner, status_checker }
+    }
+
+    pub fn new_over<P: Program + 'static>(inner: tokio::process::Command) -> Self {
         Command { inner, status_checker: Arc::new(P::handle_exit_status) }
     }
 

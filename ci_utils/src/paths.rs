@@ -8,6 +8,7 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
+use serde_yaml::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use syn::parse_quote;
@@ -37,15 +38,31 @@ impl Shape {
 #[derive(Clone, Debug, PartialEq, Shrinkwrap)]
 pub struct Node {
     #[shrinkwrap(main_field)]
-    pub value: String,
-    pub shape: Shape,
+    value:    String,
+    /// The name that replaces value in variable-like contexts.
+    var_name: Option<String>,
+    shape:    Shape,
 }
 
 impl Node {
-    pub fn new<'a>(text: &'a str) -> Node {
-        let shape = Shape::new(&text);
-        let value = text.trim_end_matches('/').into();
-        Node { shape, value }
+    pub fn new(value: impl AsRef<str>, var_name: Option<String>) -> Self {
+        let shape = Shape::new(value.as_ref());
+        let value = value.as_ref().trim_end_matches('/').to_string();
+        Self { var_name, shape, value }
+    }
+
+    pub fn new_from_key(value: &Value) -> Result<Self> {
+        Ok(match value {
+            Value::Mapping(mapping) => {
+                let value = mapping[&"path".into()]
+                    .as_str()
+                    .context("Expected string for `path`")?
+                    .to_owned();
+                Node::new(value, mapping[&"var".into()].as_str().map(into))
+            }
+            Value::String(string) => Node::new(string, None),
+            other => bail!("Cannot deserialize {} to a node.", serde_yaml::to_string(other)?),
+        })
     }
 
     pub fn add_child(&mut self, node: Node) {
@@ -119,10 +136,11 @@ impl Node {
 
     /// Sanitize string to be a valid Rust identifier.
     pub fn rustify(&self) -> String {
-        if self.value == "." {
+        let base = self.var_name.as_ref().unwrap_or(&self.value);
+        if base == "." {
             String::from("Paths")
         } else {
-            let mut ret = self.value.replace(|c| matches!(c, '-' | '.' | ' '), "_");
+            let mut ret = base.replace(|c| matches!(c, '-' | '.' | ' '), "_");
             ret.remove_matches(|c| matches!(c, '<' | '>'));
             ret
         }
@@ -140,6 +158,12 @@ impl Node {
         syn::Ident::new(&self.rustify().to_case(case), Span::call_site())
     }
 }
+
+// impl TryFrom<&serde_yaml::Value> for Node {
+//     type Error = anyhow::Error;
+//
+//     fn try_from(value: &Value) -> std::result::Result<Self, Self::Error> {}
+// }
 
 pub fn struct_ident<'a>(full_path: impl IntoIterator<Item = &'a Node>) -> Ident {
     let text = full_path.into_iter().map(|n| n.struct_ident_piece()).join("");
@@ -181,6 +205,12 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
            }
        }
 
+       impl AsRef<std::ffi::OsStr> for #ty_name {
+           fn as_ref(&self) -> &std::ffi::OsStr {
+               self.path.as_ref()
+           }
+       }
+
        impl std::ops::Deref for #ty_name {
            type Target = std::path::PathBuf;
            fn deref(&self) -> &Self::Target {
@@ -215,7 +245,8 @@ pub fn generate(forest: Vec<Node>) -> Result<proc_macro2::TokenStream> {
         // }
     };
 
-    let top = Node { value: String::from("."), shape: Shape::Directory(forest) };
+    let top =
+        Node { value: String::from("."), var_name: None, shape: Shape::Directory(forest) };
     top.foreach(|full_path, last_node| {
         ret.extend(generate_struct(full_path, last_node));
     });
@@ -227,12 +258,7 @@ pub fn convert(value: &serde_yaml::Value) -> Result<Vec<Node>> {
         serde_yaml::Value::Mapping(mapping) => {
             let mut ret = Vec::new();
             for (key, value) in mapping {
-                let segment = key.as_str().context(format!(
-                    "Expected string with a path segment, found: {}",
-                    serde_yaml::to_string(value)?
-                ))?;
-
-                let mut node = Node::new(segment);
+                let mut node = Node::new_from_key(key)?;
                 if !value.is_null() {
                     for child in convert(value)? {
                         node.add_child(child);
@@ -253,42 +279,15 @@ pub fn process(yaml_input: impl Read) -> Result<String> {
     Ok(out.to_string())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn convert(value: &serde_yaml::Value) -> Result<Vec<Node>> {
-        match value {
-            serde_yaml::Value::Mapping(mapping) => {
-                let mut ret = Vec::new();
-                for (key, value) in mapping {
-                    let segment = key.as_str().context(format!(
-                        "Expected string with a path segment, found: {}",
-                        serde_yaml::to_string(value)?
-                    ))?;
-
-                    let mut node = Node::new(segment);
-                    if !value.is_null() {
-                        for child in convert(value)? {
-                            node.add_child(child);
-                        }
-                    }
-                    ret.push(node)
-                }
-                Ok(ret)
-            }
-            _ => bail!("Expected YAML mapping, found the {}", serde_yaml::to_string(value)?),
-        }
-    }
-
     #[test]
-    fn generate_paths() -> Result {
-        let yaml = serde_yaml::from_str::<serde_yaml::Value>(YAML)?;
-        let forest = convert(&yaml)?;
-        let out = generate(forest)?;
-        println!("===\n\n{}\n\n===", out);
-        // dbg!(forest);
+    fn generate() -> Result {
+        let yaml_contents = include_bytes!("../../build/ide-paths.yaml");
+        let code = crate::paths::process(yaml_contents.as_slice())?;
+        println!("{}", code);
         Ok(())
     }
 }

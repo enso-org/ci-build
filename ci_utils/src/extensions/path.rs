@@ -25,7 +25,7 @@ pub trait PathExt: AsRef<Path> {
     /// ```
     fn with_appended_extension(&self, extension: impl AsRef<OsStr>) -> PathBuf {
         if extension.as_ref().is_empty() {
-            return self.as_ref().into()
+            return self.as_ref().into();
         } else {
             let mut ret = self.as_ref().to_path_buf().into_os_string();
             ret.push(".");
@@ -36,8 +36,8 @@ pub trait PathExt: AsRef<Path> {
 
     #[context("Failed to deserialize file `{}` as type `{}`.", self.as_ref().display(), std::any::type_name::<T>())]
     fn read_to_json<T: DeserializeOwned>(&self) -> Result<T> {
-        let file = std::fs::File::open(self)?;
-        serde_json::from_reader(file).anyhow_err()
+        let content = std::fs::read_to_string(self)?;
+        serde_json::from_str(&content).anyhow_err()
     }
 
     fn write_as_json<T: Serialize>(&self, value: &T) -> Result {

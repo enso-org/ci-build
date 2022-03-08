@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Sbt;
 
 impl Program for Sbt {

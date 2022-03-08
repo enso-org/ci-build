@@ -75,7 +75,10 @@ impl SessionClient {
         .value)
     }
 
-    pub async fn download_container_item(&self, content_location: Url) -> Result<impl AsyncRead> {
+    pub async fn download_container_item(
+        &self,
+        content_location: Url,
+    ) -> Result<impl AsyncRead + Send> {
         raw::endpoints::download_item(&self.download_client, content_location).await
     }
 }

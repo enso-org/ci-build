@@ -5,9 +5,14 @@
     gui/:
     ide-desktop/:
       lib/:
+        client/:
         content/:
+        icons/:
         project-manager/:
   build/:
+  built-distribution:
+    "project-manager-bundle-<triple>":
+      enso:
   dist/:
     bin/:
     client/:
@@ -15,16 +20,24 @@
       assets/:
       package.json:
       preload.js:
+    icons/:
     project-manager/:
     tmp/:
     # Final WASM artifacts in `dist` directory.
     wasm/: &WASM
-      &WASM_MAIN ide.wasm:
-      &WASM_MAIN_RAW ide_bg.wasm:
-      &WASM_GLUE ide.js:
+      ? path: ide.wasm
+        var: wasm_main
+      ? path: ide_bg.wasm
+        var: wasm_main_raw
+      ? path: ide.js
+        var: wasm_glue
     init:
     build-init:
     build.json:
   run:
 <temp>:
   enso-wasm/: *WASM
+#":wasm":
+#  &WASM_MAIN ide.wasm:
+#  &WASM_MAIN_RAW ide_bg.wasm:
+#  &WASM_GLUE ide.js:

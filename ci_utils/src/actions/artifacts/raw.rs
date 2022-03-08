@@ -130,7 +130,7 @@ pub mod endpoints {
     pub async fn download_item(
         bin_client: &reqwest::Client,
         artifact_location: Url,
-    ) -> Result<Pin<Box<dyn AsyncRead>>> {
+    ) -> Result<Pin<Box<dyn AsyncRead + Send>>> {
         // println!("Downloading {} to {}.", artifact_location, destination.as_ref().display());
         // let file = tokio::fs::File::create(destination);
 
@@ -144,10 +144,10 @@ pub mod endpoints {
         let reader = StreamReader::new(response.bytes_stream().map_err(std::io::Error::other));
         if is_gzipped {
             let decoded_stream = async_compression::tokio::bufread::GzipDecoder::new(reader);
-            Ok(Box::pin(decoded_stream) as Pin<Box<dyn AsyncRead>>)
+            Ok(Box::pin(decoded_stream) as Pin<Box<dyn AsyncRead + Send>>)
             // tokio::io::copy(&mut decoded_stream, &mut file.await?).await?;
         } else {
-            Ok(Box::pin(reader) as Pin<Box<dyn AsyncRead>>)
+            Ok(Box::pin(reader) as Pin<Box<dyn AsyncRead + Send>>)
             // tokio::io::copy(&mut reader, &mut destination).await?;
         }
     }

@@ -26,9 +26,9 @@ pub trait Variable {
         expect_var_os(Self::NAME)
     }
 
-    fn set(&self, value: Self::Value)
-    where Self::Value: AsRef<OsStr> {
-        std::env::set_var(Self::NAME, value)
+    fn set(&self, value: &Self::Value)
+    where Self::Value: ToString {
+        std::env::set_var(Self::NAME, value.to_string())
     }
 
     fn emit_env(&self, value: &Self::Value) -> Result
@@ -45,6 +45,10 @@ pub trait Variable {
 
     fn is_set(&self) -> bool {
         self.fetch_os_string().is_ok()
+    }
+
+    fn remove(&self) {
+        std::env::remove_var(Self::NAME)
     }
 }
 

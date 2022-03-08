@@ -59,7 +59,7 @@ pub struct Run {
     pub command_pieces: Vec<OsString>,
 }
 
-#[derive(Clone, PartialEq, Debug, EnumString)]
+#[derive(Clone, Copy, PartialEq, Debug, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 pub enum BuildKind {
     Dev,

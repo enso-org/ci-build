@@ -1,8 +1,18 @@
 use crate::prelude::*;
 
+use ide_ci::env::Variable;
 use ide_ci::programs::Go;
 use std::process::Stdio;
 use tokio::process::Child;
+
+pub mod env {
+    /// Environment variable that stores URL under which spawned httpbin server is available.
+    pub struct Url;
+    impl ide_ci::env::Variable for Url {
+        const NAME: &'static str = "ENSO_HTTP_TEST_HTTPBIN_URL";
+        type Value = url::Url;
+    }
+}
 
 pub struct Spawned {
     pub process: Child,
@@ -26,13 +36,13 @@ pub async fn get_and_spawn_httpbin(port: u16) -> Result<Spawned> {
 
     let url_string = iformat!("http://localhost:{port}");
     let url = Url::parse(&url_string)?;
-    std::env::set_var("ENSO_HTTP_TEST_HTTPBIN_URL", &url_string);
+    env::Url.set(&url);
     Ok(Spawned { url, process })
 }
 
 impl Drop for Spawned {
     fn drop(&mut self) {
-        std::env::remove_var("ENSO_HTTP_TEST_HTTPBIN_URL");
+        env::Url.remove();
     }
 }
 

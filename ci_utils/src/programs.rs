@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+pub mod Lerna;
 pub mod cargo;
 pub mod cmd;
 pub mod conda;
@@ -9,15 +10,18 @@ pub mod git;
 pub mod go;
 pub mod java;
 pub mod node;
+pub mod npx;
 pub mod pwsh;
 pub mod robocopy;
 pub mod rsync;
+pub mod rustup;
 pub mod sbt;
 pub mod seven_zip;
 pub mod sh;
 pub mod tar;
 pub mod vs;
 pub mod vswhere;
+pub mod wasm_pack;
 
 pub use cargo::Cargo;
 pub use cmd::Cmd;
@@ -33,3 +37,4 @@ pub use pwsh::PwSh;
 pub use sbt::Sbt;
 pub use seven_zip::SevenZip;
 pub use sh::Bash;
+pub use wasm_pack::WasmPack;

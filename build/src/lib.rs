@@ -1,6 +1,13 @@
 #![feature(bool_to_option)]
 #![feature(exit_status_error)]
+#![feature(async_closure)]
+#![feature(generic_associated_types)]
+#![feature(associated_type_bounds)]
 #![feature(option_result_contains)]
+#![feature(result_flattening)]
+#![feature(async_stream)]
+#![feature(default_free_fn)]
+#![feature(map_first_last)]
 
 use crate::prelude::*;
 use ide_ci::programs::java;
@@ -14,6 +21,7 @@ pub mod args;
 pub mod aws;
 pub mod bump_version;
 pub mod changelog;
+pub mod engine;
 pub mod enso;
 pub mod env;
 pub mod httpbin;

@@ -78,7 +78,7 @@ pub trait Program: Sized + 'static {
 
     fn cmd(&self) -> Result<Command> {
         let tokio_command = self.lookup().map(tokio::process::Command::new)?;
-        let mut command = Command::new::<Self>(tokio_command);
+        let mut command = Command::new_over::<Self>(tokio_command);
         if let Some(current_dir) = self.current_directory() {
             command.current_dir(current_dir);
         }
