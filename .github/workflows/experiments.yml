@@ -24,16 +24,24 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
+            core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
+            core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
+
       - uses: actions/checkout@v2
         with:
           ref: wip/mwu/new-ide-build
           repository: enso-org/enso
           path: enso
+
       - uses: actions/checkout@v2
         with:
           path: ci-build
           clean: false
+
       - name: Run a multi-line script
         run: cargo run --example build-gui -- ../enso build
         working-directory: ${{ github.workspace }}/ci-build
