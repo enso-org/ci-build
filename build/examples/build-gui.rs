@@ -145,10 +145,10 @@ async fn main() -> Result {
 
 
     if true {
-        // let pm_source = ProjectManagerSource::Local;
-        let pm_source = ProjectManagerSource::Bundle(
-            paths.repo_root.built_distribution.project_manager_bundle_triple.enso.path.clone(),
-        );
+        let pm_source = ProjectManagerSource::Local;
+        // let pm_source = ProjectManagerSource::Bundle(
+        //     paths.repo_root.built_distribution.project_manager_bundle_triple.enso.path.clone(),
+        // );
 
 
         let get_pm_fut = {
