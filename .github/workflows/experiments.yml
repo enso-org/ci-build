@@ -20,8 +20,6 @@ jobs:
           - [macos-latest]
           - [self-hosted, Windows, engine]
           - [self-hosted, Linux, engine]
-        #        - [self-hosted, macOS]]
-        nightly: [true, false]
       fail-fast: false
 
     # Steps represent a sequence of tasks that will be executed as part of the job
