@@ -105,7 +105,9 @@ pub struct BuildInfo {
 #[tokio::main]
 async fn main() -> Result {
     let root_path =
-        PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| String::from(r"H:/NBO/enso5")));
+        PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| String::from(r"H:/NBO/enso5")))
+            .absolutize()?
+            .to_owned();
     let temp = tempfile::tempdir()?;
 
     let octocrab = setup_octocrab()?;
