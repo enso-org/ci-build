@@ -1,3 +1,4 @@
 [toolchain]
 # Bump when https://github.com/rust-lang/rust/issues/91991 is fixed.
+components = [ "rustfmt"]
 channel = "nightly-2022-01-20"
