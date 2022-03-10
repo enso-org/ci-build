@@ -14,6 +14,7 @@ use std::collections::HashSet;
 use syn::parse_quote;
 
 lazy_static::lazy_static! {
+    /// Matches `bar` in `foo <bar> baz`.
     static ref PARAMETER: regex::Regex = regex::Regex::new(r"<([^>]+)>").unwrap();
 }
 

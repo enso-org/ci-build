@@ -7,6 +7,22 @@ use std::fs::File;
 use crate::archive::Format;
 use reqwest::IntoUrl;
 
+#[context("Failed to write path: {}", path.as_ref().display())]
+pub fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result {
+    create_parent_dir_if_missing(&path)?;
+    std::fs::write(&path, contents).anyhow_err()
+}
+
+#[context("Failed to read the file: {}", path.as_ref().display())]
+pub fn read_to_string(path: impl AsRef<Path>) -> Result<String> {
+    std::fs::read_to_string(&path).anyhow_err()
+}
+
+#[context("Failed to read the file: {}", path.as_ref().display())]
+pub fn read_string_into<T: FromString>(path: impl AsRef<Path>) -> Result<T> {
+    read_to_string(&path)?.parse2()
+}
+
 #[context("Failed to open path for writing: {}", path.as_ref().display())]
 pub fn create(path: impl AsRef<Path>) -> Result<File> {
     create_parent_dir_if_missing(&path)?;
@@ -158,8 +174,19 @@ pub async fn download_relative(
     Ok(output_path)
 }
 
+pub fn require_exist(path: impl AsRef<Path>) -> Result {
+    if path.as_ref().exists() {
+        println!("{} does exist.", path.as_ref().display());
+        Ok(())
+    } else {
+        bail!("{} does not exist.", path.as_ref().display())
+    }
+}
+
 pub fn copy_to(source_file: impl AsRef<Path>, dest_dir: impl AsRef<Path>) -> Result {
+    require_exist(&source_file)?;
     create_dir_if_missing(dest_dir.as_ref())?;
+    println!("Will copy {} to {}", source_file.as_ref().display(), dest_dir.as_ref().display());
     let mut options = CopyOptions::new();
     options.overwrite = true;
     fs_extra::copy_items(&[source_file], dest_dir, &options)?;

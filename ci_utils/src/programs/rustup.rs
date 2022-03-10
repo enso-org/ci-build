@@ -13,3 +13,11 @@ pub mod env {
         const NAME: &'static str = "RUSTUP_TOOLCHAIN";
     }
 }
+
+pub struct Rustup;
+
+impl Program for Rustup {
+    fn executable_name() -> &'static str {
+        "rustup"
+    }
+}

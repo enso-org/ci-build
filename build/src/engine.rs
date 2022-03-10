@@ -1,40 +1,21 @@
 use crate::prelude::*;
 
-use crate::args;
 use crate::args::default_repo;
 use crate::args::Args;
 use crate::args::BuildKind;
 use crate::args::WhatToDo;
-use crate::enso::BuiltEnso;
-use crate::enso::IrCaches;
-use crate::get_graal_version;
-use crate::get_java_major_version;
-use crate::paths;
 use crate::paths::ComponentPaths;
 use crate::paths::Paths;
-use crate::retrieve_github_access_token;
-use crate::setup_octocrab;
 use crate::version::Versions;
 
-use crate::engine::sbt::verify_generated_package;
 use anyhow::Context;
 use ide_ci::env::Variable;
 use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
-use ide_ci::goodie::GoodieDatabase;
-use ide_ci::goodies;
 use ide_ci::goodies::graalvm;
 use ide_ci::models::config::RepoContext;
-use ide_ci::platform::default_shell;
-use ide_ci::program::with_cwd::WithCwd;
-use ide_ci::programs::git::Git;
-use ide_ci::programs::Flatc;
-use ide_ci::programs::Sbt;
-use ide_ci::run_in_ci;
-use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
 use std::env::consts::EXE_EXTENSION;
-use sysinfo::SystemExt;
 
 pub mod context;
 pub mod env;
@@ -138,32 +119,6 @@ pub const NIGHTLY: BuildConfiguration = BuildConfiguration {
     build_bundles:         false,
 };
 
-pub async fn deduce_versions(
-    octocrab: &Octocrab,
-    build_kind: BuildKind,
-    target_repo: Option<&RepoContext>,
-    root_path: impl AsRef<Path>,
-) -> Result<Versions> {
-    println!("Deciding on version to target.");
-    let changelog_path = crate::paths::root_to_changelog(&root_path);
-    let version = Version {
-        pre: match build_kind {
-            BuildKind::Dev => Versions::local_prerelease()?,
-            BuildKind::Nightly => {
-                let repo = target_repo.cloned().or_else(|| default_repo()).ok_or_else(|| {
-                    anyhow!(
-                        "Missing target repository designation in the release mode. \
-                        Please provide `--repo` option or `GITHUB_REPOSITORY` repository."
-                    )
-                })?;
-                Versions::nightly_prerelease(octocrab, &repo).await?
-            }
-        },
-        ..crate::version::base_version(&changelog_path)?
-    };
-    Ok(Versions::new(version))
-}
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum ReleaseCommand {
     Create,
@@ -220,10 +175,6 @@ pub enum Operation {
     Release(ReleaseOperation),
     Run(RunOperation),
     Build(BuildOperation),
-}
-
-pub mod engine_sbt {
-    use super::*;
 }
 
 #[derive(Clone, PartialEq, Debug, Default)]

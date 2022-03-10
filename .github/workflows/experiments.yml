@@ -2,44 +2,43 @@ name: Experimental command
 
 # Controls when the workflow will run
 on:
+  workflow_dispatch:
+
   push:
     branches:
       - "*"
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-    inputs:
-      command:
-        description: "Command to be run."
-        required: true
-        type: string
 
-          # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    runs-on:
-#      - Linux
-      - Windows
-      - self-hosted
+    # The type of runner that the job will run on
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ubuntu-latest]
+          - [windows-latest]
+          - [macos-latest]
+          - [self-hosted, Windows, engine]
+          - [self-hosted, Linux, engine]
+        #        - [self-hosted, macOS]]
+        nightly: [true, false]
+      fail-fast: false
 
+    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - run: echo "foo content" > foo.txt
-      - uses: actions/upload-artifact@v2
-        with:
-          name: Cergo.toml
-          path: foo.txt
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
         with:
-          clean: false
-      - uses: actions/github-script@v5
+          ref: wip/mwu/new-ide-build
+          repository: enso-org/enso
+          path: enso
+      - uses: actions/checkout@v2
         with:
-          script: |
-            core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
-            core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
-            core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
-      - run: cargo run --example s3
+          path: ci-build
+          clean: false
+      - name: Run a multi-line script
+        run: cargo run --example build-gui -- ../enso build
+        working-directory: ${{ github.workspace }}/ci-build
         env:
-          RUST_BACKTRACE: 1
-          AWS_ACCESS_KEY_ID: ${{ secrets.ARTEFACT_S3_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARTEFACT_S3_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-west-1
+          GITHUB_TOKEN: ${{ github.token }}
+        if: "!matrix.nightly"

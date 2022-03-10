@@ -10,7 +10,6 @@ use crate::args::Args;
 use crate::args::WhatToDo;
 use crate::engine::create_bundles;
 use crate::engine::create_packages;
-use crate::engine::deduce_versions;
 use crate::engine::download_project_templates;
 use crate::engine::env;
 use crate::engine::BuildConfiguration;
@@ -34,11 +33,11 @@ use crate::setup_octocrab;
 use crate::engine::sbt::verify_generated_package;
 use crate::enso::BuiltEnso;
 use crate::enso::IrCaches;
+use crate::version::deduce_versions;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies;
 use ide_ci::goodies::graalvm;
 use ide_ci::models::config::RepoContext;
-use ide_ci::paths;
 use ide_ci::platform::default_shell;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::Flatc;
@@ -162,8 +161,10 @@ impl RunContext {
         let versions = &self.paths.triple.versions;
 
         let commit = ide_ci::actions::env::Sha.fetch()?;
+
+        let changelog_contents = ide_ci::io::read_to_string(self.paths.changelog())?;
         let latest_changelog_body =
-            crate::changelog::retrieve_unreleased_release_notes(self.paths.changelog())?;
+            crate::changelog::Changelog(&changelog_contents).top_release_notes()?;
 
         println!("Preparing release {} for commit {}", versions.version, commit);
         let release = repo

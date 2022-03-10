@@ -1,4 +1,12 @@
-// use crate::prelude::*;
-// use anyhow::Error;
-// use futures_util::future::MapErr;
-// use futures_util::TryFutureExt;
+use crate::prelude::*;
+
+pub trait FutureExt: Future {
+    fn spawn(self) -> tokio::task::JoinHandle<Self::Output>
+    where
+        Self: Future + Send + 'static + Sized,
+        Self::Output: Send + 'static, {
+        tokio::spawn(self)
+    }
+}
+
+impl<T: ?Sized> FutureExt for T where T: Future {}

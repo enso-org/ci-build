@@ -1,4 +1,6 @@
 // use crate::preflight_check::NIGHTLY_RELEASE_TITLE_INFIX;
+use crate::args::default_repo;
+use crate::args::BuildKind;
 use crate::prelude::*;
 use chrono::Datelike;
 use ide_ci::models::config::RepoContext;
@@ -14,7 +16,7 @@ pub const RELEASE_MODE_VAR_NAME: &str = "ENSO_RELEASE_MODE";
 pub const LOCAL_BUILD_PREFIX: &str = "dev";
 pub const NIGHTLY_BUILD_PREFIX: &str = "nightly";
 
-pub fn default_engine_version() -> Version {
+pub fn default_dev_version() -> Version {
     let mut ret = Version::new(0, 0, 0);
     ret.pre = Prerelease::new(LOCAL_BUILD_PREFIX).unwrap();
     ret
@@ -39,7 +41,7 @@ pub struct Versions {
 
 impl Default for Versions {
     fn default() -> Self {
-        Versions { version: default_engine_version(), release_mode: false }
+        Versions { version: default_dev_version(), release_mode: false }
     }
 }
 
@@ -131,13 +133,6 @@ pub fn version_from_env() -> Result<Version> {
     Ok(version)
 }
 
-pub fn version_from_legacy_repo(repo_root: impl AsRef<Path>) -> Result<Version> {
-    let repo_root: PathBuf = repo_root.as_ref().absolutize()?.into();
-    let build_sbt = repo_root.join("build.sbt");
-    let build_sbt_contents = std::fs::read_to_string(build_sbt)?;
-    crate::get_enso_version(&build_sbt_contents)
-}
-
 #[context("Deducing version using changelog file: {}", changelog_path.as_ref().display())]
 pub fn base_version(changelog_path: impl AsRef<Path>) -> Result<Version> {
     if let Ok(from_env) = version_from_env() {
@@ -145,15 +140,16 @@ pub fn base_version(changelog_path: impl AsRef<Path>) -> Result<Version> {
     }
 
     let changelog_contents = std::fs::read_to_string(changelog_path.as_ref())?;
-    let mut headers = crate::changelog::iterate_headers(&changelog_contents)
+    let mut headers = crate::changelog::Changelog(&changelog_contents)
+        .iterate_headers()
         .map(|h| ide_ci::program::version::find_in_text(h.text));
 
     let version = match headers.next() {
-        Some(Ok(version)) => version,
-        None => suggest_new_version(),
-        Some(Err(_)) => match headers.next() {
+        None => generate_initial_version(),
+        Some(Ok(top_version)) => top_version,
+        Some(Err(_top_non_version_thingy)) => match headers.next() {
             Some(Ok(version)) => suggest_next_version(&version),
-            None => suggest_new_version(),
+            None => generate_initial_version(),
             Some(Err(_)) => bail!("Two leading release headers have no version number in them."),
         },
     };
@@ -164,7 +160,7 @@ pub fn current_year() -> u64 {
     chrono::Utc::today().year() as u64
 }
 
-pub fn suggest_new_version() -> Version {
+pub fn generate_initial_version() -> Version {
     Version::new(current_year(), 1, 1)
 }
 
@@ -173,10 +169,35 @@ pub fn suggest_next_version(previous: &Version) -> Version {
     if previous.major == year {
         Version::new(year, previous.minor + 1, 1)
     } else {
-        suggest_new_version()
+        generate_initial_version()
     }
 }
 
+pub async fn deduce_versions(
+    octocrab: &Octocrab,
+    build_kind: BuildKind,
+    target_repo: Option<&RepoContext>,
+    root_path: impl AsRef<Path>,
+) -> Result<Versions> {
+    println!("Deciding on version to target.");
+    let changelog_path = crate::paths::root_to_changelog(&root_path);
+    let version = Version {
+        pre: match build_kind {
+            BuildKind::Dev => Versions::local_prerelease()?,
+            BuildKind::Nightly => {
+                let repo = target_repo.cloned().or_else(|| default_repo()).ok_or_else(|| {
+                    anyhow!(
+                        "Missing target repository designation in the release mode. \
+                        Please provide `--repo` option or `GITHUB_REPOSITORY` repository."
+                    )
+                })?;
+                Versions::nightly_prerelease(octocrab, &repo).await?
+            }
+        },
+        ..crate::version::base_version(&changelog_path)?
+    };
+    Ok(Versions::new(version))
+}
 
 #[cfg(test)]
 mod tests {

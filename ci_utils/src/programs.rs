@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-pub mod Lerna;
 pub mod cargo;
 pub mod cmd;
 pub mod conda;

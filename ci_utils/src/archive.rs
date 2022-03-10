@@ -6,6 +6,8 @@ use crate::programs::tar::Compression;
 use crate::programs::tar::Tar;
 use crate::programs::SevenZip;
 
+pub mod zip;
+
 /// Archive formats that we handle.
 #[derive(Copy, Clone, Debug)]
 pub enum Format {
