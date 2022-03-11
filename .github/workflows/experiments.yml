@@ -47,3 +47,56 @@ jobs:
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Upload Content Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: content
+          path: dist/content
+        if: runner.os == 'Linux'
+      - name: Upload Artifacts (macOS, dmg)
+        uses: actions/upload-artifact@v1
+        with:
+          name: enso-mac-${{ env.ENSO_VERSION }}.dmg
+          path: >-
+            enso/dist/client/enso-mac-${{ env.ENSO_VERSION }}.dmg
+        if: runner.os == 'macOS'
+      - name: Upload Artifacts (macOS, dmg.sha256)
+        uses: actions/upload-artifact@v1
+        with:
+          name: >-
+            enso-mac-${{ env.ENSO_VERSION }}.dmg.sha256
+          path: >-
+            enso/dist/client/enso-mac-${{ env.ENSO_VERSION }}.dmg.sha256
+        if: runner.os == 'macOS'
+      - name: Upload Artifacts (Windows, exe)
+        uses: actions/upload-artifact@v1
+        with:
+          name: enso-win-${{ env.ENSO_VERSION }}.exe
+          path: >-
+            enso/dist/client/enso-win-${{ env.ENSO_VERSION }}.exe
+        if: runner.os == 'Windows'
+      - name: Upload Artifacts (Windows, exe.sha256)
+        uses: actions/upload-artifact@v1
+        with:
+          name: >-
+            enso-win-${{ env.ENSO_VERSION }}.exe.sha256
+          path: >-
+            enso/dist/client/enso-win-${{ env.ENSO_VERSION }}.exe.sha256
+        if: runner.os == 'Windows'
+      - name: Upload Artifacts (Linux, AppImage)
+        uses: actions/upload-artifact@v1
+        with:
+          name: >-
+            enso-linux-${{ env.ENSO_VERSION }}.AppImage
+          path: >-
+            enso/dist/client/enso-linux-${{ env.ENSO_VERSION }}.AppImage
+        if: runner.os == 'Linux'
+      - name: Upload Artifacts (Linux, AppImage.sha256)
+        uses: actions/upload-artifact@v1
+        with:
+          name: >-
+            enso-linux-${{ env.ENSO_VERSION }}.AppImage.sha256
+          path: >-
+            enso/dist/client/enso-linux-${{ env.ENSO_VERSION }}.AppImage.sha256
+        if: runner.os == 'Linux'

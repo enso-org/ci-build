@@ -19,12 +19,10 @@ impl Variable for RunnerName {
     const NAME: &'static str = "RUNNER_NAME";
 }
 
-pub fn is_self_hosted() -> bool {
-    if let Ok(name) = RunnerName.fetch() {
-        !name.starts_with("GitHub Actions")
-    } else {
-        false
-    }
+/// Fails when called outside of GitHub Actions environment,
+pub fn is_self_hosted() -> Result<bool> {
+    let name = RunnerName.fetch()?;
+    Ok(!name.starts_with("GitHub Actions"))
 }
 
 pub struct Repository;

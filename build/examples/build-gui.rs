@@ -13,9 +13,11 @@ use enso_build::paths::GuiPaths;
 use enso_build::paths::TargetTriple;
 use enso_build::setup_octocrab;
 use enso_build::version::Versions;
+use ide_ci::actions::env::is_self_hosted;
 use ide_ci::env::Variable;
 use ide_ci::future::try_join_all;
 use ide_ci::future::AsyncPolicy::FutureParallelism;
+use ide_ci::future::AsyncPolicy::Sequential;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::io::download_all;
 use ide_ci::programs::Git;
@@ -150,7 +152,6 @@ async fn main() -> Result {
         //     paths.repo_root.built_distribution.project_manager_bundle_triple.enso.path.clone(),
         // );
 
-
         let get_pm_fut = {
             let paths = paths.clone();
             let triple = triple.clone();
@@ -158,15 +159,16 @@ async fn main() -> Result {
         }
         .boxed();
 
-        let handle = tokio::task::spawn(get_pm_fut);
         let get_wasm_fut = {
             let paths = paths.clone();
             async move { build_wasm(&paths).await }.boxed()
         };
 
-        let pm_handle = tokio::task::spawn(get_wasm_fut);
-        let res = try_join_all([handle, pm_handle], FutureParallelism).await?;
-        Result::from_iter(res)?;
+        let parallelism = match is_self_hosted() {
+            Ok(false) => Sequential,
+            _ => FutureParallelism,
+        };
+        let _res = try_join_all([get_pm_fut, get_wasm_fut], parallelism).await?;
     }
     // ProjectManagerSource::Local.get(&paths, &triple).await?;
     // build_wasm(&paths).await?;
