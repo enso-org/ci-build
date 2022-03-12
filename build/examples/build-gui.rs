@@ -41,7 +41,7 @@ async fn init(paths: &Paths) -> Result {
         println!("Initialization");
         println!("Installing build script dependencies.");
         Npm.cmd()?.current_dir(&paths.repo_root.build).arg("install").run_ok().await?;
-        ide_ci::io::write(&init_token, "")?;
+        ide_ci::fs::write(&init_token, "")?;
     }
     Ok(())
 }
@@ -140,7 +140,7 @@ async fn main() -> Result {
         version: triple.versions.version.clone(),
     };
 
-    ide_ci::io::write(
+    ide_ci::fs::write(
         &paths.repo_root.app.ide_desktop.join("build.json"),
         serde_json::to_string(&info_for_js)?,
     )?;

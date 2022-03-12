@@ -162,7 +162,7 @@ impl RunContext {
 
         let commit = ide_ci::actions::env::Sha.fetch()?;
 
-        let changelog_contents = ide_ci::io::read_to_string(self.paths.changelog())?;
+        let changelog_contents = ide_ci::fs::read_to_string(self.paths.changelog())?;
         let latest_changelog_body =
             crate::changelog::Changelog(&changelog_contents).top_release_notes()?;
 
@@ -204,7 +204,7 @@ impl RunContext {
             // engine version as part of the key. As such, any change made to engine that does not
             // change its version might break the caches.
             // See (private): https://discord.com/channels/401396655599124480/407883082310352928/939618590158630922
-            ide_ci::io::remove_dir_if_exists(cache_directory())?;
+            ide_ci::fs::remove_dir_if_exists(cache_directory())?;
         }
 
         let git = Git::new(&self.paths.repo_root);
@@ -324,7 +324,7 @@ impl RunContext {
             // Flatbuffer schemas are platform agnostic, so they just need to be
             // uploaded from one of the runners.
             sbt.call_arg("syntaxJS/fullOptJS").await?;
-            ide_ci::io::copy_to(
+            ide_ci::fs::copy_to(
                 self.paths.target.join("scala-parser.js"),
                 self.paths.target.join("parser-upload"),
             )?;
@@ -337,7 +337,7 @@ impl RunContext {
             if let Ok(gdoc_key) = std::env::var("GDOC_KEY") {
                 let google_api_test_data_dir =
                     self.paths.repo_root.join("test").join("Google_Api_Test").join("data");
-                ide_ci::io::create_dir_if_missing(&google_api_test_data_dir)?;
+                ide_ci::fs::create_dir_if_missing(&google_api_test_data_dir)?;
                 std::fs::write(google_api_test_data_dir.join("secret.json"), &gdoc_key)?;
             }
             enso.run_tests(IrCaches::No, PARALLEL_ENSO_TESTS).await?;

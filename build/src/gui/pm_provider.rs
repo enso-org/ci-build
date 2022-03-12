@@ -35,16 +35,16 @@ impl ProjectManagerSource {
                     )?,
                 };
                 dbg!(context.execute().await?);
-                ide_ci::io::reset_dir(&target_path)?;
-                ide_ci::io::copy_to(
+                ide_ci::fs::reset_dir(&target_path)?;
+                ide_ci::fs::copy_to(
                     &repo_root.built_distribution.project_manager_bundle_triple.enso,
                     &target_path,
                 )?;
             }
             ProjectManagerSource::Bundle(path) => {
                 assert_eq!(path.file_name().and_then(|f| f.to_str()), Some("enso"));
-                ide_ci::io::reset_dir(&target_path)?;
-                ide_ci::io::copy_to(&path, &target_path)?;
+                ide_ci::fs::reset_dir(&target_path)?;
+                ide_ci::fs::copy_to(&path, &target_path)?;
             }
             ProjectManagerSource::Release(version) => {
                 let needed_target = TargetTriple::new(Versions::new(version.clone()));

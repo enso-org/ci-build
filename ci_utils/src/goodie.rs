@@ -1,4 +1,4 @@
-use crate::io::create_dir_if_missing;
+use crate::fs::create_dir_if_missing;
 use crate::prelude::*;
 
 

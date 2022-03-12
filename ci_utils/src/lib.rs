@@ -20,6 +20,7 @@ pub mod archive;
 pub mod deploy;
 pub mod env;
 pub mod extensions;
+pub mod fs;
 pub mod future;
 pub mod github;
 pub mod goodie;

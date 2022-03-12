@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use crate::io::create_dir_if_missing;
+use crate::fs::create_dir_if_missing;
 use crate::programs;
 use crate::programs::tar::Compression;
 use crate::programs::tar::Tar;

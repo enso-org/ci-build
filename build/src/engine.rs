@@ -1,12 +1,10 @@
 use crate::prelude::*;
 
-use crate::args::default_repo;
 use crate::args::Args;
 use crate::args::BuildKind;
 use crate::args::WhatToDo;
 use crate::paths::ComponentPaths;
 use crate::paths::Paths;
-use crate::version::Versions;
 
 use anyhow::Context;
 use ide_ci::env::Variable;
@@ -186,18 +184,18 @@ pub struct BuiltArtifacts {
 #[context("Failed to create a launcher distribution.")]
 pub fn create_launcher_distribution(paths: &Paths) -> Result {
     paths.launcher.clear()?;
-    ide_ci::io::copy_to(
+    ide_ci::fs::copy_to(
         paths.repo_root.join_many(["distribution", "launcher", "THIRD-PARTY"]),
         &paths.launcher.dir,
     )?;
-    ide_ci::io::copy_to(
+    ide_ci::fs::copy_to(
         paths.repo_root.join("enso").with_extension(EXE_EXTENSION),
         &paths.launcher.dir.join("bin"),
     )?;
     //     IO.createDirectory(distributionRoot / "dist")
     //     IO.createDirectory(distributionRoot / "runtime")
     for filename in [".enso.portable", "README.md"] {
-        ide_ci::io::copy_to(
+        ide_ci::fs::copy_to(
             paths.repo_root.join_many(["distribution", "launcher", filename]),
             &paths.launcher.dir,
         )?;
@@ -228,7 +226,7 @@ pub async fn place_graal_under(target_directory: impl AsRef<Path>) -> Result {
     let graal_dirname = graal_path
         .file_name()
         .context(anyhow!("Invalid Graal Path deduced from JAVA_HOME: {}", graal_path.display()))?;
-    ide_ci::io::mirror_directory(&graal_path, target_directory.as_ref().join(graal_dirname)).await
+    ide_ci::fs::mirror_directory(&graal_path, target_directory.as_ref().join(graal_dirname)).await
 }
 
 #[context("Placing a Enso Engine package in {}", target_engine_dir.as_ref().display())]
@@ -236,7 +234,7 @@ pub fn place_component_at(
     engine_paths: &ComponentPaths,
     target_engine_dir: impl AsRef<Path>,
 ) -> Result {
-    ide_ci::io::copy(&engine_paths.dir, &target_engine_dir)
+    ide_ci::fs::copy(&engine_paths.dir, &target_engine_dir)
 }
 
 #[async_trait]
@@ -251,8 +249,8 @@ impl ComponentPathExt for ComponentPaths {
         ide_ci::archive::create(&self.artifact_archive, [&self.dir]).await
     }
     fn clear(&self) -> Result {
-        ide_ci::io::remove_dir_if_exists(&self.root)?;
-        ide_ci::io::remove_file_if_exists(&self.artifact_archive)
+        ide_ci::fs::remove_dir_if_exists(&self.root)?;
+        ide_ci::fs::remove_file_if_exists(&self.artifact_archive)
     }
 }
 
@@ -262,7 +260,7 @@ pub async fn create_bundle(
     bundle: &ComponentPaths,
 ) -> Result {
     bundle.clear()?;
-    ide_ci::io::copy(&base_component.root, &bundle.root)?;
+    ide_ci::fs::copy(&base_component.root, &bundle.root)?;
 
     let bundled_engine_dir = bundle.dir.join("dist").join(paths.version().to_string());
     place_component_at(&paths.engine, &bundled_engine_dir)?;
@@ -293,7 +291,7 @@ pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
         &paths.triple,
     );
     create_bundle(paths, &paths.project_manager, &pm_bundle).await?;
-    ide_ci::io::copy(
+    ide_ci::fs::copy(
         paths.repo_root.join_many(["distribution", "enso.bundle.template"]),
         pm_bundle.dir.join(".enso.bundle"),
     )?;

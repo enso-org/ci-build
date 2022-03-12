@@ -26,11 +26,11 @@ pub async fn ensure_present(dist_path: impl AsRef<Path>, target: &TargetTriple) 
     } else {
         // We remove the build info file to avoid misinformation if the build is interrupted during
         // the call to `download_project_manager`.
-        ide_ci::io::remove_if_exists(&build_info_file)?;
+        ide_ci::fs::remove_if_exists(&build_info_file)?;
 
         let url = url(target)?;
         ide_ci::io::download_and_extract(url, &dist_path).await?;
-        ide_ci::io::allow_owner_execute(crate::paths::project_manager(&dist_path))?;
+        ide_ci::fs::allow_owner_execute(crate::paths::project_manager(&dist_path))?;
         build_info_file.write_as_json(&target)?;
     }
     Ok(())

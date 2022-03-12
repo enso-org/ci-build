@@ -86,7 +86,7 @@ impl SevenZip {
         output_archive: impl AsRef<Path>,
         paths_to_pack: impl IntoIterator<Item = P>,
     ) -> Result {
-        crate::io::remove_if_exists(output_archive.as_ref())?;
+        crate::fs::remove_if_exists(output_archive.as_ref())?;
         self.add(output_archive, paths_to_pack).await
     }
 

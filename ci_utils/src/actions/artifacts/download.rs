@@ -36,7 +36,7 @@ impl ArtifactDownloader {
     pub async fn download_file_item(&self, file: &FileToDownload) -> Result {
         let mut stream =
             self.client.download_container_item(file.remote_source_location.clone()).await?;
-        crate::io::create_parent_dir_if_missing(&file.target)?;
+        crate::fs::create_parent_dir_if_missing(&file.target)?;
         let mut file = tokio::fs::File::create(&file.target).await?;
         tokio::io::copy(&mut stream, &mut file).await?;
         Ok(())

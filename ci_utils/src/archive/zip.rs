@@ -8,9 +8,9 @@ use zip::read::ZipFile;
 pub fn extract_file(file: &mut ZipFile, output: impl AsRef<Path>) -> Result {
     println!("Extracting {}", output.as_ref().display());
     if file.is_dir() {
-        crate::io::create_dir_if_missing(&output)?;
+        crate::fs::create_dir_if_missing(&output)?;
     } else {
-        let mut output_file = crate::io::create(&output)?;
+        let mut output_file = crate::fs::create(&output)?;
         std::io::copy(file, &mut output_file)?;
     }
     // Get and Set permissions

@@ -2,9 +2,9 @@ use crate::prelude::*;
 
 use crate::goodie::GoodieDatabase;
 
+use crate::fs::expect_dir;
+use crate::fs::expect_file;
 use crate::io::download_and_extract;
-use crate::io::expect_dir;
-use crate::io::expect_file;
 use crate::programs::Bash;
 use lazy_static::lazy_static;
 use platforms::TARGET_ARCH;
@@ -61,8 +61,8 @@ impl Goodie for Musl {
         // let url = format!("https://musl.cc/{}.{}", filename_stem(), archive_format);
         let downloaded_dir = database.root_directory.join(filename_stem());
         let target_dir = database.root_directory.join("musl");
-        crate::io::reset_dir(&downloaded_dir)?;
-        crate::io::reset_dir(&target_dir)?;
+        crate::fs::reset_dir(&downloaded_dir)?;
+        crate::fs::reset_dir(&target_dir)?;
         // let result = (async move || -> Result {
         crate::io::download_and_extract(url.clone(), &database.root_directory).await?;
         add_zlib(&downloaded_dir).await?;
