@@ -7,6 +7,7 @@ use enso_build::engine::BuildConfiguration;
 use enso_build::engine::BuildOperation;
 use enso_build::gui::js_patcher::patch_js_glue;
 use enso_build::gui::pm_provider::ProjectManagerSource;
+use enso_build::ide::web::download_js_assets;
 use enso_build::paths::generated::Paths;
 use enso_build::paths::root_to_changelog;
 use enso_build::paths::GuiPaths;
@@ -20,32 +21,11 @@ use ide_ci::future::AsyncPolicy::FutureParallelism;
 use ide_ci::future::AsyncPolicy::Sequential;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::io::download_all;
+use ide_ci::programs::Cargo;
 use ide_ci::programs::Git;
 use ide_ci::programs::Npm;
+use ide_ci::programs::WasmPack;
 use tempfile::TempDir;
-
-async fn download_js_assets(paths: &Paths) -> Result {
-    let output = paths.repo_root.app.ide_desktop.lib.content.join("assets");
-    const ARCHIVED_ASSET_FILE: &str = "ide-assets-main/content/assets/";
-    let archived_asset_prefix = PathBuf::from(ARCHIVED_ASSET_FILE);
-    let ide_assets_url = "https://github.com/enso-org/ide-assets/archive/refs/heads/main.zip";
-    let archive = download_all(ide_assets_url).await?;
-    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(archive))?;
-    ide_ci::archive::zip::extract_subtree(&mut archive, &archived_asset_prefix, &output)?;
-    Ok(())
-}
-
-async fn init(paths: &Paths) -> Result {
-    let init_token = &paths.repo_root.dist.build_init;
-    if !init_token.exists() {
-        println!("Initialization");
-        println!("Installing build script dependencies.");
-        Npm.cmd()?.current_dir(&paths.repo_root.build).arg("install").run_ok().await?;
-        ide_ci::fs::write(&init_token, "")?;
-    }
-    Ok(())
-}
-
 
 #[derive(Debug, Shrinkwrap)]
 pub struct GuiPathsData {
@@ -66,8 +46,6 @@ impl GuiPaths for GuiPathsData {
 
 
 pub async fn build_wasm(paths: &Paths) -> Result {
-    init(&paths).await?;
-
     let target_crate = "app/gui";
     let wasm_dir = &paths.repo_root.dist.wasm;
 
@@ -145,6 +123,12 @@ async fn main() -> Result {
         serde_json::to_string(&info_for_js)?,
     )?;
 
+    //
+    if WasmPack.require_present().await.is_err() {
+        Cargo.cmd()?.args(["install", "wasm-pack"]).run_ok().await?;
+    }
+    //
+
 
     if true {
         let pm_source = ProjectManagerSource::Local;
@@ -193,7 +177,7 @@ async fn main() -> Result {
 
 
 
-    download_js_assets(&paths).await?;
+    download_js_assets(&paths.repo_root.app.ide_desktop.lib.content).await?;
 
     Npm.install(&paths.repo_root.app.ide_desktop)?.run_ok().await?;
 
