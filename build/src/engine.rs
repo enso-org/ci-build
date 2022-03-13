@@ -305,7 +305,7 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
         let pattern =
             paths.dir.join_many(["bin", "*"]).with_extension(EXE_EXTENSION).display().to_string();
         for binary in glob::glob(&pattern)? {
-            ide_ci::io::allow_owner_execute(binary?)?;
+            ide_ci::fs::allow_owner_execute(binary?)?;
         }
     }
 
