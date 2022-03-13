@@ -76,10 +76,12 @@ pub async fn build_wasm(paths: &Paths) -> Result {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BuildInfo {
-    pub commit:  String,
-    pub version: Version,
-    pub name:    String,
+    pub commit:         String,
+    pub version:        Version,
+    pub engine_version: Version,
+    pub name:           String,
 }
 
 #[tokio::main]
@@ -113,9 +115,10 @@ async fn main() -> Result {
     // versions.publish()?;
 
     let info_for_js = BuildInfo {
-        commit:  "badf00d".into(),
-        name:    "Enso IDE".into(),
-        version: triple.versions.version.clone(),
+        commit:         "badf00d".into(),
+        name:           "Enso IDE".into(),
+        version:        triple.versions.version.clone(),
+        engine_version: triple.versions.version.clone(),
     };
 
     ide_ci::fs::write(
