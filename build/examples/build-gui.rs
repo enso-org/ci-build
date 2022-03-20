@@ -81,7 +81,7 @@ async fn main() -> Result {
 
         let get_wasm_fut = {
             let paths = paths.clone();
-            async move { build_wasm(&paths).await }.boxed()
+            async move { `build_wasm(&paths).await }.boxed()
         };
 
         let parallelism = match is_self_hosted() {

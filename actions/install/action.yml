@@ -15,7 +15,16 @@ runs:
       with:
         update-conda: false
         conda-channels: anaconda, conda-forge
-
+    - name: Install wasm-pack (macOS)
+      env:
+        WASMPACKURL: https://github.com/rustwasm/wasm-pack/releases/download/v0.10.2
+        WASMPACKDIR: wasm-pack-v0.10.2-x86_64-apple-darwin
+      run: |-
+        curl -L "$WASMPACKURL/$WASMPACKDIR.tar.gz" | tar -xz -C .
+        mv $WASMPACKDIR/wasm-pack ~/.cargo/bin
+        rm -r $WASMPACKDIR
+      shell: bash
+      if: startsWith(runner.name, 'GitHub Actions') # GitHub-hosted runner.
     - uses: actions/checkout@v2
       with:
         repository: enso-org/enso
@@ -29,7 +38,7 @@ runs:
     # Runs a set of commands using the runners shell
     - uses: actions/github-script@v6
       with:
-        script: |
+        script: |-
           const path = require('path');
           console.warn(process.env);
           console.warn(context);

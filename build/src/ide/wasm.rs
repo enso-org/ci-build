@@ -11,6 +11,7 @@ use crate::paths::generated::PathsRepoRootDistWasm;
 
 use ide_ci::env::Variable;
 use ide_ci::models::config::RepoContext;
+use ide_ci::programs::WasmPack;
 
 pub mod js_patcher;
 
