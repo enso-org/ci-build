@@ -35,9 +35,9 @@ runs:
           console.warn(context);
           core.addPath(String.raw`${{ runner.temp }}/bin`);
           let args = ['install', '--bins', 
-            '--root', process.env["RUNNER_TEMP"], 
-            '--path', path.join(gprocess.env["GITHUB_WORKSPACE"], 'ci-build')
+            '--root', process.env["RUNNER_TEMP"]
           ]; 
+          let opts = {'cwd': path.resolve(process.env["GITHUB_WORKSPACE"], 'enso')};
           await exec.exec('cargo', args, opts);
           core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
           core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
