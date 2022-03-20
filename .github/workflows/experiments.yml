@@ -22,7 +22,7 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - uses: ${{ GITHUB_REPOSITORY }}/actions/install@${{ GITHUB_REF }}
+      - uses: ${{ github.repository }}/actions/install@${{ github.ref }}
       - name: Run a multi-line script
         run: enso-build --bin new -- wasm
         working-directory: ${{ github.workspace }}/ci-build
