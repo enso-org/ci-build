@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use anyhow::Context;
+
 use fs_extra::dir::CopyOptions;
 use platforms::TARGET_OS;
 
@@ -16,6 +16,15 @@ use std::fs::File;
 pub fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result {
     create_parent_dir_if_missing(&path)?;
     wrappers::write(&path, &contents)
+}
+
+/// Serialize the data to JSON text and write it to the file.
+///
+/// See [`write`].
+#[context("Failed to write path: {}", path.as_ref().display())]
+pub fn write_json(path: impl AsRef<Path>, contents: &impl Serialize) -> Result {
+    let contents = serde_json::to_string(contents)?;
+    write(&path, &contents)
 }
 
 /// Like the standard version but will create any missing parent directories from the path.
@@ -58,7 +67,7 @@ pub fn create_parent_dir_if_missing(path: impl AsRef<Path>) -> Result<PathBuf> {
 
 /// Remove a directory with all its subtree.
 ///
-/// Does not fail if the directory is already gone.
+/// Does not fail if the directory is not found.
 #[context("Failed to remove directory {}", path.as_ref().display())]
 pub fn remove_dir_if_exists(path: impl AsRef<Path>) -> Result {
     let result = std::fs::remove_dir_all(&path);
@@ -70,7 +79,7 @@ pub fn remove_dir_if_exists(path: impl AsRef<Path>) -> Result {
 
 /// Remove a regular file.
 ///
-/// Does not fail if the file is already gone.
+/// Does not fail if the file is not found.
 #[context("Failed to remove file {}", path.as_ref().display())]
 pub fn remove_file_if_exists(path: impl AsRef<Path>) -> Result<()> {
     let result = std::fs::remove_file(&path);
@@ -141,25 +150,31 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
 pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
     create_parent_dir_if_missing(destination.as_ref())?;
     if TARGET_OS == OS::Windows {
-        crate::programs::robocopy::mirror_dir(source, destination).await
+        crate::programs::robocopy::mirror_directory(source, destination).await
     } else {
         crate::programs::rsync::mirror_directory(source, destination).await
     }
 }
 
+#[context("Failed because the path does not point to a directory: {}", path.as_ref().display())]
 pub fn expect_dir(path: impl AsRef<Path>) -> Result {
-    path.as_ref()
-        .is_dir()
-        .then_some(())
-        .context(anyhow!("{} is not a directory.", path.as_ref().display()))
+    let filetype = metadata(&path)?.file_type();
+    if filetype.is_dir() {
+        Ok(())
+    } else {
+        bail!("File is not directory, its type is: {filetype:?}")
+    }
 }
 
 
+#[context("Failed because the path does not point to a regular file: {}", path.as_ref().display())]
 pub fn expect_file(path: impl AsRef<Path>) -> Result {
-    path.as_ref()
-        .is_file()
-        .then_some(())
-        .context(anyhow!("{} is not a files.", path.as_ref().display()))
+    let filetype = metadata(&path)?.file_type();
+    if filetype.is_dir() {
+        Ok(())
+    } else {
+        bail!("File is not a regular file, its type is: {filetype:?}")
+    }
 }
 
 #[cfg(not(target_os = "windows"))]

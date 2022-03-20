@@ -15,8 +15,6 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ubuntu-latest]
-          - [windows-latest]
           - [macos-latest]
           - [self-hosted, Windows, engine]
           - [self-hosted, Linux, engine]
@@ -24,79 +22,62 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - uses: actions/github-script@v6
-        with:
-          script: |
-            core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
-            core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
-            core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
-
-      - uses: actions/checkout@v2
-        with:
-          ref: wip/mwu/new-ide-build
-          repository: enso-org/enso
-          path: enso
-
-      - uses: actions/checkout@v2
-        with:
-          path: ci-build
-          clean: false
-
+      - uses: ${{ GITHUB_REPOSITORY }}/actions/install@${{ GITHUB_REF }}
       - name: Run a multi-line script
-        run: cargo run --example build-gui -- ../enso build
+        run: enso-build --bin new -- wasm
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Upload Content Artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: content
-          path: dist/content
-        if: runner.os == 'Linux'
-      - name: Upload Artifacts (macOS, dmg)
-        uses: actions/upload-artifact@v1
-        with:
-          name: enso-mac-${{ env.ENSO_VERSION }}.dmg
-          path: >-
-            enso/dist/client/enso-mac-${{ env.ENSO_VERSION }}.dmg
-        if: runner.os == 'macOS'
-      - name: Upload Artifacts (macOS, dmg.sha256)
-        uses: actions/upload-artifact@v1
-        with:
-          name: >-
-            enso-mac-${{ env.ENSO_VERSION }}.dmg.sha256
-          path: >-
-            enso/dist/client/enso-mac-${{ env.ENSO_VERSION }}.dmg.sha256
-        if: runner.os == 'macOS'
-      - name: Upload Artifacts (Windows, exe)
-        uses: actions/upload-artifact@v1
-        with:
-          name: enso-win-${{ env.ENSO_VERSION }}.exe
-          path: >-
-            enso/dist/client/enso-win-${{ env.ENSO_VERSION }}.exe
-        if: runner.os == 'Windows'
-      - name: Upload Artifacts (Windows, exe.sha256)
-        uses: actions/upload-artifact@v1
-        with:
-          name: >-
-            enso-win-${{ env.ENSO_VERSION }}.exe.sha256
-          path: >-
-            enso/dist/client/enso-win-${{ env.ENSO_VERSION }}.exe.sha256
-        if: runner.os == 'Windows'
-      - name: Upload Artifacts (Linux, AppImage)
-        uses: actions/upload-artifact@v1
-        with:
-          name: >-
-            enso-linux-${{ env.ENSO_VERSION }}.AppImage
-          path: >-
-            enso/dist/client/enso-linux-${{ env.ENSO_VERSION }}.AppImage
-        if: runner.os == 'Linux'
-      - name: Upload Artifacts (Linux, AppImage.sha256)
-        uses: actions/upload-artifact@v1
-        with:
-          name: >-
-            enso-linux-${{ env.ENSO_VERSION }}.AppImage.sha256
-          path: >-
-            enso/dist/client/enso-linux-${{ env.ENSO_VERSION }}.AppImage.sha256
-        if: runner.os == 'Linux'
+#
+#      - name: Upload Content Artifacts
+#        uses: actions/upload-artifact@v2
+#        with:
+#          name: content
+#          path: dist/content
+#        if: runner.os == 'Linux'
+#      - name: Upload Artifacts (macOS, dmg)
+#        uses: actions/upload-artifact@v1
+#        with:
+#          name: enso-mac-${{ env.ENSO_VERSION }}.dmg
+#          path: >-
+#            enso/dist/client/enso-mac-${{ env.ENSO_VERSION }}.dmg
+#        if: runner.os == 'macOS'
+#      - name: Upload Artifacts (macOS, dmg.sha256)
+#        uses: actions/upload-artifact@v1
+#        with:
+#          name: >-
+#            enso-mac-${{ env.ENSO_VERSION }}.dmg.sha256
+#          path: >-
+#            enso/dist/client/enso-mac-${{ env.ENSO_VERSION }}.dmg.sha256
+#        if: runner.os == 'macOS'
+#      - name: Upload Artifacts (Windows, exe)
+#        uses: actions/upload-artifact@v1
+#        with:
+#          name: enso-win-${{ env.ENSO_VERSION }}.exe
+#          path: >-
+#            enso/dist/client/enso-win-${{ env.ENSO_VERSION }}.exe
+#        if: runner.os == 'Windows'
+#      - name: Upload Artifacts (Windows, exe.sha256)
+#        uses: actions/upload-artifact@v1
+#        with:
+#          name: >-
+#            enso-win-${{ env.ENSO_VERSION }}.exe.sha256
+#          path: >-
+#            enso/dist/client/enso-win-${{ env.ENSO_VERSION }}.exe.sha256
+#        if: runner.os == 'Windows'
+#      - name: Upload Artifacts (Linux, AppImage)
+#        uses: actions/upload-artifact@v1
+#        with:
+#          name: >-
+#            enso-linux-${{ env.ENSO_VERSION }}.AppImage
+#          path: >-
+#            enso/dist/client/enso-linux-${{ env.ENSO_VERSION }}.AppImage
+#        if: runner.os == 'Linux'
+#      - name: Upload Artifacts (Linux, AppImage.sha256)
+#        uses: actions/upload-artifact@v1
+#        with:
+#          name: >-
+#            enso-linux-${{ env.ENSO_VERSION }}.AppImage.sha256
+#          path: >-
+#            enso/dist/client/enso-linux-${{ env.ENSO_VERSION }}.AppImage.sha256
+#        if: runner.os == 'Linux'

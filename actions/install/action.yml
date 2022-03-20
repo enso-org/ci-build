@@ -18,17 +18,23 @@ runs:
 
     - uses: actions/checkout@v2
       with:
+        repository: enso-org/enso
         path: enso
+
+    - uses: actions/checkout@v2
+      with:
+        repository: enso-org/ci-build
+        path: ci-build
 
     # Runs a set of commands using the runners shell
     - uses: actions/github-script@v6
+      working-directory: ${{ github.workspace }}/ci-build
       with:
         script: |
           const path = require('path');
           console.warn(process.env);
           console.warn(context);
           core.addPath(String.raw`${{ runner.temp }}/bin`);
-          let script_repo_root = path.join(process.env["GITHUB_ACTION_PATH"], '/../../')
           let args = ['install', '--bins', 
             '--root', process.env["RUNNER_TEMP"], 
             '--path', path.join(script_repo_root, 'build')

@@ -21,7 +21,7 @@ impl Program for Robocopy {
 
 impl Robocopy {}
 
-pub async fn mirror_dir(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
+pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
     Robocopy
         .cmd()?
         .arg(source.as_ref())

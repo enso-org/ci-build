@@ -43,7 +43,6 @@ use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::Flatc;
 use ide_ci::programs::Git;
 use ide_ci::programs::Sbt;
-use ide_ci::run_in_ci;
 
 pub struct RunContext {
     pub config:    BuildConfiguration,
@@ -199,7 +198,7 @@ impl RunContext {
 
     pub async fn build(&self) -> Result<BuiltArtifacts> {
         self.prepare_build_env().await?;
-        if ide_ci::run_in_ci() {
+        if ide_ci::ci::run_in_ci() {
             // On CI we remove IR caches. They might contain invalid or outdated data, as are using
             // engine version as part of the key. As such, any change made to engine that does not
             // change its version might break the caches.
@@ -398,7 +397,7 @@ impl RunContext {
         ide_ci::archive::create(self.paths.target.join("fbs-upload/fbs-schema.zip"), schema_files)
             .await?;
 
-        if TARGET_OS == OS::Linux && run_in_ci() {
+        if TARGET_OS == OS::Linux && ide_ci::ci::run_in_ci() {
             self.paths.upload_edition_file_artifact().await?;
         }
 

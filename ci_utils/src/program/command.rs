@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use anyhow::Context;
+use std::borrow::BorrowMut;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::ops::Deref;
@@ -8,6 +9,27 @@ use std::process::ExitStatus;
 use std::process::Output;
 use std::process::Stdio;
 use tokio::process::Child;
+
+pub trait MyCommand: BorrowMut<Command> {
+    fn new_program<P: Program + 'static, S: AsRef<OsStr>>(program: S) -> Self;
+}
+
+impl MyCommand for Command {
+    fn new_program<P: Program + 'static, S: AsRef<OsStr>>(program: S) -> Self {
+        // Self::new(program)
+        let inner = tokio::process::Command::new(program);
+        Self::new_over::<P>(inner)
+    }
+}
+
+pub trait CommandOption {
+    fn arg(&self) -> Option<&str> {
+        None
+    }
+    fn args(&self) -> Vec<&str> {
+        vec![]
+    }
+}
 
 pub struct Command {
     pub inner:          tokio::process::Command,

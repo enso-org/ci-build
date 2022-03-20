@@ -94,14 +94,14 @@ impl<'a> Header<'a> {
 pub fn is_release_notes_header(event: &Event) -> bool {
     matches!(event, Event::Start(Heading(HeadingLevel::H1, _, _)))
 }
-
-#[test]
-fn aaaa() -> Result {
-    // let opts = pulldown_cmark::Options::all();
-
-    let path = r"H:\NBO\enso\app\gui\CHANGELOG.md";
-    // let text = std::fs::read_to_string(path)?;
-    let entry = retrieve_unreleased_release_notes(path)?;
-    dbg!(entry);
-    Ok(())
-}
+//
+// #[test]
+// fn aaaa() -> Result {
+//     // let opts = pulldown_cmark::Options::all();
+//
+//     let path = r"H:\NBO\enso\app\gui\CHANGELOG.md";
+//     // let text = std::fs::read_to_string(path)?;
+//     let entry = retrieve_unreleased_release_notes(path)?;
+//     dbg!(entry);
+//     Ok(())
+// }

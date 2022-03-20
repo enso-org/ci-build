@@ -19,6 +19,8 @@ pub mod context;
 pub mod env;
 pub mod sbt;
 
+pub use context::RunContext;
+
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
 // const GRAAL_VERSION: Version = Version::new(21, 1, 0);
 // const GRAAL_JAVA_VERSION: graalvm::JavaVersion = graalvm::JavaVersion::Java11;

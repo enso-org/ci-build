@@ -3,86 +3,19 @@
 use enso_build::prelude::*;
 
 use enso_build::args::BuildKind;
-use enso_build::engine::BuildConfiguration;
-use enso_build::engine::BuildOperation;
-use enso_build::gui::js_patcher::patch_js_glue;
-use enso_build::gui::pm_provider::ProjectManagerSource;
+use enso_build::ide::pm_provider::ProjectManagerSource;
+use enso_build::ide::wasm::build_wasm;
 use enso_build::ide::web::download_js_assets;
-use enso_build::paths::generated::Paths;
-use enso_build::paths::root_to_changelog;
-use enso_build::paths::GuiPaths;
+use enso_build::ide::BuildInfo;
 use enso_build::paths::TargetTriple;
 use enso_build::setup_octocrab;
-use enso_build::version::Versions;
 use ide_ci::actions::env::is_self_hosted;
-use ide_ci::env::Variable;
 use ide_ci::future::try_join_all;
 use ide_ci::future::AsyncPolicy::FutureParallelism;
 use ide_ci::future::AsyncPolicy::Sequential;
-use ide_ci::goodie::GoodieDatabase;
-use ide_ci::io::download_all;
 use ide_ci::programs::Cargo;
-use ide_ci::programs::Git;
 use ide_ci::programs::Npm;
 use ide_ci::programs::WasmPack;
-use tempfile::TempDir;
-
-#[derive(Debug, Shrinkwrap)]
-pub struct GuiPathsData {
-    #[shrinkwrap(main_field)]
-    pub root: PathBuf,
-    pub temp: TempDir,
-}
-
-impl GuiPaths for GuiPathsData {
-    fn root(&self) -> &Path {
-        &self.root
-    }
-
-    fn temp(&self) -> &Path {
-        self.temp.path()
-    }
-}
-
-
-pub async fn build_wasm(paths: &Paths) -> Result {
-    let target_crate = "app/gui";
-    let wasm_dir = &paths.repo_root.dist.wasm;
-
-    ide_ci::programs::WasmPack
-        .cmd()?
-        .env_remove(ide_ci::programs::rustup::env::Toolchain::NAME)
-        .args([
-            "-vv",
-            "build",
-            "--target",
-            "web",
-            "--out-dir",
-            wasm_dir.as_str(), // &paths.wasm().as_os_str().to_str().unwrap(),
-            "--out-name",
-            "ide",
-            target_crate,
-        ])
-        .current_dir(&paths.repo_root)
-        .spawn()?
-        .wait()
-        .await?
-        .exit_ok()?;
-
-    let glue_path = &wasm_dir.wasm_glue;
-    patch_js_glue(std::fs::read_to_string(&glue_path)?, &glue_path)?;
-    std::fs::rename(&wasm_dir.wasm_main_raw, &wasm_dir.wasm_main)?;
-    Ok(())
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BuildInfo {
-    pub commit:         String,
-    pub version:        Version,
-    pub engine_version: Version,
-    pub name:           String,
-}
 
 #[tokio::main]
 async fn main() -> Result {

@@ -17,6 +17,7 @@
 pub mod actions;
 pub mod anyhow;
 pub mod archive;
+pub mod ci;
 pub mod deploy;
 pub mod env;
 pub mod extensions;
@@ -58,6 +59,7 @@ pub mod prelude {
     pub use ifmt::iformat;
     pub use ifmt::iprintln;
     pub use itertools::Itertools;
+    pub use lazy_static::lazy_static;
     pub use octocrab::Octocrab;
     pub use path_absolutize::*;
     pub use platforms::target::Arch;
@@ -82,6 +84,7 @@ pub mod prelude {
     pub use std::io::Seek;
     pub use std::iter::once;
     pub use std::iter::FromIterator;
+    pub use std::ops::Range;
     pub use std::path::Path;
     pub use std::path::PathBuf;
     pub use std::pin::Pin;
@@ -94,6 +97,7 @@ pub mod prelude {
 
 
     pub use crate::anyhow::ResultExt;
+    pub use crate::env::Variable as EnvironmentVariable;
     pub use crate::extensions::command::CommandExt;
     pub use crate::extensions::from_string::FromString;
     pub use crate::extensions::iterator::TryIteratorExt;
@@ -126,22 +130,22 @@ pub const EMPTY_REQUEST_BODY: Option<&()> = None;
 /// The user agent string name used by our HTTP clients.
 pub const USER_AGENT: &str = "enso-build";
 
+pub const UNREGISTERED_PORTS: Range<u16> = 49152..65535;
+
 /// Looks up a free port in the IANA private or dynamic port range.
 pub fn get_free_port() -> Result<u16> {
-    let port_range = 49152..65535;
+    let port_range = UNREGISTERED_PORTS;
     port_range
         .into_iter()
         .find(|port| {
+            // Note that we must use Ipv4Addr::UNSPECIFIED. Ipv4Addr::LOCALHOST would not be enough,
+            // as it misses e.g. services spawned by docker subnetworks.
+            // This also makes us write this by hand, rather than use a crate.
             let ipv4 = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, *port);
-            // FIXME this can show firewall dialog on windows
+            // FIXME investigate? this can show firewall dialog on windows
             TcpListener::bind(ipv4).is_ok()
         })
         .context("Failed to find a free local port.")
-}
-
-/// Check if the environment suggests that we are being run in a CI.
-pub fn run_in_ci() -> bool {
-    std::env::var("CI").is_ok()
 }
 
 #[cfg(test)]

@@ -3,6 +3,17 @@
 use crate::prelude::*;
 
 use std::fs::File;
+use std::fs::Metadata;
+
+#[context("Failed to obtain metadata for file: {}", path.as_ref().display())]
+pub fn metadata<P: AsRef<Path>>(path: P) -> Result<Metadata> {
+    std::fs::metadata(&path).anyhow_err()
+}
+
+#[context("Failed to rename file from {} to {}", from.as_ref().display(), to.as_ref().display())]
+pub fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result {
+    std::fs::rename(&from, &to).anyhow_err()
+}
 
 #[context("Failed to read the file: {}", path.as_ref().display())]
 pub fn read(path: impl AsRef<Path>) -> Result<Vec<u8>> {

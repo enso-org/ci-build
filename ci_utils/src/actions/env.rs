@@ -5,6 +5,17 @@ use crate::models::config::RepoContext;
 use crate::prelude::*;
 // use octocrab::models::RunId;
 
+
+/// Always set to `true` when GitHub Actions is running the workflow. You can use this variable
+/// to differentiate when tests are being run locally or by GitHub Actions.
+///
+/// See: <https://docs.github.com/en/actions/learn-github-actions/environment-variables#default-environment-variables>
+pub struct Actions;
+impl Variable for Actions {
+    const NAME: &'static str = "GITHUB_ACTIONS";
+    type Value = bool;
+}
+
 pub struct EnvFile;
 
 impl Variable for EnvFile {

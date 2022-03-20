@@ -6,12 +6,22 @@ use reqwest::IntoUrl;
 
 /// Get the the response body as a byte stream.
 pub async fn download(url: impl IntoUrl) -> Result<impl Stream<Item = reqwest::Result<Bytes>>> {
-    Ok(reqwest::get(url).await?.bytes_stream())
+    Ok(reqwest::get(url).await?.error_for_status()?.bytes_stream())
 }
 
 /// Get the full response body from URL as bytes.
 pub async fn download_all(url: impl IntoUrl) -> anyhow::Result<Bytes> {
-    reqwest::get(url).await?.bytes().await.map_err(Into::into)
+    let url = url.into_url()?;
+    let bar = indicatif::ProgressBar::new_spinner();
+    bar.enable_steady_tick(10);
+    bar.set_message(format!("Downloading {}", url));
+    let response = reqwest::get(url).await?;
+    if let Some(e) = response.error_for_status_ref().err() {
+        let body = response.text().await?;
+        Err(e).context(body)
+    } else {
+        response.bytes().await.map_err(Into::into)
+    }
 }
 
 /// Take the trailing filename from URL path.
@@ -90,6 +100,15 @@ mod tests {
     use crate::fs::create_parent_dir_if_missing;
     use crate::fs::mirror_directory;
     use tempfile::tempdir;
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_download() -> Result {
+        println!("Hello world!");
+        let url = "https://speed.hetzner.de/100MB.bin";
+        download_all(url).await?;
+        Ok(())
+    }
 
     #[tokio::test]
     #[ignore]

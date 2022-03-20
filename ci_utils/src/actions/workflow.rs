@@ -1,8 +1,13 @@
 use crate::prelude::*;
 
-use crate::actions::env::EnvFile;
-use crate::env::Variable;
+use crate::actions::env;
 use std::io::Write;
+
+/// Check if we are running in an environment that looks like being spawned by GitHub Actions
+/// workflow.
+pub fn is_in_env() -> bool {
+    env::Actions.fetch().contains(&true)
+}
 
 /// Sets an action's output parameter.
 ///
@@ -33,8 +38,8 @@ pub fn set_env(name: &str, value: &impl ToString) -> Result {
     let value_string = value.to_string();
     println!("Will try writing Github Actions environment variable: {name}={value_string}");
     std::env::set_var(name, value.to_string());
-    if crate::run_in_ci() {
-        let env_file = EnvFile.fetch()?;
+    if is_in_env() {
+        let env_file = env::EnvFile.fetch()?;
         let mut file = std::fs::OpenOptions::new().create_new(false).append(true).open(env_file)?;
         writeln!(file, "{name}={value_string}")?;
     }
@@ -42,13 +47,13 @@ pub fn set_env(name: &str, value: &impl ToString) -> Result {
 }
 
 pub fn mask_text(text: impl AsRef<str>) {
-    if std::env::var("GITHUB_ACTIONS").is_ok() {
+    if is_in_env() {
         iprintln!("::add-mask::{text.as_ref()}")
     }
 }
 
 pub fn mask_value(value: impl Display) {
-    if std::env::var("GITHUB_ACTIONS").is_ok() {
+    if is_in_env() {
         iprintln!("::add-mask::{value}")
     }
 }

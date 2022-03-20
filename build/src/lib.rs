@@ -1,3 +1,4 @@
+#![feature(let_chains)]
 #![feature(bool_to_option)]
 #![feature(exit_status_error)]
 #![feature(async_closure)]
@@ -8,6 +9,8 @@
 #![feature(async_stream)]
 #![feature(default_free_fn)]
 #![feature(map_first_last)]
+#![feature(result_option_inspect)]
+#![feature(associated_type_defaults)]
 
 use crate::prelude::*;
 use ide_ci::programs::java;
@@ -24,12 +27,12 @@ pub mod changelog;
 pub mod engine;
 pub mod enso;
 pub mod env;
-pub mod gui;
 pub mod httpbin;
 pub mod ide;
 pub mod paths;
 pub mod postgres;
 pub mod project_manager;
+pub mod repo;
 pub mod version;
 
 /// Get version of Enso from the `build.sbt` file contents.
@@ -76,6 +79,7 @@ pub fn get_java_major_version(build_sbt_contents: &str) -> Result<java::Language
 
 pub fn retrieve_github_access_token() -> Result<String> {
     ide_ci::env::expect_var("GITHUB_TOKEN")
+        .inspect(|_| println!("Will use GITHUB_TOKEN environment variable."))
 }
 
 pub fn setup_octocrab() -> Result<Octocrab> {

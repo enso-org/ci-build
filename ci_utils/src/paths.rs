@@ -198,6 +198,13 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
                #(let #children_var = #children_struct::new(#parameters_var, &path);)*
                Self { path, #(#children_var),* }
            }
+
+           #[allow(unused_variables)]
+           pub fn new2(#parameters_var: &Parameters, path: impl Into<std::path::PathBuf>) -> Self {
+               let path = path.into();
+               #(let #children_var = #children_struct::new(#parameters_var, &path);)*
+               Self { path, #(#children_var),* }
+           }
        }
 
        impl AsRef<std::path::Path> for #ty_name {
@@ -236,14 +243,6 @@ pub fn generate(forest: Vec<Node>) -> Result<proc_macro2::TokenStream> {
         pub struct Parameters {
             #(pub #variable_idents: std::path::PathBuf),*
         }
-
-        // impl Parameters {
-        //     pub fn new(#(#variable_idents: impl Into<std::path::PathBuf>),*) -> Self {
-        //         Self {
-        //             #(#variable_idents: #variable_idents.into()),*
-        //         }
-        //     }
-        // }
     };
 
     let top =
@@ -272,6 +271,27 @@ pub fn convert(value: &serde_yaml::Value) -> Result<Vec<Node>> {
         _ => bail!("Expected YAML mapping, found the {}", serde_yaml::to_string(value)?),
     }
 }
+
+// #[derive(Default)]
+// pub struct Generator<'a> {
+//     stack:     Vec<&'a Node>,
+//     root_node: &'a Node,
+//     out:       &'a mut TokenStream,
+// }
+//
+// impl<'a> Generator<'a> {
+//     pub fn new(tree: &Node, out: &'a mut TokenStream) -> Self {
+//         Self { stack: vec![tree], root_node: tree, out }
+//     }
+//
+//     pub fn process_node(&mut self, node: &'a Node) -> Result {
+//
+//     }
+//
+//     pub fn run(&mut self) -> Result {
+//
+//     }
+// }
 
 pub fn process(yaml_input: impl Read) -> Result<String> {
     let yaml = serde_yaml::from_reader(yaml_input)?;

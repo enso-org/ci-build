@@ -4,11 +4,42 @@ use std::collections::BTreeSet;
 use std::env::join_paths;
 use std::env::set_var;
 use std::env::split_paths;
+use std::str::FromStr;
 use unicase::UniCase;
+
+
+pub mod known;
+
+//
+//
+// impl<'a, T> SpecFromIter<T> for std::slice::Iter<'a, T> {
+//     fn f(&self) {}
+// }
+
+pub struct StrLikeVariable {
+    pub name: &'static str,
+}
+
+impl StrLikeVariable {
+    pub const fn new(name: &'static str) -> Self {
+        Self { name }
+    }
+}
+
+impl Variable for StrLikeVariable {
+    const NAME: &'static str = "";
+    fn name(&self) -> &str {
+        self.name
+    }
+}
 
 pub trait Variable {
     const NAME: &'static str;
     type Value: FromString = String;
+
+    fn name(&self) -> &str {
+        Self::NAME
+    }
 
     fn fetch(&self) -> Result<Self::Value> {
         self.fetch_as()
@@ -19,27 +50,39 @@ pub trait Variable {
     }
 
     fn fetch_string(&self) -> Result<String> {
-        expect_var(Self::NAME)
+        expect_var(self.name())
     }
 
     fn fetch_os_string(&self) -> Result<OsString> {
-        expect_var_os(Self::NAME)
+        expect_var_os(self.name())
     }
 
     fn set(&self, value: &Self::Value)
     where Self::Value: ToString {
-        std::env::set_var(Self::NAME, value.to_string())
+        std::env::set_var(self.name(), value.to_string())
+    }
+
+    fn set_os(&self, value: &Self::Value)
+    where Self::Value: AsRef<OsStr> {
+        std::env::set_var(self.name(), value)
+    }
+
+    fn set_path<P>(&self, value: &P)
+    where
+        Self::Value: AsRef<Path>,
+        P: AsRef<Path>, {
+        std::env::set_var(self.name(), value.as_ref())
     }
 
     fn emit_env(&self, value: &Self::Value) -> Result
     where Self::Value: ToString {
-        crate::actions::workflow::set_env(Self::NAME, value)
+        crate::actions::workflow::set_env(self.name(), value)
     }
 
     fn emit(&self, value: &Self::Value) -> Result
     where Self::Value: ToString {
         self.emit_env(value)?;
-        crate::actions::workflow::set_output(Self::NAME, value);
+        crate::actions::workflow::set_output(self.name(), value);
         Ok(())
     }
 
@@ -48,11 +91,12 @@ pub trait Variable {
     }
 
     fn remove(&self) {
-        std::env::remove_var(Self::NAME)
+        std::env::remove_var(self.name())
     }
 }
 
 const PATH_ENVIRONMENT_NAME: &str = "PATH";
+
 
 pub fn expect_var(name: impl AsRef<str>) -> Result<String> {
     let name = name.as_ref();

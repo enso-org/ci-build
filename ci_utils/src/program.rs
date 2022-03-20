@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use std::borrow::BorrowMut;
 
 pub mod command;
 pub mod resolver;
@@ -6,8 +7,11 @@ pub mod shell;
 pub mod version;
 pub mod with_cwd;
 
+use crate::program::command::MyCommand;
 pub use resolver::Resolver;
 pub use shell::Shell;
+
+pub const EMPTY_ARGS: [&str; 0] = [];
 
 /// A set of utilities for using a known external program.
 ///
@@ -15,6 +19,8 @@ pub use shell::Shell;
 // `Sized + 'static` bounds are due to using `Self` as type parameter for `Command` constructor.
 #[async_trait]
 pub trait Program: Sized + 'static {
+    type Command: MyCommand + Send + Sync = Command;
+
     /// The name used to find and invoke the program.
     ///
     /// This should just the stem name, not a full path. The os-specific executable extension should
@@ -28,24 +34,12 @@ pub trait Program: Sized + 'static {
         vec![]
     }
 
-    fn executable_names() -> Vec<&'static str> {
-        let mut ret = vec![Self::executable_name()];
-        ret.extend(Self::executable_name_fallback());
-        ret
-    }
-
     fn default_locations(&self) -> Vec<PathBuf> {
         Vec::new()
     }
 
     fn pretty_name() -> &'static str {
         Self::executable_name()
-    }
-
-    fn lookup_all(&self) -> Result<Box<dyn Iterator<Item = PathBuf>>> {
-        Ok(Box::new(
-            Resolver::new(Self::executable_names(), self.default_locations())?.lookup_all(),
-        ))
     }
 
     /// Locate the program executable.
@@ -76,22 +70,17 @@ pub trait Program: Sized + 'static {
         Ok(())
     }
 
-    fn cmd(&self) -> Result<Command> {
-        let tokio_command = self.lookup().map(tokio::process::Command::new)?;
-        let mut command = Command::new_over::<Self>(tokio_command);
+    fn cmd(&self) -> Result<Self::Command> {
+        let program_path = self.lookup()?;
+        let mut command = Self::Command::new_program::<Self, _>(program_path);
         if let Some(current_dir) = self.current_directory() {
-            command.current_dir(current_dir);
+            command.borrow_mut().current_dir(current_dir);
         }
         Ok(command)
     }
 
     fn current_directory(&self) -> Option<PathBuf> {
         None
-    }
-
-    async fn wait(mut command: Command) -> Result {
-        let status = command.status().await?;
-        Self::handle_exit_status(status)
     }
 
     fn handle_exit_status(status: std::process::ExitStatus) -> Result {
@@ -101,14 +90,14 @@ pub trait Program: Sized + 'static {
     /// Command that prints to stdout the version of given program.
     ///
     /// If this is anything other than `--version` the implementor should overwrite this method.
-    fn version_command(&self) -> Result<Command> {
+    fn version_command(&self) -> Result<Self::Command> {
         let mut cmd = self.cmd()?;
-        cmd.arg("--version");
+        cmd.borrow_mut().arg("--version");
         Ok(cmd)
     }
 
     async fn version_string(&self) -> Result<String> {
-        let output = self.version_command()?.output().await?;
+        let output = self.version_command()?.borrow_mut().output().await?;
         let string = String::from_utf8(output.stdout)?;
         Ok(string.trim().to_string())
     }
@@ -128,9 +117,15 @@ pub trait Program: Sized + 'static {
 }
 
 pub trait ProgramExt: Program {
-    fn args(&self, args: impl IntoIterator<Item: AsRef<OsStr>>) -> Result<Command> {
+    fn executable_names() -> Vec<&'static str> {
+        let mut ret = vec![Self::executable_name()];
+        ret.extend(Self::executable_name_fallback());
+        ret
+    }
+
+    fn args(&self, args: impl IntoIterator<Item: AsRef<OsStr>>) -> Result<Self::Command> {
         let mut cmd = self.cmd()?;
-        cmd.args(args);
+        cmd.borrow_mut().args(args);
         Ok(cmd)
     }
 
@@ -145,7 +140,7 @@ pub trait ProgramExt: Program {
             Ok(cmd) => cmd,
             e @ Err(_) => return ready(e.map(|_| ())).boxed(),
         };
-        cmd.run_ok().boxed()
+        cmd.borrow_mut().run_ok().boxed()
     }
 }
 
