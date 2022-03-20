@@ -4,7 +4,6 @@ use std::collections::BTreeSet;
 use std::env::join_paths;
 use std::env::set_var;
 use std::env::split_paths;
-use std::str::FromStr;
 use unicase::UniCase;
 
 

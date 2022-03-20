@@ -9,7 +9,6 @@ use crate::actions::artifacts::upload::UploadOptions;
 use anyhow::Context as Trait_anyhow_Context;
 use flume::Sender;
 use serde::de::DeserializeOwned;
-use walkdir::DirEntry;
 
 pub mod artifact;
 pub mod context;

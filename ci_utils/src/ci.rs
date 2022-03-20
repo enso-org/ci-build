@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
 use crate::env::StrLikeVariable;
-use crate::env::Variable;
 
 pub const CI: StrLikeVariable = StrLikeVariable::new("CI");
 

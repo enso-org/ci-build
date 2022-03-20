@@ -142,7 +142,8 @@ impl IdeDesktop {
         self.npm()?.workspace(Workspaces::Content).run("build", EMPTY_ARGS).run_ok().await?;
 
         if is_in_env() {
-            ide_ci::actions::artifacts::upload_directory(&output_dir, "gui_content").await?;
+            ide_ci::actions::artifacts::upload_directory(output_path.as_ref(), "gui_content")
+                .await?;
         }
 
         Ok(())
