@@ -35,7 +35,8 @@ runs:
           console.warn(context);
           core.addPath(String.raw`${{ runner.temp }}/bin`);
           let args = ['install', '--bins', 
-            '--root', process.env["RUNNER_TEMP"]
+              '--root', process.env["RUNNER_TEMP"],
+              '--paths', './build'
           ]; 
           let opts = {'cwd': path.resolve(process.env["GITHUB_WORKSPACE"], 'ci-build')};
           await exec.exec('cargo', args, opts);
