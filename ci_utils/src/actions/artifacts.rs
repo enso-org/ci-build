@@ -9,6 +9,7 @@ use crate::actions::artifacts::upload::UploadOptions;
 use anyhow::Context as Trait_anyhow_Context;
 use flume::Sender;
 use serde::de::DeserializeOwned;
+use walkdir::DirEntry;
 
 pub mod artifact;
 pub mod context;
@@ -80,6 +81,15 @@ pub fn upload_single_file(
     (async move || -> Result { upload(files?, artifact_name, default()).await })()
 }
 
+pub fn upload_directory(
+    dir: impl Into<PathBuf>,
+    artifact_name: impl AsRef<str>,
+) -> impl Future<Output = Result> {
+    let dir = dir.into();
+    let files = single_dir_provider(&dir);
+    (async move || -> Result { upload(files?, artifact_name, default()).await })()
+}
+
 pub async fn download_single_file_artifact(
     artifact_name: impl AsRef<str>,
     target: impl Into<PathBuf>,
@@ -105,6 +115,20 @@ pub fn single_file_provider(
 ) -> Result<impl Stream<Item = FileToUpload> + 'static> {
     let file = FileToUpload::new(path)?;
     Ok(futures::stream::iter([file]))
+}
+
+pub fn single_dir_provider(path: &Path) -> Result<impl Stream<Item = FileToUpload> + 'static> {
+    // TODO not optimal, could discover files at the same time as handling them.
+    let files = walkdir::WalkDir::new(path)
+        .into_iter()
+        .collect_result()?
+        .into_iter()
+        .map(|entry| FileToUpload::new(entry.path()))
+        .collect_result()?;
+    // let entries = files.into_iter().map(|entry|
+    // entry.map(DirEntry::into_path)).collect_result()?;
+    // let files = files.into_iter().map(|entry| FileToUpload::new(entry.path())).collect_result();
+    Ok(futures::stream::iter(files))
 }
 
 

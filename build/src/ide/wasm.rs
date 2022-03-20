@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use anyhow::Context;
+use ide_ci::actions::workflow::is_in_env;
 use octocrab::models::RunId;
 use octocrab::params::actions::ArchiveFormat;
 
@@ -19,6 +20,7 @@ const OUTPUT_NAME: &str = "ide";
 const TARGET_CRATE: &str = "app/gui";
 
 pub struct WasmArtifacts {
+    pub dir:     PathBuf,
     pub wasm:    PathBuf,
     pub js_glue: PathBuf,
 }
@@ -50,7 +52,13 @@ pub async fn build_wasm(
 
     patch_js_glue_in_place(&output_dir.wasm_glue)?;
     ide_ci::fs::rename(&output_dir.wasm_main_raw, &output_dir.wasm_main)?;
+
+    if is_in_env() {
+        ide_ci::actions::artifacts::upload_directory(&output_dir, "ide_wasm").await?;
+    }
+
     Ok(WasmArtifacts {
+        dir:     output_dir.path.clone(),
         wasm:    output_dir.wasm_main.to_path_buf(),
         js_glue: output_dir.wasm_glue.to_path_buf(),
     })
