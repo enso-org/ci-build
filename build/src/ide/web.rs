@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use ide_ci::actions::workflow::is_in_env;
 use tempfile::TempDir;
 
 use crate::ide::wasm::WasmArtifacts;
@@ -139,6 +140,11 @@ impl IdeDesktop {
         env::AssetsPath.set_path(&assets);
 
         self.npm()?.workspace(Workspaces::Content).run("build", EMPTY_ARGS).run_ok().await?;
+
+        if is_in_env() {
+            ide_ci::actions::artifacts::upload_directory(&output_dir, "gui_content").await?;
+        }
+
         Ok(())
     }
 
