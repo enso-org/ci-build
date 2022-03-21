@@ -13,6 +13,7 @@ use ide_ci::actions::env::is_self_hosted;
 use ide_ci::future::try_join_all;
 use ide_ci::future::AsyncPolicy::FutureParallelism;
 use ide_ci::future::AsyncPolicy::Sequential;
+use ide_ci::programs::wasm_pack;
 use ide_ci::programs::Cargo;
 use ide_ci::programs::Npm;
 use ide_ci::programs::WasmPack;
@@ -60,9 +61,7 @@ async fn main() -> Result {
     )?;
 
     //
-    if WasmPack.require_present().await.is_err() {
-        Cargo.cmd()?.args(["install", "wasm-pack"]).run_ok().await?;
-    }
+    wasm_pack::install_if_missing().await?;
     //
 
 

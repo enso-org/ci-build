@@ -102,6 +102,7 @@ pub trait Program: Sized + 'static {
         Ok(string.trim().to_string())
     }
 
+    // TODO if such need appears, likely Version should be made an associated type
     async fn version(&self) -> Result<Version> {
         let stdout = self.version_string().await?;
         self.parse_version(&stdout)

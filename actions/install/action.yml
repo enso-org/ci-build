@@ -15,7 +15,7 @@ runs:
   steps:
     - name: Setup conda
       uses: s-weigand/setup-conda@v1.0.5
-      if: startsWith(runner.name, 'GitHub Actions') # GitHub-hosted runner.
+      if: startsWith(runner.name, 'GitHub Actions') || startsWith(runner.name, 'Hosted Agent') # GitHub-hosted runner.
       with:
         update-conda: false
         conda-channels: anaconda, conda-forge
@@ -28,7 +28,7 @@ runs:
         mv $WASMPACKDIR/wasm-pack ~/.cargo/bin
         rm -r $WASMPACKDIR
       shell: bash
-      if: startsWith(runner.name, 'GitHub Actions') # GitHub-hosted runner.
+      if: startsWith(runner.name, 'GitHub Actions') || startsWith(runner.name, 'Hosted Agent') # GitHub-hosted runner.
     - uses: actions/checkout@v2
       with:
         repository: enso-org/enso
