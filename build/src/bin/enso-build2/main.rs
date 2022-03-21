@@ -2,15 +2,22 @@ use enso_build::prelude::*;
 use std::ops::Deref;
 
 use clap::Arg;
+use clap::ArgEnum;
 use clap::Parser;
 use clap::Subcommand;
 use enso_build::args::BuildKind;
+use enso_build::ide::wasm::build_wasm;
+use enso_build::ide::wasm::download_wasm_from_run;
 use enso_build::ide::BuildInfo;
+use enso_build::paths::generated::Parameters;
 use enso_build::paths::generated::Paths;
+use enso_build::paths::generated::PathsRepoRootDistWasm;
 use enso_build::paths::TargetTriple;
 use enso_build::setup_octocrab;
 use ide_ci::models::config::RepoContext;
+use ide_ci::programs::Git;
 use lazy_static::lazy_static;
+use octocrab::models::RunId;
 
 
 pub trait ArgExt<'h>: Sized + 'h {
@@ -41,10 +48,25 @@ pub fn normalize_path(path: &str) -> Result<PathBuf> {
     Ok(ret.to_path_buf())
 }
 
+pub struct RunContext {
+    repo: RepoContext,
+    run:  RunId,
+}
+
 #[derive(Subcommand, Clone, Debug)]
 pub enum GuiCommand {
     Build,
     Watch,
+}
+
+#[derive(ArgEnum, Clone, Debug)]
+pub enum WasmSource {
+    /// WASM will be built from the target repository's sources.
+    Build,
+    /// WASM will be copied from the local path.
+    LocalPath,
+    /// bar
+    Whatever,
 }
 
 #[derive(Subcommand, Clone, Debug)]
@@ -56,8 +78,14 @@ pub enum Target {
     },
     Gui {
         /// Where the GUI artifacts should be placed.
-        #[clap(default_value = "dist/gui", parse(try_from_str=normalize_path))]
+        #[clap(long, default_value = "dist/gui", parse(try_from_str=normalize_path))]
         output_path: PathBuf,
+
+        #[clap(long, arg_enum, default_value_t = WasmSource::Whatever)]
+        wasm_source: WasmSource,
+
+        #[clap(long, required_if_eq("wasm-source", "local-path"))]
+        wasm_bundle: Option<PathBuf>,
 
         /// Command for GUI package.
         #[clap(subcommand)]
@@ -138,10 +166,15 @@ async fn main() -> Result {
     dbg!(&params);
     let paths = enso_build::paths::generated::Paths::new(&params, &PathBuf::from("."));
 
+    let commit = match ide_ci::actions::env::Sha.fetch() {
+        Ok(commit) => commit,
+        Err(e) => Git::new(&cli.repo_path).head_hash().await?,
+    };
+
     let info_for_js = BuildInfo {
-        commit:         "badf00d".into(),
-        name:           "Enso IDE".into(),
-        version:        triple.versions.version.clone(),
+        commit,
+        name: "Enso IDE".into(),
+        version: triple.versions.version.clone(),
         engine_version: triple.versions.version.clone(),
     };
 
@@ -154,7 +187,7 @@ async fn main() -> Result {
             // FIXME rebase output path
             enso_build::ide::wasm::build_wasm(&cli.repo_path, &paths.repo_root.dist.wasm).await?;
         }
-        Target::Gui { output_path, command } => {
+        Target::Gui { output_path, command, .. } => {
             let wasm =
                 enso_build::ide::wasm::build_wasm(&cli.repo_path, &paths.repo_root.dist.wasm)
                     .await?;

@@ -65,6 +65,36 @@ pub async fn build_wasm(
     })
 }
 
+#[derive(Clone, Debug)]
+pub enum WasmSource {
+    Build(Paths),
+    Local(PathBuf),
+    GuiCiRun { repo: RepoContext, run: RunId },
+}
+
+impl WasmSource {
+    pub async fn place_at(&self, client: &Octocrab, output_dir: impl AsRef<Path>) -> Result {
+        match self {
+            WasmSource::Build(repo_root) => {
+                let faux_parameters = Parameters {
+                    repo_root: repo_root.into(),
+                    triple:    "".into(),
+                    temp:      "".into(),
+                };
+                let wasm_dir = PathsRepoRootDistWasm::new2(&faux_parameters, output_dir.as_ref());
+                build_wasm(repo_root, &wasm_dir).await?;
+            }
+            WasmSource::Local(local_path) => {
+                ide_ci::fs::copy(local_path, &output_dir)?;
+            }
+            WasmSource::GuiCiRun { repo, run } => {
+                download_wasm_from_run(client, &repo, *run, &output_dir).await?;
+            }
+        }
+        Ok(())
+    }
+}
+
 // "Failed to find artifacts for run {run} in {repo}."
 pub async fn download_wasm_from_run(
     client: &Octocrab,
@@ -96,35 +126,6 @@ pub async fn download_wasm_from_run(
     ide_ci::fs::create_dir_if_missing(&output_path)?;
     wasm.extract(&output_path)?;
     Ok(())
-}
-
-pub enum WasmSource {
-    Build(Paths),
-    Local(PathBuf),
-    GuiCiRun { repo: RepoContext, run: RunId },
-}
-
-impl WasmSource {
-    pub async fn place_at(&self, client: &Octocrab, output_dir: impl AsRef<Path>) -> Result {
-        match self {
-            WasmSource::Build(repo_root) => {
-                let faux_parameters = Parameters {
-                    repo_root: repo_root.into(),
-                    triple:    "".into(),
-                    temp:      "".into(),
-                };
-                let wasm_dir = PathsRepoRootDistWasm::new2(&faux_parameters, output_dir.as_ref());
-                build_wasm(repo_root, &wasm_dir).await?;
-            }
-            WasmSource::Local(local_path) => {
-                ide_ci::fs::copy(local_path, &output_dir)?;
-            }
-            WasmSource::GuiCiRun { repo, run } => {
-                download_wasm_from_run(client, &repo, *run, &output_dir).await?;
-            }
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]

@@ -5,6 +5,10 @@ inputs:
     description: Whether the local build script repository should be cleaned.
     required: true
     default: 'false'
+  enso_ref:
+    description:
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -29,9 +33,13 @@ runs:
       with:
         repository: enso-org/enso
         path: enso
+        ref: ${{ inputs.ref }}
+        clean: false
+
 
     - uses: actions/checkout@v2
       with:
+        clean: false
         repository: enso-org/ci-build
         path: ci-build
 

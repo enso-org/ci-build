@@ -150,7 +150,7 @@ impl IdeDesktop {
     }
 
     pub async fn watch(&self, wasm: &WasmArtifacts, build_info: &BuildInfo) -> Result {
-        self.install();
+        self.install().await?;
 
         let assets = TempDir::new()?;
         download_js_assets(&assets).await?;
