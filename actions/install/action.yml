@@ -6,7 +6,7 @@ inputs:
     required: true
     default: 'false'
   enso_ref:
-    description:
+    description: Reference to be cheked out in the Enso repository.
     required: false
     default: ''
 
@@ -33,7 +33,7 @@ runs:
       with:
         repository: enso-org/enso
         path: enso
-        ref: ${{ inputs.ref }}
+        ref: ${{ inputs.enso_ref }}
         clean: false
 
 
