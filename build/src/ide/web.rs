@@ -126,7 +126,7 @@ impl IdeDesktop {
         build_info: &BuildInfo,
         output_path: impl AsRef<Path>,
     ) -> Result {
-        self.install();
+        self.install().await?;
 
         let assets = TempDir::new()?;
         download_js_assets(&assets).await?;
