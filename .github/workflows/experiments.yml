@@ -23,6 +23,8 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/new-ide-build
+        with:
+          enso_ref: ${{ github.ref }}
       - name: Run a multi-line script
         run: enso-build2 gui build
         working-directory: ${{ github.workspace }}/ci-build
