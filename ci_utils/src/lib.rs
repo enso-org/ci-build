@@ -13,10 +13,13 @@
 #![feature(io_error_other)]
 #![feature(bool_to_option)]
 #![feature(string_remove_matches)]
+#![feature(once_cell)]
+#![feature(duration_constants)]
 
 pub mod actions;
 pub mod anyhow;
 pub mod archive;
+pub mod buffer;
 pub mod ci;
 pub mod deploy;
 pub mod env;
@@ -24,6 +27,7 @@ pub mod extensions;
 pub mod fs;
 pub mod future;
 pub mod github;
+pub mod global;
 pub mod goodie;
 pub mod goodies;
 pub mod io;

@@ -11,6 +11,8 @@
 #![feature(map_first_last)]
 #![feature(result_option_inspect)]
 #![feature(associated_type_defaults)]
+#![feature(once_cell)]
+#![feature(duration_constants)]
 
 use crate::prelude::*;
 use ide_ci::programs::java;

@@ -26,6 +26,16 @@ pub struct WasmArtifacts {
     pub js_glue: PathBuf,
 }
 
+impl From<&PathsRepoRootDistWasm> for WasmArtifacts {
+    fn from(value: &PathsRepoRootDistWasm) -> Self {
+        Self {
+            dir:     value.path.clone(),
+            wasm:    value.wasm_main.path.clone(),
+            js_glue: value.wasm_glue.path.clone(),
+        }
+    }
+}
+
 pub async fn build_wasm(
     repo_root: impl AsRef<Path>,
     output_dir: &PathsRepoRootDistWasm,
@@ -58,30 +68,28 @@ pub async fn build_wasm(
         ide_ci::actions::artifacts::upload_directory(&output_dir, "ide_wasm").await?;
     }
 
-    Ok(WasmArtifacts {
-        dir:     output_dir.path.clone(),
-        wasm:    output_dir.wasm_main.to_path_buf(),
-        js_glue: output_dir.wasm_glue.to_path_buf(),
-    })
+    Ok(output_dir.into())
 }
 
 #[derive(Clone, Debug)]
 pub enum WasmSource {
-    Build(Paths),
+    Build { repo_root: PathBuf },
     Local(PathBuf),
     GuiCiRun { repo: RepoContext, run: RunId },
 }
 
 impl WasmSource {
-    pub async fn place_at(&self, client: &Octocrab, output_dir: impl AsRef<Path>) -> Result {
+    pub async fn place_at(
+        &self,
+        client: &Octocrab,
+        output_dir: impl AsRef<Path>,
+    ) -> Result<WasmArtifacts> {
+        let faux_parameters =
+            Parameters { repo_root: "".into(), triple: "".into(), temp: "".into() };
+        let wasm_dir = PathsRepoRootDistWasm::new2(&faux_parameters, output_dir.as_ref());
+
         match self {
-            WasmSource::Build(repo_root) => {
-                let faux_parameters = Parameters {
-                    repo_root: repo_root.into(),
-                    triple:    "".into(),
-                    temp:      "".into(),
-                };
-                let wasm_dir = PathsRepoRootDistWasm::new2(&faux_parameters, output_dir.as_ref());
+            WasmSource::Build { repo_root } => {
                 build_wasm(repo_root, &wasm_dir).await?;
             }
             WasmSource::Local(local_path) => {
@@ -91,7 +99,7 @@ impl WasmSource {
                 download_wasm_from_run(client, &repo, *run, &output_dir).await?;
             }
         }
-        Ok(())
+        Ok((&wasm_dir).into())
     }
 }
 

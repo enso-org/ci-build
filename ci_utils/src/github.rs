@@ -1,4 +1,6 @@
 use crate::prelude::*;
+use anyhow::Context;
+use octocrab::models::ReleaseId;
 
 use octocrab::models::repos::Release;
 
@@ -9,7 +11,7 @@ pub mod release;
 
 /// Entity that uniquely identifies a GitHub-hosted repository.
 #[async_trait]
-pub trait RepoPointer {
+pub trait RepoPointer: Display {
     fn owner(&self) -> &str;
     fn name(&self) -> &str;
 
@@ -49,6 +51,19 @@ pub trait RepoPointer {
         client: &Octocrab,
     ) -> octocrab::Result<octocrab::models::repos::Release> {
         self.repos(client).releases().get_latest().await
+    }
+
+    async fn find_release_by_id(
+        &self,
+        client: &Octocrab,
+        release_id: ReleaseId,
+    ) -> Result<octocrab::models::repos::Release> {
+        let repo_handler = self.repos(client);
+        let releases_handler = repo_handler.releases();
+        releases_handler
+            .get_by_id(release_id)
+            .await
+            .context(format!("Failed to find release by id `{release_id}` in `{self}`."))
     }
 
     async fn find_release_by_text(

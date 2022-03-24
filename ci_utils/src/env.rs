@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use anyhow::Context;
+use serde_json::Value;
 use std::collections::BTreeSet;
 use std::env::join_paths;
 use std::env::set_var;
@@ -36,6 +37,11 @@ pub trait Variable {
     const NAME: &'static str;
     type Value: FromString = String;
 
+    fn format(&self, value: &Self::Value) -> String
+    where Self::Value: ToString {
+        value.to_string()
+    }
+
     fn name(&self) -> &str {
         Self::NAME
     }
@@ -58,7 +64,7 @@ pub trait Variable {
 
     fn set(&self, value: &Self::Value)
     where Self::Value: ToString {
-        std::env::set_var(self.name(), value.to_string())
+        std::env::set_var(self.name(), self.format(value))
     }
 
     fn set_os(&self, value: &Self::Value)

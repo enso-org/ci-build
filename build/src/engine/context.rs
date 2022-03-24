@@ -8,8 +8,6 @@ use sysinfo::SystemExt;
 use crate::args;
 use crate::args::Args;
 use crate::args::WhatToDo;
-use crate::engine::create_bundles;
-use crate::engine::create_packages;
 use crate::engine::download_project_templates;
 use crate::engine::env;
 use crate::engine::BuildConfiguration;
@@ -30,10 +28,12 @@ use crate::paths::Paths;
 use crate::retrieve_github_access_token;
 use crate::setup_octocrab;
 
+use crate::engine::bundle::Bundle;
 use crate::engine::sbt::verify_generated_package;
 use crate::enso::BuiltEnso;
 use crate::enso::IrCaches;
 use crate::version::deduce_versions;
+
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies;
 use ide_ci::goodies::graalvm;
@@ -84,6 +84,8 @@ impl RunContext {
         Ok(Self { config, octocrab, paths, goodies, operation })
     }
 
+    /// Check that required programs are present (if not, installs them, if supported). Set
+    /// environment variables for the build to follow.
     pub async fn prepare_build_env(&self) -> Result {
         // Building native images with Graal on Windows requires Microsoft Visual C++ Build Tools
         // available in the environment. If it is not visible, we need to add it.
@@ -136,13 +138,17 @@ impl RunContext {
             env::CiFlakyTestEnable.set(&true);
         }
 
+        // TODO [mwu]
+        //  Currently we rely on Musl to be present on the host machine. Eventually, we should
+        //  consider obtaining it by ourselves.
         // if TARGET_OS == OS::Linux {
         //     let musl = ide_ci::goodies::musl::Musl;
         //     goodies.require(&musl).await?;
         // }
 
-        let build_sbt_content = std::fs::read_to_string(self.paths.build_sbt())?;
+
         // Setup GraalVM
+        let build_sbt_content = std::fs::read_to_string(self.paths.build_sbt())?;
         let graalvm = graalvm::GraalVM {
             client:        &self.octocrab,
             graal_version: get_graal_version(&build_sbt_content)?,
@@ -152,13 +158,31 @@ impl RunContext {
         };
         self.goodies.require(&graalvm).await?;
         graalvm::Gu.require_present().await?;
-        graalvm::Gu.cmd()?.args(["install", "native-image"]).status().await?.exit_ok()?;
+
+        // Make sure that Graal has installed the optional components that we need.
+        // Some are not supported on Windows, in part because their runtime (Sulong) is not.
+        // See e.g. https://github.com/oracle/graalpython/issues/156
+        let conditional_components: &[&str] =
+            if graalvm::sulong_supported() { &["install", "python", "r"] } else { &[] };
+        graalvm::Gu
+            .cmd()?
+            .arg("install")
+            .arg("native-image")
+            .args(conditional_components)
+            .status()
+            .await?
+            .exit_ok()?;
         Ok(())
     }
 
-    pub async fn create_release(&self, repo: &RepoContext) -> Result {
+    /// Create a new draft release on the GitHub repository.
+    ///
+    /// Emits its ID into environment, so other build steps can use it.
+    pub async fn create_release(
+        &self,
+        repo: &RepoContext,
+    ) -> Result<octocrab::models::repos::Release> {
         let versions = &self.paths.triple.versions;
-
         let commit = ide_ci::actions::env::Sha.fetch()?;
 
         let changelog_contents = ide_ci::fs::read_to_string(self.paths.changelog())?;
@@ -179,7 +203,7 @@ impl RunContext {
             .await?;
 
         crate::env::ReleaseId.emit(&release.id)?;
-        Ok(())
+        Ok(release)
     }
 
     pub async fn publish_release(&self, repo: &RepoContext) -> Result {
@@ -197,6 +221,8 @@ impl RunContext {
     }
 
     pub async fn build(&self) -> Result<BuiltArtifacts> {
+        let mut ret = BuiltArtifacts::default();
+
         self.prepare_build_env().await?;
         if ide_ci::ci::run_in_ci() {
             // On CI we remove IR caches. They might contain invalid or outdated data, as are using
@@ -213,11 +239,11 @@ impl RunContext {
             git.args(["checkout"])?.arg(lib_src).run_ok().await?;
         }
 
-        // Install Dependencies of the Simple Library Server
-        ide_ci::programs::Npm
-            .install(self.paths.repo_root.join_many(["tools", "simple-library-server"]))?
-            .run_ok()
-            .await?;
+        // // Install Dependencies of the Simple Library Server. It is a JS tool that is used by the
+        // // library manager tests.
+        // let simple_lib_server_path =
+        //     self.paths.repo_root.join_many(["tools", "simple-library-server"]);
+        // ide_ci::programs::Npm.cmd()?.install().arg(simple_lib_server_path).run_ok().await?;
 
         // Download Project Template Files
         let client = reqwest::Client::new();
@@ -237,21 +263,40 @@ impl RunContext {
         sbt.call_arg("bootstrap").await?;
 
         if TARGET_OS != OS::Windows {
-            // FIXME debug what is going on here
+            // FIXME [mwu] apparently this is broken on Windows because of the line endings mismatch
             sbt.call_arg("verifyLicensePackages").await?;
         }
 
-        let github_hosted_macos_memory = 15032385;
+        // If we have much memory, we can try building everything in a single batch. Reducing number
+        // of SBT invocations significantly helps build time. However, it is more memory heavy, so
+        // we don't want to call this in environments like GH-hosted runners.
+        let github_hosted_macos_memory = 15_032_385;
         if system.total_memory() > github_hosted_macos_memory {
             let mut tasks = vec![
                 "engine-runner/assembly",
-                "launcher/buildNativeImage",
-                "project-manager/buildNativeImage",
-                "buildLauncherDistribution",
-                "buildEngineDistribution",
-                "buildProjectManagerDistribution",
+                // "project-manager/buildNativeImage",
+                // "launcher/buildNativeImage",
+                // "buildLauncherDistribution",
+                // "buildEngineDistribution",
+                // "buildProjectManagerDistribution",
             ];
 
+            if self.config.build_engine_package() {
+                tasks.push("buildEngineDistribution");
+                ret.packages.engine = Some(self.paths.engine.clone());
+            }
+            if self.config.build_project_manager_package() {
+                tasks.push("buildProjectManagerDistribution");
+                ret.packages.project_manager = Some(self.paths.project_manager.clone());
+            }
+            if self.config.build_launcher_package() {
+                tasks.push("buildLauncherDistribution");
+                ret.packages.launcher = Some(self.paths.launcher.clone());
+            }
+
+            // This just compiles benchmarks, not run them. At least we'll know that they can be
+            // run. Actually running them, as part of this routine, would be too heavy.
+            // TODO [mwu] It should be possible to run them through context config option.
             if self.config.benchmark_compilation {
                 tasks.extend([
                     "runtime/Benchmark/compile",
@@ -305,11 +350,9 @@ impl RunContext {
         }
 
         // === Build Distribution ===
-        // Build the Project Manager Native Image
-        // FIXME looks like a copy-paste error
-
         if self.config.mode == BuildMode::Development {
-            // docs-generator fails on Windows because it can't understand non-Unix-style paths.
+            // FIXME [mwu]
+            //  docs-generator fails on Windows because it can't understand non-Unix-style paths.
             if TARGET_OS != OS::Windows {
                 // Build the docs from standard library sources.
                 sbt.call_arg("docs-generator/run").await?;
@@ -318,10 +361,6 @@ impl RunContext {
 
         if self.config.build_js_parser {
             // Build the Parser JS Bundle
-            // TODO do once across the build
-            // The builds are run on 3 platforms, but
-            // Flatbuffer schemas are platform agnostic, so they just need to be
-            // uploaded from one of the runners.
             sbt.call_arg("syntaxJS/fullOptJS").await?;
             ide_ci::fs::copy_to(
                 self.paths.target.join("scala-parser.js"),
@@ -337,7 +376,7 @@ impl RunContext {
                 let google_api_test_data_dir =
                     self.paths.repo_root.join("test").join("Google_Api_Test").join("data");
                 ide_ci::fs::create_dir_if_missing(&google_api_test_data_dir)?;
-                std::fs::write(google_api_test_data_dir.join("secret.json"), &gdoc_key)?;
+                ide_ci::fs::write(google_api_test_data_dir.join("secret.json"), &gdoc_key)?;
             }
             enso.run_tests(IrCaches::No, PARALLEL_ENSO_TESTS).await?;
         }
@@ -401,14 +440,17 @@ impl RunContext {
             self.paths.upload_edition_file_artifact().await?;
         }
 
-        if self.config.build_bundles {
-            // Launcher bundle
-            let packages = create_packages(&self.paths).await?;
-            let bundles = create_bundles(&self.paths).await?;
-            Ok(BuiltArtifacts { packages, bundles })
-        } else {
-            Ok(default())
+        if self.config.build_launcher_bundle {
+            ret.bundles.launcher =
+                Some(crate::engine::bundle::Launcher::create(&self.paths).await?);
         }
+
+        if self.config.build_project_manager_bundle {
+            ret.bundles.project_manager =
+                Some(crate::engine::bundle::ProjectManager::create(&self.paths).await?);
+        }
+
+        Ok(ret)
     }
 
     pub async fn execute(&self) -> Result {
@@ -425,21 +467,24 @@ impl RunContext {
 
                     // Make packages.
                     let release_id = crate::env::ReleaseId.fetch()?;
-                    let repo_handler = repo.repos(&self.octocrab);
-
-                    let releases_handler = repo_handler.releases();
-                    let release = releases_handler.get_by_id(release_id).await.context(format!(
-                        "Failed to find release by id `{release_id}` in `{repo}`."
-                    ))?;
-
                     let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
-                    for package in artifacts.packages {
-                        ide_ci::github::release::upload_asset(repo, &client, release.id, package)
-                            .await?;
+                    for package in artifacts.packages.iter() {
+                        ide_ci::github::release::upload_asset(
+                            repo,
+                            &client,
+                            release_id,
+                            &package.dir,
+                        )
+                        .await?;
                     }
-                    for bundle in artifacts.bundles {
-                        ide_ci::github::release::upload_asset(repo, &client, release.id, bundle)
-                            .await?;
+                    for bundle in artifacts.bundles.iter() {
+                        ide_ci::github::release::upload_asset(
+                            repo,
+                            &client,
+                            release_id,
+                            &bundle.dir,
+                        )
+                        .await?;
                     }
                 }
             },

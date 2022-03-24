@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use std::time::Duration;
 
 use crate::fs::create_dir_if_missing;
 use crate::programs;
@@ -49,10 +50,10 @@ impl Format {
         compressed_data: impl Read + Seek,
         output_dir: impl AsRef<Path>,
     ) -> anyhow::Result<()> {
-        let bar = indicatif::ProgressBar::new_spinner();
-        bar.enable_steady_tick(10);
-        bar.set_message(format!("Unpacking archive to {}", output_dir.as_ref().display()));
-
+        let bar = crate::global::new_spinner(format!(
+            "Unpacking archive to {}",
+            output_dir.as_ref().display()
+        ));
         create_dir_if_missing(&output_dir)?;
         match self {
             Format::Zip => {

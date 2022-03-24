@@ -30,6 +30,6 @@ impl Git {
     }
 
     pub async fn clean_xfd(&self) -> Result {
-        self.cmd()?.arg("clean").arg("-xfd").run_ok().await
+        self.cmd()?.arg("clean").arg("-xfd").args(["-e", ".idea/"]).run_ok().await
     }
 }

@@ -2,6 +2,7 @@ use crate::prelude::*;
 use anyhow::Context;
 
 use crate::archive::Format;
+use crate::global::progress_bar;
 use reqwest::IntoUrl;
 
 /// Get the the response body as a byte stream.
@@ -12,7 +13,7 @@ pub async fn download(url: impl IntoUrl) -> Result<impl Stream<Item = reqwest::R
 /// Get the full response body from URL as bytes.
 pub async fn download_all(url: impl IntoUrl) -> anyhow::Result<Bytes> {
     let url = url.into_url()?;
-    let bar = indicatif::ProgressBar::new_spinner();
+    let bar = progress_bar(indicatif::ProgressBar::new_spinner);
     bar.enable_steady_tick(10);
     bar.set_message(format!("Downloading {}", url));
     let response = reqwest::get(url).await?;

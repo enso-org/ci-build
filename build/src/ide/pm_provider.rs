@@ -5,52 +5,62 @@ use crate::paths::TargetTriple;
 use crate::prelude::*;
 use crate::setup_octocrab;
 use crate::version::Versions;
+use anyhow::Context;
 use ide_ci::goodie::GoodieDatabase;
-
 #[derive(Clone, Debug)]
 pub enum ProjectManagerSource {
-    Local,
+    Local {
+        repo_root: PathBuf,
+    },
+    /// Wraps path to a Project Manager bundle.
+    ///
+    /// Such path looks like:
+    /// ```text
+    /// H:\NBO\enso5\built-distribution\project-manager-bundle-2022.1.1-dev-windows-amd64\enso
+    /// ```
     Bundle(PathBuf),
     Release(Version),
 }
 
+pub struct ProjectManagerArtifacts(pub PathBuf);
+
 impl ProjectManagerSource {
-    pub async fn get(&self, paths: Paths, triple: TargetTriple) -> Result {
-        let repo_root = &paths.repo_root;
-        let target_path = &paths.repo_root.dist.project_manager;
+    pub async fn get(
+        &self,
+        triple: TargetTriple,
+        output_path: impl AsRef<Path>,
+    ) -> Result<ProjectManagerArtifacts> {
+        let output_path = output_path.as_ref();
         match self {
-            ProjectManagerSource::Local => {
+            ProjectManagerSource::Local { repo_root } => {
+                let paths =
+                    crate::paths::Paths::new_version(&repo_root, triple.versions.version.clone())?;
                 let context = crate::engine::context::RunContext {
                     operation: crate::engine::Operation::Build(BuildOperation {}),
-                    goodies:   GoodieDatabase::new()?,
-                    config:    BuildConfiguration {
+                    goodies: GoodieDatabase::new()?,
+                    config: BuildConfiguration {
                         clean_repo: false,
-                        build_bundles: true,
+                        build_project_manager_bundle: true,
                         ..crate::engine::NIGHTLY
                     },
-                    octocrab:  setup_octocrab()?,
-                    paths:     crate::paths::Paths::new_version(
-                        &repo_root.path,
-                        triple.versions.version.clone(),
-                    )?,
+                    octocrab: setup_octocrab()?,
+                    paths,
                 };
-                dbg!(context.execute().await?);
-                ide_ci::fs::reset_dir(&target_path)?;
-                ide_ci::fs::copy_to(
-                    &repo_root.built_distribution.project_manager_bundle_triple.enso,
-                    &target_path,
-                )?;
+                let artifacts = context.build().await?;
+                let project_manager =
+                    artifacts.bundles.project_manager.context("Missing project manager bundle!")?;
+                ide_ci::fs::mirror_directory(&project_manager.dir, &output_path).await?;
             }
             ProjectManagerSource::Bundle(path) => {
-                assert_eq!(path.file_name().and_then(|f| f.to_str()), Some("enso"));
-                ide_ci::fs::reset_dir(&target_path)?;
-                ide_ci::fs::copy_to(&path, &target_path)?;
+                assert_eq!(path.file_name(), Some(OsStr::new("enso")));
+                ide_ci::fs::mirror_directory(&path, &output_path).await?;
             }
             ProjectManagerSource::Release(version) => {
+                todo!();
                 let needed_target = TargetTriple::new(Versions::new(version.clone()));
-                crate::project_manager::ensure_present(&target_path, &needed_target).await?;
+                crate::project_manager::ensure_present(&output_path, &needed_target).await?;
             }
         };
-        Ok(())
+        Ok(ProjectManagerArtifacts(output_path.to_path_buf()))
     }
 }

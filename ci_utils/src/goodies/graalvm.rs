@@ -36,6 +36,13 @@ impl crate::goodie::Instance for Instance {
     }
 }
 
+/// Support for sulong has not been implemented for Windows yet.
+///
+/// See: https://github.com/oracle/graal/issues/1160
+pub fn sulong_supported() -> bool {
+    TARGET_OS != OS::Windows
+}
+
 
 const PACKAGE_PREFIX: &str = "graalvm-ce";
 

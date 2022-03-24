@@ -1,24 +1,33 @@
+#![feature(adt_const_params)]
+
+use anyhow::Context;
 use enso_build::prelude::*;
 use std::ops::Deref;
 
 use clap::Arg;
 use clap::ArgEnum;
+use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use enso_build::args::BuildKind;
-use enso_build::ide::wasm::build_wasm;
-use enso_build::ide::wasm::download_wasm_from_run;
+use enso_build::ide::pm_provider::ProjectManagerSource;
+use enso_build::ide::wasm::WasmSource;
+use enso_build::ide::web::IdeDesktop;
 use enso_build::ide::BuildInfo;
-use enso_build::paths::generated::Parameters;
-use enso_build::paths::generated::Paths;
-use enso_build::paths::generated::PathsRepoRootDistWasm;
 use enso_build::paths::TargetTriple;
 use enso_build::setup_octocrab;
 use ide_ci::models::config::RepoContext;
+use ide_ci::platform::default_shell;
 use ide_ci::programs::Git;
 use lazy_static::lazy_static;
 use octocrab::models::RunId;
 
+lazy_static! {
+    pub static ref DIST_WASM: PathBuf = PathBuf::from_iter(["dist", "ide"]);
+    pub static ref DIST_GUI: PathBuf = PathBuf::from_iter(["dist", "gui"]);
+    pub static ref DIST_IDE: PathBuf = PathBuf::from_iter(["dist", "ide"]);
+    pub static ref DIST_PROJECT_MANAGER: PathBuf = PathBuf::from_iter(["dist", "project-manager"]);
+}
 
 pub trait ArgExt<'h>: Sized + 'h {
     fn maybe_default<S: AsRef<str> + 'h>(self, f: &'h impl Deref<Target = Option<S>>) -> Self;
@@ -48,10 +57,10 @@ pub fn normalize_path(path: &str) -> Result<PathBuf> {
     Ok(ret.to_path_buf())
 }
 
-pub struct RunContext {
-    repo: RepoContext,
-    run:  RunId,
-}
+// pub struct RunContext {
+//     repo: RepoContext,
+//     run:  RunId,
+// }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum GuiCommand {
@@ -59,37 +68,107 @@ pub enum GuiCommand {
     Watch,
 }
 
-#[derive(ArgEnum, Clone, Debug)]
-pub enum WasmSource {
-    /// WASM will be built from the target repository's sources.
+#[derive(ArgEnum, Clone, Copy, Debug)]
+pub enum TargetSource {
+    /// Target will be built from the target repository's sources.
     Build,
-    /// WASM will be copied from the local path.
+    /// Target will be copied from the local path.
     LocalPath,
+    // /// WASM will be copied from the local path.
+    // CurrentCiRun,
     /// bar
     Whatever,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum TargetSource2 {
+    /// Target will be built from the target repository's sources.
+    Build,
+    /// Target will be copied from the local path.
+    LocalPath,
+    // /// WASM will be copied from the local path.
+    // CurrentCiRun,
+    /// bar
+    Whatever,
+}
+
+
+// #[derive(Clone, Copy, Debug)]
+// pub enum TargetSourceValue {
+//     /// Target will be built from the target repository's sources.
+//     Build { repo_root: PathBuf },
+//     /// Target will be copied from the local path.
+//     LocalPath { artifact_path: PathBuf },
+//     // /// WASM will be copied from the local path.
+//     // CurrentCiRun,
+//     /// bar
+//     Whatever,
+// }
+//
+
+
+// pub struct Foo<> {}
+
+#[derive(Args, Clone, Debug)]
+pub struct TargetSourceArg<const SOURCE_NAME: &'static str, const PATH_NAME: &'static str> {
+    #[clap(long, arg_enum, default_value_t = TargetSource::Whatever, name  = SOURCE_NAME, long = SOURCE_NAME)]
+    source: TargetSource,
+
+    /// If source is `local-path`, this argument is required to give the path.
+    #[clap(long, required_if_eq(SOURCE_NAME, "local-path"), name  = PATH_NAME, long = PATH_NAME)]
+    path: Option<PathBuf>,
+}
+
+impl<const SOURCE_NAME: &'static str, const PATH_NAME: &'static str>
+    TargetSourceArg<SOURCE_NAME, PATH_NAME>
+{
+    pub fn resolve(&self, repo_root: impl Into<PathBuf>) -> Result<WasmSource> {
+        let repo_root = repo_root.into();
+        Ok(match self.source {
+            TargetSource::Build => WasmSource::Build { repo_root },
+            TargetSource::LocalPath => WasmSource::Local(
+                self.path.clone().context("Missing path to the local WASM artifacts!")?,
+            ),
+            TargetSource::Whatever => WasmSource::Build { repo_root },
+        })
+    }
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Target {
     Wasm {
         /// Where the WASM artifacts should be placed.
-        #[clap(default_value = "dist/wasm", parse(try_from_str=normalize_path))]
+        #[clap(default_value = DIST_WASM.as_str(), parse(try_from_str=normalize_path))]
         output_path: PathBuf,
     },
     Gui {
         /// Where the GUI artifacts should be placed.
-        #[clap(long, default_value = "dist/gui", parse(try_from_str=normalize_path))]
+        #[clap(long, default_value = DIST_GUI.as_str(), parse(try_from_str=normalize_path))]
         output_path: PathBuf,
-
-        #[clap(long, arg_enum, default_value_t = WasmSource::Whatever)]
-        wasm_source: WasmSource,
-
-        #[clap(long, required_if_eq("wasm-source", "local-path"))]
-        wasm_bundle: Option<PathBuf>,
 
         /// Command for GUI package.
         #[clap(subcommand)]
         command: GuiCommand,
+
+        #[clap(flatten)]
+        wasm_source: TargetSourceArg<"wasm-source", "wasm-path">,
+    },
+    /// Build a bundle with Project Manager. Bundle includes Engine and Runtime.
+    ProjectManager {
+        /// Where the GUI artifacts should be placed.
+        #[clap(long, default_value = DIST_PROJECT_MANAGER.as_str(), parse(try_from_str=normalize_path))]
+        output_path: PathBuf,
+    },
+    Ide {
+        #[clap(flatten)]
+        project_manager_source: TargetSourceArg<"project-manager-source", "project-manager-path">,
+
+        #[clap(flatten)]
+        gui_source: TargetSourceArg<"gui-source", "gui-path">,
+
+        /// Where the GUI artifacts should be placed.
+        #[clap(long, default_value = DIST_IDE.as_str(), parse(try_from_str=normalize_path))]
+        output_path: PathBuf,
     },
 }
 
@@ -114,23 +193,6 @@ pub struct Cli {
 
     #[clap(subcommand)]
     pub target: Target,
-    /* /// build kind (dev/nightly)
-     * #[argh(option, default = "default_kind()")]
-     * pub kind:       BuildKind,
-     * /// path to the local copy of the Enso Engine repository
-     * #[argh(positional)]
-     * pub target:     PathBuf,
-     * /// identifier of the release to be targeted (necessary for
-     * `upload` and `finish` commands)
-     * #[argh(option)] pub release_id:
-     * Option<u64>,
-     * /// repository that will be targeted for the release info purposes
-     * #[argh(option, from_str_fn(parse_repo_context), default =
-     * "default_repo()")] pub repo:
-     * Option<RepoContext>, // #[argh(subcommand)]
-     * // pub command:    WhatToDo,
-     * /* #[argh(subcommand)]
-     *  * pub task:       Vec<Task>, */ */
 }
 
 
@@ -187,11 +249,10 @@ async fn main() -> Result {
             // FIXME rebase output path
             enso_build::ide::wasm::build_wasm(&cli.repo_path, &paths.repo_root.dist.wasm).await?;
         }
-        Target::Gui { output_path, command, .. } => {
-            let wasm =
-                enso_build::ide::wasm::build_wasm(&cli.repo_path, &paths.repo_root.dist.wasm)
-                    .await?;
-            let web = enso_build::ide::web::IdeDesktop::new(&paths.repo_root.app.ide_desktop);
+        Target::Gui { output_path, command, wasm_source } => {
+            let wasm_source = wasm_source.resolve(&paths.repo_root)?;
+            let wasm = wasm_source.place_at(&octocrab, &paths.repo_root.dist.wasm).await?;
+            let web = IdeDesktop::from(&paths);
             match command {
                 GuiCommand::Build => {
                     web.build(&wasm, &info_for_js, output_path).await?;
@@ -200,6 +261,28 @@ async fn main() -> Result {
                     web.watch(&wasm, &info_for_js).await?;
                 }
             }
+        }
+        Target::ProjectManager { output_path, .. } => {
+            let pm_source = ProjectManagerSource::Local { repo_root: cli.repo_path.clone() };
+            let triple = triple.clone();
+            pm_source.get(triple, output_path).await?;
+        }
+        Target::Ide { output_path, .. } => {
+            let pm_source = ProjectManagerSource::Local { repo_root: cli.repo_path.clone() };
+            let triple = triple.clone();
+            let project_manager =
+                pm_source.get(triple, &paths.repo_root.dist.project_manager).await?;
+
+            let wasm =
+                enso_build::ide::wasm::build_wasm(&cli.repo_path, &paths.repo_root.dist.wasm)
+                    .await?;
+
+
+            let web = enso_build::ide::web::IdeDesktop::new(&paths.repo_root.app.ide_desktop);
+
+            let gui = web.build(&wasm, &info_for_js, &paths.repo_root.dist.content).await?;
+            let icons = web.build_icons(&paths.repo_root.dist.icons).await?;
+            web.dist(&gui, &project_manager, &icons, &paths.repo_root.dist.client).await?;
         }
     };
 

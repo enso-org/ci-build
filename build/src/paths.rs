@@ -24,7 +24,7 @@ pub const ARCHIVE_EXTENSION: &str = match TARGET_OS {
     _ => "tar.gz",
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct ComponentPaths {
     // e.g. `enso-engine-0.0.0-SNAPSHOT.2022-01-19-windows-amd64`
     pub name:             PathBuf,
@@ -120,14 +120,10 @@ impl Paths {
     }
 
     /// Create a new set of paths for building the Enso with a given version number.
-    pub fn new_version(repo_root: impl Into<PathBuf>, version: Version) -> Result<Self> {
+    pub fn new_triple(repo_root: impl Into<PathBuf>, triple: TargetTriple) -> Result<Self> {
         let repo_root: PathBuf = repo_root.into().absolutize()?.into();
         let build_dist_root = repo_root.join("built-distribution");
         let target = repo_root.join("target");
-
-        let versions = Versions::new(version);
-
-        let triple = TargetTriple::new(versions);
         let launcher = ComponentPaths::new(&build_dist_root, "enso-launcher", "enso", &triple);
         let engine = ComponentPaths::new(
             &build_dist_root,
@@ -138,6 +134,13 @@ impl Paths {
         let project_manager =
             ComponentPaths::new(&build_dist_root, "enso-project-manager", "enso", &triple);
         Ok(Paths { repo_root, build_dist_root, target, launcher, engine, project_manager, triple })
+    }
+
+    /// Create a new set of paths for building the Enso with a given version number.
+    pub fn new_version(repo_root: impl Into<PathBuf>, version: Version) -> Result<Self> {
+        let versions = Versions::new(version);
+        let triple = TargetTriple::new(versions);
+        Self::new_triple(repo_root, triple)
     }
 
     /// Sets the environment variables in the current process and in GitHub Actions Runner (if being

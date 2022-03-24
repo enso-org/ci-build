@@ -122,24 +122,12 @@ pub fn single_dir_provider(path: &Path) -> Result<impl Stream<Item = FileToUploa
         .into_iter()
         .collect_result()?
         .into_iter()
+        .filter(|entry| !entry.file_type().is_dir())
         .map(|entry| FileToUpload::new(entry.path()))
         .collect_result()?;
-    // let entries = files.into_iter().map(|entry|
-    // entry.map(DirEntry::into_path)).collect_result()?;
-    // let files = files.into_iter().map(|entry| FileToUpload::new(entry.path())).collect_result();
+
     Ok(futures::stream::iter(files))
 }
-
-
-// pub async fn upload_single_file(
-//     path: impl Into<PathBuf>
-// ) -> Result {
-//     let file = FileToUpload::new(path)?;
-//     let artifact_name = file.remote_path.as_str().to_owned();
-//     let provider = futures::stream::iter([file]);
-//     upload_artifact(provider, artifact_name).await
-// }
-
 
 #[cfg(test)]
 mod tests {

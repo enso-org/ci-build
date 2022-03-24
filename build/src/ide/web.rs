@@ -2,8 +2,12 @@ use crate::prelude::*;
 use ide_ci::actions::workflow::is_in_env;
 use tempfile::TempDir;
 
+use crate::engine::bundle::ProjectManager;
+use crate::ide::pm_provider::ProjectManagerArtifacts;
 use crate::ide::wasm::WasmArtifacts;
+use crate::ide::web::Workspaces::Content;
 use crate::ide::BuildInfo;
+use crate::paths::generated;
 use crate::paths::TargetTriple;
 use ide_ci::io::download_all;
 use ide_ci::program::EMPTY_ARGS;
@@ -26,36 +30,51 @@ pub const ARCHIVED_ASSET_FILE: &str = "ide-assets-main/content/assets/";
 pub mod env {
     use super::*;
 
-    pub struct OutputPath;
-    impl EnvironmentVariable for OutputPath {
-        const NAME: &'static str = "ENSO_IDE_DIST";
+    pub struct IdeDistPath;
+    impl EnvironmentVariable for IdeDistPath {
+        const NAME: &'static str = "ENSO_BUILD_IDE";
+        type Value = PathBuf;
+    }
+
+    pub struct ProjectManager;
+    impl EnvironmentVariable for ProjectManager {
+        const NAME: &'static str = "ENSO_BUILD_PROJECT_MANAGER";
+        type Value = PathBuf;
+    }
+
+    pub struct GuiDistPath;
+    impl EnvironmentVariable for GuiDistPath {
+        const NAME: &'static str = "ENSO_BUILD_GUI";
         type Value = PathBuf;
     }
 
     pub struct IconsPath;
     impl EnvironmentVariable for IconsPath {
-        const NAME: &'static str = "ENSO_ICONS";
+        const NAME: &'static str = "ENSO_BUILD_ICONS";
         type Value = PathBuf;
     }
 
     pub struct WasmPath;
     impl EnvironmentVariable for WasmPath {
-        const NAME: &'static str = "ENSO_GUI_WASM";
+        const NAME: &'static str = "ENSO_BUILD_GUI_WASM";
         type Value = PathBuf;
     }
 
     pub struct JsGluePath;
     impl EnvironmentVariable for JsGluePath {
-        const NAME: &'static str = "ENSO_GUI_JS_GLUE";
+        const NAME: &'static str = "ENSO_BUILD_GUI_JS_GLUE";
         type Value = PathBuf;
     }
 
     pub struct AssetsPath;
     impl EnvironmentVariable for AssetsPath {
-        const NAME: &'static str = "ENSO_GUI_ASSETS";
+        const NAME: &'static str = "ENSO_BUILD_GUI_ASSETS";
         type Value = PathBuf;
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct IconsArtifacts(pub PathBuf);
 
 
 /// Fill the directory under `output_path` with the assets.
@@ -78,6 +97,8 @@ pub async fn download_js_assets(output_path: impl AsRef<Path>) -> Result {
 pub enum Workspaces {
     Icons,
     Content,
+    /// The Electron client.
+    Enso,
 }
 
 impl AsRef<OsStr> for Workspaces {
@@ -85,9 +106,13 @@ impl AsRef<OsStr> for Workspaces {
         match self {
             Workspaces::Icons => OsStr::new("enso-studio-icons"),
             Workspaces::Content => OsStr::new("enso-studio-content"),
+            Workspaces::Enso => OsStr::new("enso"),
         }
     }
 }
+
+/// The content, i.e. WASM, HTML, JS, assets.
+pub struct GuiArtifacts(pub PathBuf);
 
 #[derive(Clone, Debug)]
 pub enum Command {
@@ -120,12 +145,18 @@ impl IdeDesktop {
         self.npm()?.install().run_ok().await
     }
 
+    pub async fn build_icons(&self, output_path: impl AsRef<Path>) -> Result<IconsArtifacts> {
+        env::IconsPath.set_path(&output_path);
+        self.npm()?.workspace(Workspaces::Icons).run("build", EMPTY_ARGS).run_ok().await?;
+        Ok(IconsArtifacts(output_path.as_ref().into()))
+    }
+
     pub async fn build(
         &self,
         wasm: &WasmArtifacts,
         build_info: &BuildInfo,
         output_path: impl AsRef<Path>,
-    ) -> Result {
+    ) -> Result<GuiArtifacts> {
         self.install().await?;
 
         let assets = TempDir::new()?;
@@ -134,22 +165,22 @@ impl IdeDesktop {
         self.write_build_info(&build_info)?;
 
         // TODO: this should be set only on a child processes
-        env::OutputPath.set_path(&output_path);
+        env::GuiDistPath.set_path(&output_path);
         env::WasmPath.set_path(&wasm.wasm);
         env::JsGluePath.set_path(&wasm.js_glue);
         env::AssetsPath.set_path(&assets);
-
         self.npm()?.workspace(Workspaces::Content).run("build", EMPTY_ARGS).run_ok().await?;
 
+        let ret = GuiArtifacts(output_path.as_ref().to_path_buf());
         if is_in_env() {
             ide_ci::actions::artifacts::upload_directory(output_path.as_ref(), "gui_content")
                 .await?;
         }
-
-        Ok(())
+        Ok(ret)
     }
 
     pub async fn watch(&self, wasm: &WasmArtifacts, build_info: &BuildInfo) -> Result {
+        // TODO deduplicate with build
         self.install().await?;
 
         let assets = TempDir::new()?;
@@ -159,11 +190,47 @@ impl IdeDesktop {
 
         // TODO: this should be set only on a child processes
         let output_path = TempDir::new()?;
-        env::OutputPath.set_path(&output_path);
+        env::GuiDistPath.set_path(&output_path);
         env::WasmPath.set_path(&wasm.wasm);
         env::JsGluePath.set_path(&wasm.js_glue);
         env::AssetsPath.set_path(&assets);
         self.npm()?.workspace(Workspaces::Content).run("watch", EMPTY_ARGS).run_ok().await?;
+        Ok(())
+    }
+
+    pub async fn dist(
+        &self,
+        gui: &GuiArtifacts,
+        project_manager: &ProjectManagerArtifacts,
+        icons: &IconsArtifacts,
+        output_path: impl AsRef<Path>,
+    ) -> Result {
+        env::GuiDistPath.set_path(&gui.0);
+        env::ProjectManager.set_path(&project_manager.0);
+        env::IconsPath.set_path(&icons.0);
+        env::IdeDistPath.set_path(&output_path);
+
+        self.npm()?.workspace(Workspaces::Enso).run("build", EMPTY_ARGS).run_ok().await?;
+        self.npm()?.workspace(Workspaces::Enso).run("dist", EMPTY_ARGS).run_ok().await?;
+
+        Ok(())
+    }
+}
+
+impl From<&generated::Paths> for IdeDesktop {
+    fn from(value: &generated::Paths) -> Self {
+        Self { package_dir: value.repo_root.app.ide_desktop.to_path_buf() }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn download_test() -> Result {
+        let temp = TempDir::new()?;
+        download_js_assets(temp.path()).await?;
         Ok(())
     }
 }

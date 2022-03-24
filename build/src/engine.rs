@@ -6,15 +6,12 @@ use crate::args::WhatToDo;
 use crate::paths::ComponentPaths;
 use crate::paths::Paths;
 
-use anyhow::Context;
 use ide_ci::env::Variable;
-use ide_ci::extensions::path::PathExt;
 use ide_ci::future::AsyncPolicy;
-use ide_ci::goodies::graalvm;
 use ide_ci::models::config::RepoContext;
 use platforms::TARGET_OS;
-use std::env::consts::EXE_EXTENSION;
 
+pub mod bundle;
 pub mod context;
 pub mod env;
 pub mod sbt;
@@ -72,16 +69,20 @@ pub struct BuildConfiguration {
     /// If true, repository shall be cleaned at the build start.
     ///
     /// Makes sense given that incremental builds with SBT are currently broken.
-    pub clean_repo:            bool,
-    pub mode:                  BuildMode,
-    pub test_scala:            bool,
+    pub clean_repo: bool,
+    pub mode: BuildMode,
+    pub test_scala: bool,
     pub test_standard_library: bool,
     /// Whether benchmarks are compiled.
     ///
     /// Note that this does not run the benchmarks, only ensures that they are buildable.
     pub benchmark_compilation: bool,
-    pub build_js_parser:       bool,
-    pub build_bundles:         bool,
+    pub build_js_parser: bool,
+    pub build_engine_package: bool,
+    pub build_launcher_package: bool,
+    pub build_project_manager_package: bool,
+    pub build_launcher_bundle: bool,
+    pub build_project_manager_bundle: bool,
 }
 
 impl BuildConfiguration {
@@ -93,30 +94,62 @@ impl BuildConfiguration {
 
         // Update build configuration with a custom arg overrides.
         if matches!(args.command, WhatToDo::Upload(_)) || args.bundle.contains(&true) {
-            config.build_bundles = true;
+            config.build_launcher_bundle = true;
+            config.build_project_manager_bundle = true;
         }
+
+        if config.build_launcher_bundle {
+            config.build_launcher_package = true;
+            config.build_engine_package = true;
+        }
+
+        if config.build_project_manager_bundle {
+            config.build_project_manager_package = true;
+            config.build_engine_package = true;
+        }
+
         config
+    }
+
+    pub fn build_engine_package(&self) -> bool {
+        self.build_engine_package || self.build_launcher_bundle || self.build_project_manager_bundle
+    }
+
+    pub fn build_project_manager_package(&self) -> bool {
+        self.build_project_manager_package || self.build_project_manager_bundle
+    }
+
+    pub fn build_launcher_package(&self) -> bool {
+        self.build_launcher_package || self.build_launcher_bundle
     }
 }
 
 pub const DEV: BuildConfiguration = BuildConfiguration {
-    clean_repo:            true,
-    mode:                  BuildMode::Development,
-    test_scala:            true,
+    clean_repo: true,
+    mode: BuildMode::Development,
+    test_scala: true,
     test_standard_library: true,
     benchmark_compilation: true,
-    build_js_parser:       true,
-    build_bundles:         false,
+    build_js_parser: matches!(TARGET_OS, OS::Linux),
+    build_engine_package: false,
+    build_launcher_package: false,
+    build_project_manager_package: false,
+    build_launcher_bundle: false,
+    build_project_manager_bundle: false,
 };
 
 pub const NIGHTLY: BuildConfiguration = BuildConfiguration {
-    clean_repo:            true,
-    mode:                  BuildMode::NightlyRelease,
-    test_scala:            false,
+    clean_repo: true,
+    mode: BuildMode::NightlyRelease,
+    test_scala: false,
     test_standard_library: false,
     benchmark_compilation: false,
-    build_js_parser:       false,
-    build_bundles:         false,
+    build_js_parser: false,
+    build_engine_package: false,
+    build_launcher_package: false,
+    build_project_manager_package: false,
+    build_launcher_bundle: false,
+    build_project_manager_bundle: false,
 };
 
 #[derive(Clone, PartialEq, Debug)]
@@ -179,30 +212,36 @@ pub enum Operation {
 
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct BuiltArtifacts {
-    pub bundles:  Vec<PathBuf>,
-    pub packages: Vec<PathBuf>,
+    pub packages: BuiltPackageArtifacts,
+    pub bundles:  BuiltBundleArtifacts,
 }
 
-#[context("Failed to create a launcher distribution.")]
-pub fn create_launcher_distribution(paths: &Paths) -> Result {
-    paths.launcher.clear()?;
-    ide_ci::fs::copy_to(
-        paths.repo_root.join_many(["distribution", "launcher", "THIRD-PARTY"]),
-        &paths.launcher.dir,
-    )?;
-    ide_ci::fs::copy_to(
-        paths.repo_root.join("enso").with_extension(EXE_EXTENSION),
-        &paths.launcher.dir.join("bin"),
-    )?;
-    //     IO.createDirectory(distributionRoot / "dist")
-    //     IO.createDirectory(distributionRoot / "runtime")
-    for filename in [".enso.portable", "README.md"] {
-        ide_ci::fs::copy_to(
-            paths.repo_root.join_many(["distribution", "launcher", filename]),
-            &paths.launcher.dir,
-        )?;
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct BuiltPackageArtifacts {
+    pub engine:          Option<ComponentPaths>,
+    pub launcher:        Option<ComponentPaths>,
+    pub project_manager: Option<ComponentPaths>,
+}
+
+impl BuiltPackageArtifacts {
+    pub fn iter(&self) -> impl IntoIterator<Item = &ComponentPaths> {
+        [&self.engine, &self.launcher, &self.project_manager]
+            .into_iter()
+            .map(|b| b.iter())
+            .flatten()
     }
-    Ok(())
+}
+
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct BuiltBundleArtifacts {
+    pub launcher:        Option<ComponentPaths>,
+    pub project_manager: Option<ComponentPaths>,
+}
+
+impl BuiltBundleArtifacts {
+    pub fn iter(&self) -> impl IntoIterator<Item = &ComponentPaths> {
+        [&self.project_manager, &self.launcher].into_iter().map(|b| b.iter()).flatten()
+    }
 }
 
 pub async fn create_packages(paths: &Paths) -> Result<Vec<PathBuf>> {
@@ -210,33 +249,8 @@ pub async fn create_packages(paths: &Paths) -> Result<Vec<PathBuf>> {
     if paths.launcher.root.exists() {
         println!("Packaging launcher.");
         ret.push(package_component(&paths.launcher).await?);
-        // IO.createDirectories(
-        //     Seq("dist", "config", "runtime").map(root / "enso" / _)
-        // )
-    }
-
-    if paths.engine.root.exists() {
-        println!("Packaging engine.");
-        ret.push(package_component(&paths.engine).await?);
     }
     Ok(ret)
-}
-
-#[context("Placing a GraalVM package under {}", target_directory.as_ref().display())]
-pub async fn place_graal_under(target_directory: impl AsRef<Path>) -> Result {
-    let graal_path = PathBuf::from(ide_ci::env::expect_var_os("JAVA_HOME")?);
-    let graal_dirname = graal_path
-        .file_name()
-        .context(anyhow!("Invalid Graal Path deduced from JAVA_HOME: {}", graal_path.display()))?;
-    ide_ci::fs::mirror_directory(&graal_path, target_directory.as_ref().join(graal_dirname)).await
-}
-
-#[context("Placing a Enso Engine package in {}", target_engine_dir.as_ref().display())]
-pub fn place_component_at(
-    engine_paths: &ComponentPaths,
-    target_engine_dir: impl AsRef<Path>,
-) -> Result {
-    ide_ci::fs::copy(&engine_paths.dir, &target_engine_dir)
 }
 
 #[async_trait]
@@ -254,51 +268,6 @@ impl ComponentPathExt for ComponentPaths {
         ide_ci::fs::remove_dir_if_exists(&self.root)?;
         ide_ci::fs::remove_file_if_exists(&self.artifact_archive)
     }
-}
-
-pub async fn create_bundle(
-    paths: &Paths,
-    base_component: &ComponentPaths,
-    bundle: &ComponentPaths,
-) -> Result {
-    bundle.clear()?;
-    ide_ci::fs::copy(&base_component.root, &bundle.root)?;
-
-    let bundled_engine_dir = bundle.dir.join("dist").join(paths.version().to_string());
-    place_component_at(&paths.engine, &bundled_engine_dir)?;
-    place_graal_under(bundle.dir.join("runtime")).await?;
-    Ok(())
-}
-
-pub async fn create_bundles(paths: &Paths) -> Result<Vec<PathBuf>> {
-    // Make sure that Graal has the needed optional components installed (on platforms that support
-    // them).
-    if TARGET_OS != OS::Windows {
-        // Windows does not support sulong.
-        graalvm::Gu.call_args(["install", "python", "r"]).await?;
-    }
-
-    // Launcher bundle.
-    let engine_bundle =
-        ComponentPaths::new(&paths.build_dist_root, "enso-bundle", "enso", &paths.triple);
-    create_bundle(paths, &paths.launcher, &engine_bundle).await?;
-    engine_bundle.pack().await?;
-
-
-    // Project manager bundle.
-    let pm_bundle = ComponentPaths::new(
-        &paths.build_dist_root,
-        "project-manager-bundle",
-        "enso",
-        &paths.triple,
-    );
-    create_bundle(paths, &paths.project_manager, &pm_bundle).await?;
-    ide_ci::fs::copy(
-        paths.repo_root.join_many(["distribution", "enso.bundle.template"]),
-        pm_bundle.dir.join(".enso.bundle"),
-    )?;
-    pm_bundle.pack().await?;
-    Ok(vec![engine_bundle.artifact_archive, pm_bundle.artifact_archive])
 }
 
 pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
