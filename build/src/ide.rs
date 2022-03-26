@@ -1,9 +1,9 @@
 use crate::prelude::*;
 
+pub mod artifacts;
 pub mod context;
 pub mod desktop;
 pub mod pm_provider;
-pub mod wasm;
 pub mod web;
 
 
@@ -15,6 +15,11 @@ pub struct BuildInfo {
     pub engine_version: Version,
     pub name:           String,
 }
+
+
+#[derive(Clone, Debug)]
+pub struct Ide;
+
 
 //
 // #[tokio::main]

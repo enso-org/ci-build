@@ -24,7 +24,7 @@
     project-manager/:
     tmp/:
     # Final WASM artifacts in `dist` directory.
-    wasm/: &WASM
+    wasm/:
       ? path: ide.wasm
         var: wasm_main
       ? path: ide_bg.wasm
@@ -35,9 +35,3 @@
     build-init:
     build.json:
   run:
-<temp>:
-  enso-wasm/: *WASM
-#":wasm":
-#  &WASM_MAIN ide.wasm:
-#  &WASM_MAIN_RAW ide_bg.wasm:
-#  &WASM_GLUE ide.js:

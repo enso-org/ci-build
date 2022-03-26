@@ -137,10 +137,15 @@ impl Paths {
     }
 
     /// Create a new set of paths for building the Enso with a given version number.
-    pub fn new_version(repo_root: impl Into<PathBuf>, version: Version) -> Result<Self> {
-        let versions = Versions::new(version);
+    pub fn new_versions(repo_root: impl Into<PathBuf>, versions: Versions) -> Result<Self> {
         let triple = TargetTriple::new(versions);
         Self::new_triple(repo_root, triple)
+    }
+
+    /// Create a new set of paths for building the Enso with a given version number.
+    pub fn new_version(repo_root: impl Into<PathBuf>, version: Version) -> Result<Self> {
+        let versions = Versions::new(version);
+        Self::new_versions(repo_root, versions)
     }
 
     /// Sets the environment variables in the current process and in GitHub Actions Runner (if being

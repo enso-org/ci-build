@@ -4,11 +4,14 @@ use ide_ci::actions::workflow::is_in_env;
 use octocrab::models::RunId;
 use octocrab::params::actions::ArchiveFormat;
 
-use crate::ide::wasm::js_patcher::patch_js_glue_in_place;
-use crate::paths::generated::Parameters;
-use crate::paths::generated::Paths;
-use crate::paths::generated::PathsRepoRootDistWasm;
+use crate::project::wasm::js_patcher::patch_js_glue_in_place;
+// use crate::paths::generated::Parameters;
+// use crate::paths::generated::Paths;
+// use crate::paths::generated::PathsRepoRootDistWasm;
 
+use crate::paths::generated::RepoRoot;
+use crate::paths::generated::RepoRootDistWasm;
+use crate::project::IsTarget;
 use ide_ci::env::Variable;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::WasmPack;
@@ -20,27 +23,65 @@ const WASM_ARTIFACT_NAME: &str = "ide-wasm";
 const OUTPUT_NAME: &str = "ide";
 const TARGET_CRATE: &str = "app/gui";
 
-pub struct WasmArtifacts {
-    pub dir:     PathBuf,
-    pub wasm:    PathBuf,
-    pub js_glue: PathBuf,
+#[derive(Clone, Debug)]
+pub struct Wasm;
+
+#[async_trait]
+impl IsTarget for Wasm {
+    type BuildInput = RepoRoot;
+    type Output = Artifacts;
+
+    fn artifact_name(&self) -> &str {
+        "ide_wasm"
+    }
+
+    async fn build(
+        &self,
+        input: Self::BuildInput,
+        output_path: impl AsRef<Path> + Send + Sync + 'static,
+    ) -> Result<Self::Output> {
+        let artifacts = build_wasm(&input, &output_path).await?;
+        Ok(output_path.as_ref().into())
+    }
 }
 
-impl From<&PathsRepoRootDistWasm> for WasmArtifacts {
-    fn from(value: &PathsRepoRootDistWasm) -> Self {
-        Self {
-            dir:     value.path.clone(),
-            wasm:    value.wasm_main.path.clone(),
-            js_glue: value.wasm_glue.path.clone(),
-        }
+
+
+#[derive(Clone, Debug, Display)]
+pub struct Artifacts(RepoRootDistWasm);
+
+impl Artifacts {
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        Self(RepoRootDistWasm::new(path))
+    }
+    pub fn wasm(&self) -> &Path {
+        &self.0.wasm_main
+    }
+    pub fn js_glue(&self) -> &Path {
+        &self.0.wasm_glue
+    }
+    pub fn dir(&self) -> &Path {
+        &self.0.path
+    }
+}
+
+impl AsRef<Path> for Artifacts {
+    fn as_ref(&self) -> &Path {
+        self.0.as_path()
+    }
+}
+
+impl From<&Path> for Artifacts {
+    fn from(path: &Path) -> Self {
+        Self::new(path)
     }
 }
 
 pub async fn build_wasm(
     repo_root: impl AsRef<Path>,
-    output_dir: &PathsRepoRootDistWasm,
-) -> Result<WasmArtifacts> {
-    ide_ci::fs::create_dir_if_missing(&output_dir.path)?;
+    output_dir: impl AsRef<Path>,
+) -> Result<Artifacts> {
+    ide_ci::fs::create_dir_if_missing(&output_dir)?;
     ide_ci::programs::WasmPack
         .cmd()?
         .env_remove(ide_ci::programs::rustup::env::Toolchain::NAME)
@@ -50,7 +91,7 @@ pub async fn build_wasm(
             "--target",
             "web",
             "--out-dir",
-            output_dir.path.as_str(), // &paths.wasm().as_os_str().to_str().unwrap(),
+            output_dir.as_str(),
             "--out-name",
             OUTPUT_NAME,
             TARGET_CRATE,
@@ -61,14 +102,11 @@ pub async fn build_wasm(
         .await?
         .exit_ok()?;
 
-    patch_js_glue_in_place(&output_dir.wasm_glue)?;
-    ide_ci::fs::rename(&output_dir.wasm_main_raw, &output_dir.wasm_main)?;
-
-    if is_in_env() {
-        ide_ci::actions::artifacts::upload_directory(&output_dir, "ide_wasm").await?;
-    }
-
-    Ok(output_dir.into())
+    let mut ret = RepoRootDistWasm::new(output_dir.as_ref());
+    patch_js_glue_in_place(&ret.wasm_glue)?;
+    ide_ci::fs::rename(&ret.wasm_main_raw, &ret.wasm_main)?;
+    let ret = Artifacts(ret);
+    Ok(ret)
 }
 
 #[derive(Clone, Debug)]
@@ -82,24 +120,20 @@ impl WasmSource {
     pub async fn place_at(
         &self,
         client: &Octocrab,
-        output_dir: impl AsRef<Path>,
-    ) -> Result<WasmArtifacts> {
-        let faux_parameters =
-            Parameters { repo_root: "".into(), triple: "".into(), temp: "".into() };
-        let wasm_dir = PathsRepoRootDistWasm::new2(&faux_parameters, output_dir.as_ref());
-
+        output_dir: &RepoRootDistWasm,
+    ) -> Result<Artifacts> {
         match self {
             WasmSource::Build { repo_root } => {
-                build_wasm(repo_root, &wasm_dir).await?;
+                build_wasm(repo_root, output_dir).await?;
             }
             WasmSource::Local(local_path) => {
-                ide_ci::fs::copy(local_path, &output_dir)?;
+                ide_ci::fs::copy(local_path, output_dir)?;
             }
             WasmSource::GuiCiRun { repo, run } => {
-                download_wasm_from_run(client, &repo, *run, &output_dir).await?;
+                download_wasm_from_run(client, &repo, *run, output_dir).await?;
             }
         }
-        Ok((&wasm_dir).into())
+        Ok(Artifacts::new(output_dir))
     }
 }
 

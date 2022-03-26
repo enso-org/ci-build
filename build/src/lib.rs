@@ -1,3 +1,4 @@
+#![feature(trait_alias)]
 #![feature(let_chains)]
 #![feature(bool_to_option)]
 #![feature(exit_status_error)]
@@ -33,6 +34,7 @@ pub mod httpbin;
 pub mod ide;
 pub mod paths;
 pub mod postgres;
+pub mod project;
 pub mod project_manager;
 pub mod repo;
 pub mod version;

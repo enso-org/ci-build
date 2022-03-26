@@ -1,14 +1,16 @@
 use crate::prelude::*;
+use futures_util::future::try_join3;
 use ide_ci::actions::workflow::is_in_env;
 use tempfile::TempDir;
 
 use crate::engine::bundle::ProjectManager;
 use crate::ide::pm_provider::ProjectManagerArtifacts;
-use crate::ide::wasm::WasmArtifacts;
 use crate::ide::web::Workspaces::Content;
 use crate::ide::BuildInfo;
 use crate::paths::generated;
+use crate::paths::generated::RepoRootDistWasm;
 use crate::paths::TargetTriple;
+use crate::project::wasm::Artifacts;
 use ide_ci::io::download_all;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
@@ -112,7 +114,20 @@ impl AsRef<OsStr> for Workspaces {
 }
 
 /// The content, i.e. WASM, HTML, JS, assets.
+#[derive(Clone, Debug)]
 pub struct GuiArtifacts(pub PathBuf);
+
+impl From<&Path> for GuiArtifacts {
+    fn from(path: &Path) -> Self {
+        GuiArtifacts(path.into())
+    }
+}
+
+impl AsRef<Path> for GuiArtifacts {
+    fn as_ref(&self) -> &Path {
+        self.0.as_path()
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum Command {
@@ -153,33 +168,31 @@ impl IdeDesktop {
 
     pub async fn build(
         &self,
-        wasm: &WasmArtifacts,
+        wasm: impl Future<Output = Result<Artifacts>>,
         build_info: &BuildInfo,
         output_path: impl AsRef<Path>,
     ) -> Result<GuiArtifacts> {
-        self.install().await?;
+        let installation = self.install();
 
         let assets = TempDir::new()?;
-        download_js_assets(&assets).await?;
+        let assets_download = download_js_assets(&assets);
+
+        let (wasm, _, _) = try_join3(wasm, installation, assets_download).await?;
 
         self.write_build_info(&build_info)?;
 
         // TODO: this should be set only on a child processes
         env::GuiDistPath.set_path(&output_path);
-        env::WasmPath.set_path(&wasm.wasm);
-        env::JsGluePath.set_path(&wasm.js_glue);
+        env::WasmPath.set_path(&wasm.wasm());
+        env::JsGluePath.set_path(&wasm.js_glue());
         env::AssetsPath.set_path(&assets);
         self.npm()?.workspace(Workspaces::Content).run("build", EMPTY_ARGS).run_ok().await?;
 
         let ret = GuiArtifacts(output_path.as_ref().to_path_buf());
-        if is_in_env() {
-            ide_ci::actions::artifacts::upload_directory(output_path.as_ref(), "gui_content")
-                .await?;
-        }
         Ok(ret)
     }
 
-    pub async fn watch(&self, wasm: &WasmArtifacts, build_info: &BuildInfo) -> Result {
+    pub async fn watch(&self, wasm: &Artifacts, build_info: &BuildInfo) -> Result {
         // TODO deduplicate with build
         self.install().await?;
 
@@ -191,8 +204,8 @@ impl IdeDesktop {
         // TODO: this should be set only on a child processes
         let output_path = TempDir::new()?;
         env::GuiDistPath.set_path(&output_path);
-        env::WasmPath.set_path(&wasm.wasm);
-        env::JsGluePath.set_path(&wasm.js_glue);
+        env::WasmPath.set_path(&wasm.wasm());
+        env::JsGluePath.set_path(&wasm.js_glue());
         env::AssetsPath.set_path(&assets);
         self.npm()?.workspace(Workspaces::Content).run("watch", EMPTY_ARGS).run_ok().await?;
         Ok(())
@@ -212,14 +225,17 @@ impl IdeDesktop {
 
         self.npm()?.workspace(Workspaces::Enso).run("build", EMPTY_ARGS).run_ok().await?;
         self.npm()?.workspace(Workspaces::Enso).run("dist", EMPTY_ARGS).run_ok().await?;
-
+        if is_in_env() {
+            ide_ci::actions::artifacts::upload_directory(output_path.as_ref(), "ide_client")
+                .await?;
+        }
         Ok(())
     }
 }
 
-impl From<&generated::Paths> for IdeDesktop {
-    fn from(value: &generated::Paths) -> Self {
-        Self { package_dir: value.repo_root.app.ide_desktop.to_path_buf() }
+impl From<&generated::RepoRoot> for IdeDesktop {
+    fn from(value: &generated::RepoRoot) -> Self {
+        Self { package_dir: value.app.ide_desktop.to_path_buf() }
     }
 }
 

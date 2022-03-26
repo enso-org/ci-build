@@ -4,10 +4,10 @@ use enso_build::prelude::*;
 
 use enso_build::args::BuildKind;
 use enso_build::ide::pm_provider::ProjectManagerSource;
-use enso_build::ide::wasm::build_wasm;
 use enso_build::ide::web::download_js_assets;
 use enso_build::ide::BuildInfo;
 use enso_build::paths::TargetTriple;
+use enso_build::project::wasm::build_wasm;
 use enso_build::setup_octocrab;
 use ide_ci::actions::env::is_self_hosted;
 use ide_ci::future::try_join_all;

@@ -70,6 +70,8 @@ pub struct BuildConfiguration {
     ///
     /// Makes sense given that incremental builds with SBT are currently broken.
     pub clean_repo: bool,
+    /// Development builds have docs-generator run.
+    /// Release builds have their packages validated (license-wise).
     pub mode: BuildMode,
     pub test_scala: bool,
     pub test_standard_library: bool,

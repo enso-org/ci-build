@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use std::time::Duration;
 
 pub use ::zip::*;
 use anyhow::Context;

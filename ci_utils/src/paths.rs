@@ -8,16 +8,38 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use quote::ToTokens;
+use regex::Regex;
 use serde_yaml::Value;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::iter::zip;
 use syn::parse_quote;
+
+
+fn to_ident(name: impl AsRef<str>) -> Ident {
+    syn::Ident::new(name.as_ref(), Span::call_site())
+}
 
 lazy_static::lazy_static! {
     /// Matches `bar` in `foo <bar> baz`.
-    static ref PARAMETER: regex::Regex = regex::Regex::new(r"<([^>]+)>").unwrap();
+    static ref PARAMETER: ParameterRegex = ParameterRegex::new();
 }
 
+#[derive(Clone, Debug, Shrinkwrap)]
+pub struct ParameterRegex(Regex);
+
+impl ParameterRegex {
+    pub fn new() -> Self {
+        Self(regex::Regex::new(r"<([^>]+)>").unwrap())
+    }
+
+    pub fn find_all<'a>(&'a self, text: &'a str) -> impl IntoIterator<Item = &str> {
+        // The unwrap below is safe, if we have at least one explicit capture group in the regex.
+        // We do have.
+        self.0.captures_iter(text).map(|captures| captures.get(1).unwrap().as_str())
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Shape {
@@ -35,21 +57,23 @@ impl Shape {
     }
 }
 
-
 #[derive(Clone, Debug, PartialEq, Shrinkwrap)]
 pub struct Node {
     #[shrinkwrap(main_field)]
-    value:    String,
+    value:      String,
+    parameters: BTreeSet<String>, // Wasteful but paths won't be that huge.
     /// The name that replaces value in variable-like contexts.
-    var_name: Option<String>,
-    shape:    Shape,
+    /// Basically, we might not want use filepath name as name in the code.
+    var_name:   Option<String>,
+    shape:      Shape,
 }
 
 impl Node {
     pub fn new(value: impl AsRef<str>, var_name: Option<String>) -> Self {
         let shape = Shape::new(value.as_ref());
         let value = value.as_ref().trim_end_matches('/').to_string();
-        Self { var_name, shape, value }
+        let parameters = default();
+        Self { var_name, parameters, shape, value }
     }
 
     pub fn new_from_key(value: &Value) -> Result<Self> {
@@ -78,9 +102,32 @@ impl Node {
         }
     }
 
+    pub fn all_parameters_vars(&self) -> Vec<Ident> {
+        self.parameters
+            .iter()
+            .sorted()
+            .map(|name| syn::Ident::new(&name, Span::call_site()))
+            .collect_vec()
+    }
+
+    pub fn own_parameters(&self) -> impl IntoIterator<Item = &str> {
+        PARAMETER.find_all(&self.value)
+    }
+
+    pub fn own_parameter_vars(&self) -> Vec<Ident> {
+        self.own_parameters().into_iter().map(to_ident).collect()
+    }
+
     pub fn children(&self) -> &[Node] {
         match &self.shape {
             Shape::File => &[],
+            Shape::Directory(dir) => dir,
+        }
+    }
+
+    pub fn children_mut(&mut self) -> &mut [Node] {
+        match &mut self.shape {
+            Shape::File => &mut [],
             Shape::Directory(dir) => dir,
         }
     }
@@ -114,25 +161,18 @@ impl Node {
         me.chain(children)
     }
 
-    pub fn path_formatter(&self, parameters_expr: impl ToTokens) -> TokenStream {
-        let ret = PARAMETER.replace_all(&self.to_string(), "{}").to_string();
-        let parameters = self.parameters().into_iter().map(|param| {
+    pub fn path_formatter(&self) -> TokenStream {
+        let text = self.to_string();
+        let ret = PARAMETER.replace_all(&text, "{}").to_string();
+        let parameters = self.own_parameters().into_iter().map(|param| {
             let param = Ident::new(param, Span::call_site());
             quote! {
-                #parameters_expr.#param.display()
+                #param.as_ref().display()
             }
         });
         quote! {
             format!(#ret, #(#parameters),*)
         }
-    }
-
-    /// Collect parameter names used in this node's path segment.
-    pub fn parameters(&self) -> Vec<&str> {
-        PARAMETER
-            .captures_iter(&self.value)
-            .map(|captures| captures.get(1).unwrap().as_str())
-            .collect()
     }
 
     /// Sanitize string to be a valid Rust identifier.
@@ -160,12 +200,6 @@ impl Node {
     }
 }
 
-// impl TryFrom<&serde_yaml::Value> for Node {
-//     type Error = anyhow::Error;
-//
-//     fn try_from(value: &Value) -> std::result::Result<Self, Self::Error> {}
-// }
-
 pub fn struct_ident<'a>(full_path: impl IntoIterator<Item = &'a Node>) -> Ident {
     let text = full_path.into_iter().map(|n| n.struct_ident_piece()).join("");
     Ident::new(&text, Span::call_site())
@@ -176,34 +210,91 @@ pub fn child_struct_ident(init: &[&Node], last: &Node) -> Ident {
 }
 
 pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
-    let parameters_var: Ident = parse_quote!(context);
     let ty_name = struct_ident(full_path.into_iter().cloned());
-    let path_component = last_node.path_formatter(&parameters_var);
+    let path_component = last_node.path_formatter();
 
     let children_var = last_node.children().iter().map(Node::var_ident).collect_vec();
     let children_struct =
         last_node.children().iter().map(|child| child_struct_ident(full_path, child)).collect_vec();
 
+    let parameter_vars = last_node.all_parameters_vars();
+    let own_parameter_vars: Vec<Ident> = last_node.own_parameter_vars();
+
+    let child_parameter_vars = last_node
+        .children()
+        .iter()
+        .flat_map(|node| node.parameters.iter())
+        .map(to_ident)
+        .collect_vec();
+
+    let children_init = zip(last_node.children(), &children_struct)
+        .map(|(child, children_struct)| {
+            let child_parameters = child.all_parameters_vars();
+            quote! {
+                #children_struct::new_under(&path, #(#child_parameters),*)
+            }
+        })
+        .collect_vec();
+
+    let opt_conversions = if parameter_vars.is_empty() {
+        quote! {
+            impl From<#ty_name> for std::path::PathBuf {
+                fn from(value: #ty_name) -> Self {
+                    value.path
+                }
+            }
+
+            impl From<std::path::PathBuf> for #ty_name {
+                fn from(value: std::path::PathBuf) -> Self {
+                    #ty_name::new(value)
+                }
+            }
+
+            impl From<&std::path::Path> for #ty_name {
+                fn from(value: &std::path::Path) -> Self {
+                    #ty_name::new(value)
+                }
+            }
+        }
+    } else {
+        TokenStream::new()
+    };
+
     quote! {
-       #[derive(Clone, Debug, Hash, PartialEq)]
-       pub struct #ty_name {
-           pub path: std::path::PathBuf,
-           #(pub #children_var: #children_struct),*
-       }
+        #[derive(Clone, Debug, Hash, PartialEq)]
+        pub struct #ty_name {
+            pub path: std::path::PathBuf,
+            #(pub #children_var: #children_struct),*
+        }
+
+        #opt_conversions
 
        impl #ty_name {
-           #[allow(unused_variables)]
-           pub fn new(#parameters_var: &Parameters, parent: &std::path::Path) -> Self {
-               let path = parent.join(#path_component);
-               #(let #children_var = #children_struct::new(#parameters_var, &path);)*
+           pub fn new(path: impl Into<std::path::PathBuf> #(, #child_parameter_vars: impl AsRef<std::path::Path>)*) -> Self {
+               let path = path.into();
+               #(let #children_var = #children_init;)*
                Self { path, #(#children_var),* }
            }
 
-           #[allow(unused_variables)]
-           pub fn new2(#parameters_var: &Parameters, path: impl Into<std::path::PathBuf>) -> Self {
-               let path = path.into();
-               #(let #children_var = #children_struct::new(#parameters_var, &path);)*
-               Self { path, #(#children_var),* }
+           pub fn new_under(parent: impl AsRef<std::path::Path> #(, #parameter_vars: impl AsRef<std::path::Path>)*) -> Self {
+               let path = parent.as_ref().join(Self::segment_name(#(#own_parameter_vars),*));
+               Self::new(path, #(#child_parameter_vars),*)
+           }
+
+            pub fn segment_name(#(#own_parameter_vars: impl AsRef<std::path::Path>),*) -> String {
+                #path_component
+            }
+       }
+
+        impl std::fmt::Display for #ty_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.path.display().fmt(f)
+            }
+        }
+
+       impl AsRef<str> for #ty_name {
+           fn as_ref(&self) -> &str {
+               &self.path.to_str().unwrap()
            }
        }
 
@@ -229,28 +320,26 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
 }
 
 pub fn generate(forest: Vec<Node>) -> Result<proc_macro2::TokenStream> {
-    let variables: HashSet<&str> =
-        forest.iter().flat_map(|tree| tree.iter().flat_map(|node| node.parameters())).collect();
-    let variable_map = variables
-        .iter()
-        .map(|v| (*v, syn::Ident::new(v, Span::call_site())))
-        .collect::<HashMap<_, _>>();
-
-    // dbg!(&variables);
-    let variable_idents = variable_map.values().collect_vec();
-    let mut ret = quote! {
-       #[derive(Clone, Debug, Hash, PartialEq)]
-        pub struct Parameters {
-            #(pub #variable_idents: std::path::PathBuf),*
-        }
-    };
-
-    let top =
-        Node { value: String::from("."), var_name: None, shape: Shape::Directory(forest) };
-    top.foreach(|full_path, last_node| {
-        ret.extend(generate_struct(full_path, last_node));
-    });
+    let mut ret = TokenStream::new();
+    for node in forest {
+        node.foreach(|full_path, last_node| {
+            ret.extend(generate_struct(full_path, last_node));
+        })
+    }
     Ok(ret)
+}
+
+pub fn collect_parameters(value: &mut Node) {
+    let mut child_parameters = BTreeSet::new();
+    for child in value.children_mut() {
+        collect_parameters(child);
+        child_parameters.extend(child.parameters.clone());
+    }
+
+    let own_parameters = PARAMETER.find_all(&value.value).into_iter().map(ToString::to_string);
+    value.parameters.extend(own_parameters);
+    value.parameters.extend(child_parameters);
+    println!("{} has {} parameters", value.value, value.parameters.len());
 }
 
 pub fn convert(value: &serde_yaml::Value) -> Result<Vec<Node>> {
@@ -264,6 +353,7 @@ pub fn convert(value: &serde_yaml::Value) -> Result<Vec<Node>> {
                         node.add_child(child);
                     }
                 }
+                collect_parameters(&mut node);
                 ret.push(node)
             }
             Ok(ret)
@@ -271,27 +361,6 @@ pub fn convert(value: &serde_yaml::Value) -> Result<Vec<Node>> {
         _ => bail!("Expected YAML mapping, found the {}", serde_yaml::to_string(value)?),
     }
 }
-
-// #[derive(Default)]
-// pub struct Generator<'a> {
-//     stack:     Vec<&'a Node>,
-//     root_node: &'a Node,
-//     out:       &'a mut TokenStream,
-// }
-//
-// impl<'a> Generator<'a> {
-//     pub fn new(tree: &Node, out: &'a mut TokenStream) -> Self {
-//         Self { stack: vec![tree], root_node: tree, out }
-//     }
-//
-//     pub fn process_node(&mut self, node: &'a Node) -> Result {
-//
-//     }
-//
-//     pub fn run(&mut self) -> Result {
-//
-//     }
-// }
 
 pub fn process(yaml_input: impl Read) -> Result<String> {
     let yaml = serde_yaml::from_reader(yaml_input)?;
