@@ -12,19 +12,19 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use enso_build::args::BuildKind;
-use enso_build::ide::artifacts::Ide;
-use enso_build::ide::pm_provider::ProjectManagerSource;
 use enso_build::ide::web::IdeDesktop;
-use enso_build::ide::BuildInfo;
 use enso_build::paths::generated::RepoRoot;
 use enso_build::paths::TargetTriple;
 use enso_build::project::gui::Gui;
 use enso_build::project::gui::GuiInputs;
+use enso_build::project::ide::BuildInfo;
+use enso_build::project::ide::Ide;
 use enso_build::project::project_manager::ProjectManager;
 use enso_build::project::wasm::Wasm;
 use enso_build::project::wasm::WasmSource;
 use enso_build::project::IsTarget;
 use enso_build::setup_octocrab;
+use enso_build::version::Versions;
 use ide_ci::models::config::RepoContext;
 use ide_ci::platform::default_shell;
 use ide_ci::programs::tar::Tar;
@@ -88,22 +88,6 @@ pub enum TargetSource {
     /// bar
     Whatever,
 }
-
-// #[derive(Clone, Copy, Debug)]
-// pub enum TargetSourceValue {
-//     /// Target will be built from the target repository's sources.
-//     Build { repo_root: PathBuf },
-//     /// Target will be copied from the local path.
-//     LocalPath { artifact_path: PathBuf },
-//     // /// WASM will be copied from the local path.
-//     // CurrentCiRun,
-//     /// bar
-//     Whatever,
-// }
-//
-
-
-// pub struct Foo<> {}
 
 pub trait IsTargetSource {
     const SOURCE_NAME: &'static str;
@@ -172,10 +156,17 @@ impl<Target: IsTargetSource> TargetSourceArg<Target> {
         })
     }
 
-    pub async fn get(&self, target: Target, inputs: Target::BuildInput) -> Result<Target::Output>
-    where Target: IsTarget + Sync {
-        let source = self.resolve()?;
-        target.get(source, move || Ok(inputs), self.output_path.clone()).await
+    pub fn get(
+        &self,
+        target: Target,
+        inputs: Target::BuildInput,
+    ) -> impl Future<Output = Result<Target::Output>> + 'static
+    where
+        Target: IsTarget + Sync + 'static,
+    {
+        let output_path = self.output_path.clone();
+        let source = self.resolve();
+        async move { target.get(source?, move || Ok(inputs), output_path).await }
     }
 }
 
@@ -199,17 +190,16 @@ pub enum Target {
         #[clap(flatten)]
         project_manager_source: TargetSourceArg<ProjectManager>,
     },
-    // Ide {
-    //     #[clap(flatten)]
-    //     project_manager_source: TargetSourceArg<Wasm>,
-    //
-    //     #[clap(flatten)]
-    //     gui_source: TargetSourceArg<Wasm>,
-    //
-    //     /// Where the GUI artifacts should be placed.
-    //     #[clap(long, default_value = DIST_IDE.as_str(), parse(try_from_str=normalize_path))]
-    //     output_path: PathBuf,
-    // },
+    Ide {
+        #[clap(flatten)]
+        project_manager_source: TargetSourceArg<ProjectManager>,
+        #[clap(flatten)]
+        wasm_source:            TargetSourceArg<Wasm>,
+        #[clap(flatten)]
+        gui_source:             TargetSourceArg<Gui>,
+        #[clap(flatten)]
+        ide_source:             TargetSourceArg<Ide>,
+    },
 }
 
 /// Build, test and packave Enso Engine.
@@ -235,6 +225,46 @@ pub struct Cli {
     pub target: Target,
 }
 
+/// The basic, common information provided by this entry point.
+pub struct BuildContext {
+    /// GitHub API client.
+    ///
+    /// If authorized, it will count API rate limits against our identity and allow operations like
+    /// managing releases.
+    pub octocrab: Octocrab,
+
+    /// Version to be built.
+    ///
+    /// Note that this affects only targets that are being built. If project parts are provided by
+    /// other means, their version might be different.
+    pub triple: TargetTriple,
+
+    /// Directory being an `enso` repository's working copy.
+    ///
+    /// The directory is not required to be a git repository. It is allowed to use source tarballs
+    /// as well.
+    pub source_root: PathBuf,
+
+    /// Remote repository is used for release-related operations. This also includes deducing a new
+    /// version number.
+    pub remote_repo: Option<RepoContext>,
+}
+
+// impl BuildContext {
+//     pub fn new(cli: &Cli) {
+//         let octocrab = setup_octocrab()?;
+//         let versions = enso_build::version::deduce_versions(
+//             &octocrab,
+//             BuildKind::Dev,
+//             Some(&cli.repo_remote),
+//             &cli.repo_path,
+//         )
+//         .await?;
+//         let triple = TargetTriple::new(versions);
+//         triple.versions.publish()?;
+//         Self { source_root: cli.repo_path.clone() }
+//     }
+// }
 
 
 #[tokio::main]
@@ -270,9 +300,11 @@ async fn main() -> Result {
         engine_version: triple.versions.version.clone(),
     };
 
-    ////////
-
-
+    let pm_inputs = enso_build::project::project_manager::Inputs {
+        octocrab:  octocrab.clone(),
+        versions:  triple.versions.clone(),
+        repo_root: paths.path.clone(),
+    };
 
     match &cli.target {
         Target::Wasm { wasm_source } => {
@@ -282,7 +314,7 @@ async fn main() -> Result {
             let wasm = wasm_source.get(Wasm, paths.clone());
 
             let repo_root = paths.clone();
-            let gui_inputs = GuiInputs { wasm: wasm.await?, build_info: info_for_js, repo_root };
+            let inputs = GuiInputs { wasm: wasm.boxed(), build_info: info_for_js, repo_root };
 
             match command {
                 GuiCommand::Build => {
@@ -291,28 +323,27 @@ async fn main() -> Result {
                     // let gui = Gui.get(source, inputs, wasm_source.output_path.clone()).await?;
                 }
                 GuiCommand::Watch => {
-                    let gui = Gui.watch(inputs.await?).await?;
+                    let gui = Gui.watch(inputs).await?;
                 }
             }
         }
         Target::ProjectManager { project_manager_source } => {
-            let inputs = enso_build::project::project_manager::Inputs {
-                octocrab:  octocrab.clone(),
-                versions:  versions.clone(),
-                repo_root: paths.path.clone(),
+            project_manager_source.get(ProjectManager, pm_inputs).await?;
+        }
+        Target::Ide { ide_source, wasm_source, gui_source, project_manager_source } => {
+            let wasm = wasm_source.get(Wasm, paths.clone());
+            let gui_inputs = GuiInputs {
+                wasm:       wasm.boxed(),
+                build_info: info_for_js,
+                repo_root:  paths.clone(),
             };
-            let _pm = project_manager_source.get(ProjectManager, inputs).await?;
-        } /* Target::Ide { output_path, .. } => {
-           *     let pm_source = ProjectManagerSource::Local { repo_root: cli.repo_path.clone()
-           * };     let triple = triple.clone();
-           *     let project_manager = pm_source.get(triple, &paths.dist.project_manager).await?;
-           *     let wasm = enso_build::ide::wasm::build_wasm(&cli.repo_path,
-           * &paths.dist.wasm).await?;     let web =
-           * enso_build::ide::web::IdeDesktop::new(&paths.app.ide_desktop);     let gui
-           * = web.build(&wasm, &info_for_js, &paths.dist.content).await?;
-           *     let icons = web.build_icons(&paths.dist.icons).await?;
-           *     web.dist(&gui, &project_manager, &icons, &output_path).await?;
-           * } */
+            let ide_inputs = enso_build::project::ide::Inputs {
+                repo_root:       paths.clone(),
+                gui:             gui_source.get(Gui, gui_inputs).boxed(),
+                project_manager: project_manager_source.get(ProjectManager, pm_inputs).boxed(),
+            };
+            ide_source.get(Ide, ide_inputs).await?;
+        }
     };
 
     Ok(())

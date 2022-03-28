@@ -1,6 +1,4 @@
-use crate::ide::web::GuiArtifacts;
 use crate::ide::web::IdeDesktop;
-use crate::ide::BuildInfo;
 use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
 use crate::prelude::*;

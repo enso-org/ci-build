@@ -11,7 +11,9 @@ use crate::project::wasm::js_patcher::patch_js_glue_in_place;
 
 use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
+use crate::project::IsArtifact;
 use crate::project::IsTarget;
+use crate::project::Source;
 use ide_ci::env::Variable;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::WasmPack;
@@ -32,16 +34,15 @@ impl IsTarget for Wasm {
     type Output = Artifacts;
 
     fn artifact_name(&self) -> &str {
-        "ide_wasm"
+        "gui_wasm"
     }
 
-    async fn build(
+    fn build(
         &self,
         input: Self::BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
-    ) -> Result<Self::Output> {
-        let artifacts = build_wasm(&input, &output_path).await?;
-        Ok(output_path.as_ref().into())
+    ) -> BoxFuture<'static, Result<Self::Output>> {
+        build_wasm(input, output_path).boxed()
     }
 }
 
@@ -71,9 +72,9 @@ impl AsRef<Path> for Artifacts {
     }
 }
 
-impl From<&Path> for Artifacts {
-    fn from(path: &Path) -> Self {
-        Self::new(path)
+impl IsArtifact for Artifacts {
+    fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
+        ready(Ok(Artifacts::new(path.as_ref()))).boxed()
     }
 }
 

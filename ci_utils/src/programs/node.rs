@@ -14,11 +14,13 @@ impl Program for Node {
 #[shrinkwrap(mutable)]
 pub struct NpmCommand(pub Command);
 
-impl MyCommand for NpmCommand {
-    fn new_program<P: Program + 'static, S: AsRef<OsStr>>(program: S) -> Self {
-        Self(Command::new_program::<P, S>(program))
+impl From<Command> for NpmCommand {
+    fn from(inner: Command) -> Self {
+        NpmCommand(inner)
     }
 }
+
+impl MyCommand for NpmCommand {}
 
 impl NpmCommand {
     pub fn install(&mut self) -> &mut Self {

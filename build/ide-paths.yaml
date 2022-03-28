@@ -35,3 +35,7 @@
     build-init:
     build.json:
   run:
+
+project-manager/:
+  bin/:
+    project-manager<exe>:

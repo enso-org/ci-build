@@ -4,12 +4,11 @@ use ide_ci::actions::workflow::is_in_env;
 use tempfile::TempDir;
 
 use crate::engine::bundle::ProjectManager;
-use crate::ide::pm_provider::ProjectManagerArtifacts;
 use crate::ide::web::Workspaces::Content;
-use crate::ide::BuildInfo;
 use crate::paths::generated;
 use crate::paths::generated::RepoRootDistWasm;
 use crate::paths::TargetTriple;
+use crate::project::ide::BuildInfo;
 use crate::project::wasm::Artifacts;
 use ide_ci::io::download_all;
 use ide_ci::program::EMPTY_ARGS;
@@ -113,22 +112,6 @@ impl AsRef<OsStr> for Workspaces {
     }
 }
 
-/// The content, i.e. WASM, HTML, JS, assets.
-#[derive(Clone, Debug)]
-pub struct GuiArtifacts(pub PathBuf);
-
-impl From<&Path> for GuiArtifacts {
-    fn from(path: &Path) -> Self {
-        GuiArtifacts(path.into())
-    }
-}
-
-impl AsRef<Path> for GuiArtifacts {
-    fn as_ref(&self) -> &Path {
-        self.0.as_path()
-    }
-}
-
 #[derive(Clone, Debug)]
 pub enum Command {
     Build,
@@ -171,7 +154,7 @@ impl IdeDesktop {
         wasm: impl Future<Output = Result<Artifacts>>,
         build_info: &BuildInfo,
         output_path: impl AsRef<Path>,
-    ) -> Result<GuiArtifacts> {
+    ) -> Result {
         let installation = self.install();
 
         let assets = TempDir::new()?;
@@ -187,15 +170,18 @@ impl IdeDesktop {
         env::JsGluePath.set_path(&wasm.js_glue());
         env::AssetsPath.set_path(&assets);
         self.npm()?.workspace(Workspaces::Content).run("build", EMPTY_ARGS).run_ok().await?;
-
-        let ret = GuiArtifacts(output_path.as_ref().to_path_buf());
-        Ok(ret)
+        Ok(())
     }
 
-    pub async fn watch(&self, wasm: &Artifacts, build_info: &BuildInfo) -> Result {
+    pub async fn watch(
+        &self,
+        wasm: impl Future<Output = Result<Artifacts>>,
+        build_info: &BuildInfo,
+    ) -> Result {
         // TODO deduplicate with build
         self.install().await?;
 
+        let wasm = wasm.await?;
         let assets = TempDir::new()?;
         download_js_assets(&assets).await?;
 
@@ -213,22 +199,18 @@ impl IdeDesktop {
 
     pub async fn dist(
         &self,
-        gui: &GuiArtifacts,
-        project_manager: &ProjectManagerArtifacts,
+        gui: &crate::project::gui::Artifact,
+        project_manager: &crate::project::project_manager::Artifact,
         icons: &IconsArtifacts,
         output_path: impl AsRef<Path>,
     ) -> Result {
-        env::GuiDistPath.set_path(&gui.0);
-        env::ProjectManager.set_path(&project_manager.0);
+        env::GuiDistPath.set_path(&gui);
+        env::ProjectManager.set_path(&project_manager);
         env::IconsPath.set_path(&icons.0);
         env::IdeDistPath.set_path(&output_path);
 
         self.npm()?.workspace(Workspaces::Enso).run("build", EMPTY_ARGS).run_ok().await?;
         self.npm()?.workspace(Workspaces::Enso).run("dist", EMPTY_ARGS).run_ok().await?;
-        if is_in_env() {
-            ide_ci::actions::artifacts::upload_directory(output_path.as_ref(), "ide_client")
-                .await?;
-        }
         Ok(())
     }
 }

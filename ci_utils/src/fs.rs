@@ -56,6 +56,7 @@ pub fn create_dir_if_missing(path: impl AsRef<Path>) -> Result {
 /// Create a parent directory for path (and all missing parent directories),
 ///
 /// Does not fail when a directory already exists.
+#[context("Failed to create parent directory for {}", path.as_ref().display())]
 pub fn create_parent_dir_if_missing(path: impl AsRef<Path>) -> Result<PathBuf> {
     if let Some(parent) = path.as_ref().parent() {
         create_dir_if_missing(parent)?;

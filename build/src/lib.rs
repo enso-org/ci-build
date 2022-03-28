@@ -1,3 +1,4 @@
+#![feature(type_alias_impl_trait)]
 #![feature(trait_alias)]
 #![feature(let_chains)]
 #![feature(bool_to_option)]
@@ -34,6 +35,7 @@ pub mod httpbin;
 pub mod ide;
 pub mod paths;
 pub mod postgres;
+pub mod programs;
 pub mod project;
 pub mod project_manager;
 pub mod repo;
