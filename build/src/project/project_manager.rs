@@ -81,7 +81,7 @@ impl IsTarget for ProjectManager {
                 operation: crate::engine::Operation::Build(BuildOperation {}),
                 goodies: GoodieDatabase::new()?,
                 config: BuildConfiguration {
-                    clean_repo: false,
+                    clean_repo: true,
                     build_project_manager_bundle: true,
                     ..crate::engine::NIGHTLY
                 },
