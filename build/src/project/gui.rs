@@ -44,21 +44,11 @@ impl IsTarget for Gui {
         input: Self::BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Self::Output>> {
-        // We cannot just clone the build future, because Error (and thus Result) is not cloneable.
-        // So we'll share the the OK result through a oneshot channel.
-        // The idea is that upload artifact task can be run independently.
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let ret = async move {
+        async move {
             let ide = IdeDesktop::new(&input.repo_root.app.ide_desktop);
-            ide.build(input.wasm, &input.build_info, &output_path).await?;
-            let artifacts = Artifact::new(output_path.as_ref());
-            // We ignore error, because we don't care if upload task is actually run.
-            let _ = tx.send(artifacts.clone());
-            Ok(artifacts)
-        };
-
-        let upload_job = self.upload_artifact(rx.map_err(into));
-        tokio::spawn(upload_job);
-        ret.boxed()
+            ide.build(input.wasm, &input.build_info, &output_path).await;
+            Ok(Artifact::new(output_path.as_ref()))
+        }
+        .boxed()
     }
 }

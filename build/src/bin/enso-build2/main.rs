@@ -72,13 +72,13 @@ pub fn normalize_path(path: &str) -> Result<PathBuf> {
 //     run:  RunId,
 // }
 
-#[derive(Subcommand, Clone, Debug)]
+#[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum GuiCommand {
     Build,
     Watch,
 }
 
-#[derive(ArgEnum, Clone, Copy, Debug)]
+#[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
 pub enum TargetSource {
     /// Target will be built from the target repository's sources.
     Build,
@@ -166,7 +166,15 @@ impl<Target: IsTargetSource> TargetSourceArg<Target> {
     {
         let output_path = self.output_path.clone();
         let source = self.resolve();
-        async move { target.get(source?, move || Ok(inputs), output_path).await }
+        let should_upload_artifact = self.source == TargetSource::Build;
+        async move {
+            let artifact = target.get(source?, move || Ok(inputs), output_path).await?;
+            if should_upload_artifact {
+                let upload_job = target.upload_artifact(ready(Ok(artifact.clone())));
+                tokio::spawn(upload_job);
+            }
+            Ok(artifact)
+        }
     }
 }
 

@@ -28,7 +28,7 @@ impl IsTarget for Ide {
     type Output = PathBuf;
 
     fn artifact_name(&self) -> &str {
-        todo!()
+        "Enso IDE"
     }
 
     fn build(

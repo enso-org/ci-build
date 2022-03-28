@@ -12,7 +12,7 @@ pub mod ide;
 pub mod project_manager;
 pub mod wasm;
 
-pub trait IsArtifact: AsRef<Path> + Sized + Send + Sync + 'static {
+pub trait IsArtifact: Clone + AsRef<Path> + Sized + Send + Sync + 'static {
     fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>>;
 }
 
@@ -43,7 +43,7 @@ impl<T> AsRef<Path> for PlainArtifact<T> {
     }
 }
 
-impl<T: Send + Sync + 'static> IsArtifact for PlainArtifact<T> {
+impl<T: Clone + Send + Sync + 'static> IsArtifact for PlainArtifact<T> {
     fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
         ready(Ok(PlainArtifact::new(path.as_ref()))).boxed()
     }

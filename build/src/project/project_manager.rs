@@ -41,13 +41,11 @@ impl IsArtifact for Artifact {
         async move {
             let output =
                 Command::new(&path.bin.project_managerexe).arg("--version").output_ok().await?;
-
             let string = String::from_utf8(output.stdout)?;
             let version = find_in_text(&string)?;
             Ok(Self { path, versions: Versions::new(version) })
         }
         .boxed()
-        //let binary_path =
     }
 }
 
