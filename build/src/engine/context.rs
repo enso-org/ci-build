@@ -163,7 +163,7 @@ impl RunContext {
         // Some are not supported on Windows, in part because their runtime (Sulong) is not.
         // See e.g. https://github.com/oracle/graalpython/issues/156
         let conditional_components: &[&str] =
-            if graalvm::sulong_supported() { &["install", "python", "r"] } else { &[] };
+            if graalvm::sulong_supported() { &["python", "r"] } else { &[] };
         graalvm::Gu
             .cmd()?
             .arg("install")
