@@ -275,8 +275,12 @@ impl ComponentPathExt for ComponentPaths {
 pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
     #[cfg(not(target_os = "windows"))]
     {
-        let pattern =
-            paths.dir.join_many(["bin", "*"]).with_extension(EXE_EXTENSION).display().to_string();
+        let pattern = paths
+            .dir
+            .join_many(["bin", "*"])
+            .with_extension(std::env::consts::EXE_EXTENSION)
+            .display()
+            .to_string();
         for binary in glob::glob(&pattern)? {
             ide_ci::fs::allow_owner_execute(binary?)?;
         }

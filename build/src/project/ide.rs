@@ -1,6 +1,7 @@
 use crate::paths::generated::RepoRoot;
 use crate::prelude::*;
 use crate::project::IsTarget;
+use futures_util::future::try_join;
 use futures_util::future::try_join3;
 
 
@@ -38,10 +39,8 @@ impl IsTarget for Ide {
     ) -> BoxFuture<'static, Result<Self::Output>> {
         let ide_desktop = crate::ide::web::IdeDesktop::new(&input.repo_root.app.ide_desktop);
         async move {
-            let icons_build = ide_desktop.build_icons(&input.repo_root.dist.icons);
-            let (icons, gui, project_manager) =
-                try_join3(icons_build, input.gui, input.project_manager).await?;
-            ide_desktop.dist(&gui, &project_manager, &icons, &output_path).await?;
+            let (gui, project_manager) = try_join(input.gui, input.project_manager).await?;
+            ide_desktop.dist(&gui, &project_manager, &output_path).await?;
             Ok(output_path.as_ref().to_path_buf())
         }
         .boxed()

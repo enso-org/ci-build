@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use futures_util::future::try_join;
 use futures_util::future::try_join3;
 use ide_ci::actions::workflow::is_in_env;
 use tempfile::TempDir;
@@ -201,15 +202,20 @@ impl IdeDesktop {
         &self,
         gui: &crate::project::gui::Artifact,
         project_manager: &crate::project::project_manager::Artifact,
-        icons: &IconsArtifacts,
         output_path: impl AsRef<Path>,
     ) -> Result {
+        self.install().await?;
         env::GuiDistPath.set_path(&gui);
         env::ProjectManager.set_path(&project_manager);
-        env::IconsPath.set_path(&icons.0);
         env::IdeDistPath.set_path(&output_path);
+        let content_build =
+            self.npm()?.workspace(Workspaces::Enso).run("build", EMPTY_ARGS).run_ok();
 
-        self.npm()?.workspace(Workspaces::Enso).run("build", EMPTY_ARGS).run_ok().await?;
+        // &input.repo_root.dist.icons
+        let icons_dist = TempDir::new()?;
+        let icons_build = self.build_icons(&icons_dist);
+        try_join(icons_build, content_build).await?;
+        env::IconsPath.set_path(&icons_dist);
         self.npm()?.workspace(Workspaces::Enso).run("dist", EMPTY_ARGS).run_ok().await?;
         Ok(())
     }
