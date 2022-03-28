@@ -34,7 +34,7 @@ runs:
         repository: enso-org/enso
         path: enso
         ref: ${{ inputs.enso_ref }}
-        clean: false
+        clean: true
 
 
     - uses: actions/checkout@v2
