@@ -357,14 +357,14 @@ async fn main_internal() -> Result {
             ide_source.get(Ide, ide_inputs).await?;
         }
     };
-
+    info!("Completed main job.");
+    global::complete_tasks(&rt);
     Ok(())
 }
 
 fn main() -> Result {
     let rt = Runtime::new()?;
     rt.block_on(async { main_internal().await })?;
-    global::complete_tasks(&rt);
     rt.shutdown_timeout(Duration::from_secs(60 * 30));
     Ok(())
 }

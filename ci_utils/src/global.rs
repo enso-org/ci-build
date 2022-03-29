@@ -68,10 +68,24 @@ pub fn spawn(f: impl Future<Output = Result> + Send + 'static) {
     GLOBAL.lock().unwrap().ongoing_tasks.push(join_handle);
 }
 
-pub fn complete_tasks(rt: &Runtime) -> Result {
+
+pub async fn complete_tasks(rt: &Runtime) -> Result {
+    info!("Waiting for remaining tasks to complete.");
     while let tasks = std::mem::replace(&mut GLOBAL.lock().unwrap().ongoing_tasks, default()) && !tasks.is_empty() {
-        let tasks = try_join_all(tasks, AsyncPolicy::FutureParallelism);
-         rt.block_on(tasks)?;
+        info!("Found {} tasks to wait upon.", tasks.len());
+        try_join_all(tasks, AsyncPolicy::FutureParallelism).await?;
     }
+    info!("All pending tasks have been completed.");
     Ok(())
 }
+
+
+//
+// pub fn complete_tasks(rt: &Runtime) -> Result {
+//     info!("Waiting for remaining tasks to complete.");
+//     while let tasks = std::mem::replace(&mut GLOBAL.lock().unwrap().ongoing_tasks, default()) &&
+// !tasks.is_empty() {         let tasks = try_join_all(tasks, AsyncPolicy::FutureParallelism);
+//          rt.block_on(tasks)?;
+//     }
+//     Ok(())
+// }
