@@ -4,6 +4,7 @@ use anyhow::Context;
 use enso_build::prelude::*;
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::time::Duration;
 
 use clap::Arg;
 use clap::ArgEnum;
@@ -23,6 +24,7 @@ use enso_build::setup_octocrab;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::Git;
 use lazy_static::lazy_static;
+use tokio::runtime::Runtime;
 
 lazy_static! {
     pub static ref DIST_WASM: PathBuf = PathBuf::from_iter(["dist", "wasm"]);
@@ -267,8 +269,7 @@ pub struct BuildContext {
 // }
 
 
-#[tokio::main]
-async fn main() -> Result {
+async fn main_internal() -> Result {
     pretty_env_logger::init();
 
 
@@ -349,5 +350,12 @@ async fn main() -> Result {
         }
     };
 
+    Ok(())
+}
+
+fn main() -> Result {
+    let rt = Runtime::new()?;
+    rt.block_on(async { main_internal().await })?;
+    rt.shutdown_timeout(Duration::from_secs(60 * 30));
     Ok(())
 }
