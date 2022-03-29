@@ -191,20 +191,32 @@ mod tests {
 
     #[tokio::test]
     async fn aabhgf() -> Result {
+        pretty_env_logger::init();
         let mut cmd = Command::new("cargo");
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
         let mut child = cmd.spawn()?;
         let out = child.stdout.take().unwrap();
+        let err = child.stderr.take().unwrap();
 
 
-        let bufread = BufReader::new(out);
         tokio::task::spawn(async move {
+            let bufread = BufReader::new(out);
             let mut lines = bufread.lines();
             while let Some(line) = lines.next_line().await? {
-                println!("[cargo out] {}", line)
+                debug!("[cargo out] {}", line)
             }
-            println!("[cargo out] <ENDUT>");
+            debug!("[cargo out] <ENDUT>");
+            Result::Ok(())
+        });
+
+        tokio::task::spawn(async move {
+            let bufread = BufReader::new(err);
+            let mut lines = bufread.lines();
+            while let Some(line) = lines.next_line().await? {
+                debug!("[cargo err] {}", line)
+            }
+            debug!("[cargo err] <ENDUT>");
             Result::Ok(())
         });
 

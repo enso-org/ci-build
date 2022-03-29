@@ -1629,6 +1629,7 @@ dependencies = [
  "pin-project",
  "platforms",
  "port_check",
+ "pretty_env_logger",
  "proc-macro2",
  "quote",
  "rand 0.8.5",

@@ -2,6 +2,7 @@
 
 use anyhow::Context;
 use enso_build::prelude::*;
+use std::any::type_name;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::time::Duration;
@@ -24,6 +25,7 @@ use enso_build::setup_octocrab;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::Git;
 use lazy_static::lazy_static;
+use log::__log_module_path;
 use tokio::runtime::Runtime;
 
 lazy_static! {
@@ -162,7 +164,13 @@ impl<Target: IsTargetSource> TargetSourceArg<Target> {
         let source = self.resolve();
         let should_upload_artifact = self.source == TargetSource::Build;
         async move {
+            info!("Getting target {}.", type_name::<Target>());
             let artifact = target.get(source?, move || Ok(inputs), output_path).await?;
+            info!(
+                "Got target {}, should it be uploaded? {}",
+                type_name::<Target>(),
+                should_upload_artifact
+            );
             if should_upload_artifact {
                 let upload_job = target.upload_artifact(ready(Ok(artifact.clone())));
                 tokio::spawn(upload_job);
@@ -271,10 +279,8 @@ pub struct BuildContext {
 
 async fn main_internal() -> Result {
     pretty_env_logger::init();
-
-
+    debug!("Setting up.");
     DEFAULT_REPO_PATH.as_ref().map(|path| path.as_str());
-
     let cli = Cli::try_parse()?;
     dbg!(&cli);
 
