@@ -105,7 +105,7 @@ mod tests {
 
 
         dbg!(&response);
-        // println!("{}", response.text().await?);
+        // debug!("{}", response.text().await?);
         response.error_for_status()?;
         Ok(())
     }

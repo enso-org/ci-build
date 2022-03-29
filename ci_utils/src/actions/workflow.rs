@@ -14,8 +14,8 @@ pub fn is_in_env() -> bool {
 /// See: <https://docs.github.com/en/actions/learn-github-actions/workflow-commands-for-github-actions#setting-an-output-parameter>
 pub fn set_output(name: &str, value: &impl ToString) {
     let value = value.to_string();
-    println!("Setting GitHub Actions step output {name} to {value}");
-    println!("::set-output name={name}::{value}");
+    debug!("Setting GitHub Actions step output {name} to {value}");
+    debug!("::set-output name={name}::{value}");
 }
 
 /// Prints a debug message to the log.
@@ -25,7 +25,7 @@ pub fn set_output(name: &str, value: &impl ToString) {
 ///
 /// See: <https://docs.github.com/en/actions/learn-github-actions/workflow-commands-for-github-actions#setting-a-debug-message>
 pub fn debug(message: &str) {
-    println!("::debug::{message}")
+    debug!("::debug::{message}")
 }
 
 /// Creates or updates an environment variable for any steps running next in a job.
@@ -36,7 +36,7 @@ pub fn debug(message: &str) {
 /// Just logs and sets variable locally if used under non-GH CI.
 pub fn set_env(name: &str, value: &impl ToString) -> Result {
     let value_string = value.to_string();
-    println!("Will try writing Github Actions environment variable: {name}={value_string}");
+    debug!("Will try writing Github Actions environment variable: {name}={value_string}");
     std::env::set_var(name, value.to_string());
     if is_in_env() {
         let env_file = env::EnvFile.fetch()?;
@@ -48,13 +48,13 @@ pub fn set_env(name: &str, value: &impl ToString) -> Result {
 
 pub fn mask_text(text: impl AsRef<str>) {
     if is_in_env() {
-        iprintln!("::add-mask::{text.as_ref()}")
+        debug!("::add-mask::{}", text.as_ref())
     }
 }
 
 pub fn mask_value(value: impl Display) {
     if is_in_env() {
-        iprintln!("::add-mask::{value}")
+        debug!("::add-mask::{value}")
     }
 }
 
@@ -84,6 +84,6 @@ impl Message {
     }
 
     pub fn send(&self) {
-        println!("::{} ::{}", self.level, self.text);
+        debug!("::{} ::{}", self.level, self.text);
     }
 }

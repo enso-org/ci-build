@@ -69,7 +69,7 @@ pub trait Program: Sized + 'static {
 
     async fn require_present(&self) -> Result<String> {
         let version = self.version_string().await?;
-        println!("Found {}: {}", Self::executable_name(), version);
+        debug!("Found {}: {}", Self::executable_name(), version);
         Ok(version)
     }
 

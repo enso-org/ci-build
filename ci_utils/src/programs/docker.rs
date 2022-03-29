@@ -79,7 +79,7 @@ impl Docker {
     pub async fn build(&self, options: BuildOptions) -> Result<ImageId> {
         let mut command = self.cmd()?;
         command.arg("build").args(options.args());
-        println!("{:?}", command);
+        debug!("{:?}", command);
         let output = command.output().await?;
         output.status.exit_ok().with_context(|| {
             format!(
@@ -90,14 +90,14 @@ impl Docker {
         })?;
         let built_image_id = std::str::from_utf8(&output.stdout)?
             .lines()
-            .inspect(|line| println!("{}", line))
+            .inspect(|line| debug!("{}", line))
             .filter(|line| !line.is_empty())
             .last()
             .ok_or_else(|| anyhow!("Docker provided no output"))?
             .split(' ')
             .last()
             .ok_or_else(|| anyhow!("The last line has no space!"))?;
-        println!("Image {} successfully built!", built_image_id);
+        debug!("Image {} successfully built!", built_image_id);
         Ok(ImageId(built_image_id.into()))
     }
 
@@ -263,9 +263,9 @@ impl BuildOptions {
         for (name, value) in &self.build_args {
             ret.push("--build-arg".into());
             if let Some(value) = value {
-                ret.push(iformat!("{name}={value}").into());
+                ret.push(format!("{name}={value}").into());
             } else {
-                ret.push(iformat!("{name}").into());
+                ret.push(format!("{name}").into());
             }
         }
         if let Some(file) = self.file.as_ref() {
@@ -424,11 +424,11 @@ impl RunOptions {
 
         for (host, guest) in &self.ports {
             ret.push("-p".into());
-            ret.push(iformat!("{host}:{guest}").into());
+            ret.push(format!("{host}:{guest}").into());
         }
 
         if let Some(network) = self.network.as_ref() {
-            let arg = iformat!(r#"--network={network}"#);
+            let arg = format!(r#"--network={network}"#);
             ret.push(arg.into());
         }
 
@@ -439,7 +439,7 @@ impl RunOptions {
         }
 
         if let Some(sig_proxy) = self.sig_proxy {
-            let arg = iformat!(r#"--sig-proxy={sig_proxy}"#);
+            let arg = format!(r#"--sig-proxy={sig_proxy}"#);
             ret.push(arg.into());
         }
 

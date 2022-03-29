@@ -46,7 +46,7 @@ pub trait ArgExt<'h>: Sized + 'h {
 impl<'h> ArgExt<'h> for Arg<'h> {
     fn maybe_default<S: AsRef<str> + 'h>(self, f: &'h impl Deref<Target = Option<S>>) -> Self {
         if let Some(default) = f.deref().as_ref() {
-            println!("Adding default value {} to argument {}", default.as_ref(), self.get_id());
+            debug!("Adding default value {} to argument {}", default.as_ref(), self.get_id());
             self.default_value(default.as_ref()).required(false)
         } else {
             self
@@ -277,6 +277,7 @@ pub struct BuildContext {
 
 #[tokio::main]
 async fn main() -> Result {
+    pretty_env_logger::init();
     DEFAULT_REPO_PATH.as_ref().map(|path| path.as_str());
 
     let cli = Cli::try_parse()?;

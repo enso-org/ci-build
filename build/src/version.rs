@@ -179,7 +179,7 @@ pub async fn deduce_versions(
     target_repo: Option<&RepoContext>,
     root_path: impl AsRef<Path>,
 ) -> Result<Versions> {
-    println!("Deciding on version to target.");
+    debug!("Deciding on version to target.");
     let changelog_path = crate::paths::root_to_changelog(&root_path);
     let version = Version {
         pre: match build_kind {

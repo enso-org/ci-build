@@ -85,7 +85,7 @@ pub fn get_java_major_version(build_sbt_contents: &str) -> Result<java::Language
 
 pub fn retrieve_github_access_token() -> Result<String> {
     ide_ci::env::expect_var("GITHUB_TOKEN")
-        .inspect(|_| println!("Will use GITHUB_TOKEN environment variable."))
+        .inspect(|_| debug!("Will use GITHUB_TOKEN environment variable."))
 }
 
 pub fn setup_octocrab() -> Result<Octocrab> {
@@ -118,7 +118,7 @@ val stdLibVersion  = ensoVersion
         assert_eq!(version.patch, 32);
         assert_eq!(version.pre.as_str(), "SNAPSHOT");
 
-        println!("{}\n{:?}", version, version);
+        debug!("{}\n{:?}", version, version);
         Ok(())
     }
 

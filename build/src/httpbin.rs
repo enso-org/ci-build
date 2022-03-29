@@ -27,7 +27,7 @@ pub async fn get_and_spawn_httpbin(port: u16) -> Result<Spawned> {
     let gopath = gopath.trim();
     let gopath = PathBuf::from(gopath); // be careful of trailing newline!
     let program = gopath.join("bin").join("httpbin");
-    println!("Will spawn {}", program.display());
+    debug!("Will spawn {}", program.display());
     let process = tokio::process::Command::new(program) // TODO? wrap in Program?
         .args(["-host", &iformat!(":{port}")])
         .kill_on_drop(true)

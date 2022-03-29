@@ -58,9 +58,9 @@ impl RunContext {
         let config = BuildConfiguration::new(&args);
         let octocrab = setup_octocrab()?;
         let enso_root = args.target.clone();
-        println!("Received target location: {}", enso_root.display());
+        debug!("Received target location: {}", enso_root.display());
         let enso_root = args.target.absolutize()?.to_path_buf();
-        println!("Absolute target location: {}", enso_root.display());
+        debug!("Absolute target location: {}", enso_root.display());
 
 
         let operation = match &args.command {
@@ -78,7 +78,7 @@ impl RunContext {
         };
         let versions = deduce_versions(&octocrab, args.kind, target_repo, &enso_root).await?;
         versions.publish()?;
-        println!("Target version: {versions:?}.");
+        debug!("Target version: {versions:?}.");
         let paths = Paths::new_version(&enso_root, versions.version.clone())?;
         let goodies = GoodieDatabase::new()?;
         Ok(Self { config, octocrab, paths, goodies, operation })
@@ -111,7 +111,7 @@ impl RunContext {
         // TODO: After flatc version is bumped, it should be possible to get it without `conda`.
         //       See: https://www.pivotaltracker.com/story/show/180303547
         if let Err(e) = Flatc.require_present_at(&FLATC_VERSION).await {
-            println!("Cannot find expected flatc: {}", e);
+            debug!("Cannot find expected flatc: {}", e);
             // GitHub-hosted runner has `conda` on PATH but not things installed by it.
             // It provides `CONDA` variable pointing to the relevant location.
             if let Some(conda_path) = std::env::var_os("CONDA").map(PathBuf::from) {
@@ -130,7 +130,7 @@ impl RunContext {
         }
 
         let _ = self.paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.
-        println!("Build configuration: {:#?}", self.config);
+        debug!("Build configuration: {:#?}", self.config);
 
         // Setup Tests on Windows
         if TARGET_OS == OS::Windows {
@@ -189,7 +189,7 @@ impl RunContext {
         let latest_changelog_body =
             crate::changelog::Changelog(&changelog_contents).top_release_notes()?;
 
-        println!("Preparing release {} for commit {}", versions.version, commit);
+        debug!("Preparing release {} for commit {}", versions.version, commit);
         let release = repo
             .repos(&self.octocrab)
             .releases()
@@ -208,14 +208,14 @@ impl RunContext {
 
     pub async fn publish_release(&self, repo: &RepoContext) -> Result {
         let release_id = crate::env::ReleaseId.fetch()?;
-        println!("Looking for release with id {release_id} on github.");
+        debug!("Looking for release with id {release_id} on github.");
         let release = repo.repos(&self.octocrab).releases().get_by_id(release_id).await?;
-        println!("Found the target release, will publish it.");
+        debug!("Found the target release, will publish it.");
         repo.repos(&self.octocrab).releases().update(release.id.0).draft(false).send().await?;
-        iprintln!("Done. Release URL: {release.url}");
+        debug!("Done. Release URL: {}", release.url);
 
         self.paths.download_edition_file_artifact().await?;
-        println!("Updating edition in the AWS S3.");
+        debug!("Updating edition in the AWS S3.");
         crate::aws::update_manifest(repo, &self.paths).await?;
         Ok(())
     }
@@ -259,7 +259,7 @@ impl RunContext {
         dbg!(system.free_memory());
 
         // Build packages.
-        println!("Bootstrapping Enso project.");
+        debug!("Bootstrapping Enso project.");
         sbt.call_arg("bootstrap").await?;
 
         if TARGET_OS != OS::Windows {
@@ -383,7 +383,7 @@ impl RunContext {
 
         let std_libs = self.paths.engine.dir.join("lib").join("Standard");
         // Compile the Standard Libraries (Unix)
-        println!("Compiling standard libraries under {}", std_libs.display());
+        debug!("Compiling standard libraries under {}", std_libs.display());
         for entry in std_libs.read_dir()? {
             let entry = entry?;
             let target = entry.path().join(self.paths.version().to_string());
@@ -493,7 +493,7 @@ impl RunContext {
                 self.prepare_build_env().await?;
                 let mut run = run.command_pieces.iter();
                 if let Some(program) = run.next() {
-                    println!("Spawning program {}.", program.to_str().unwrap());
+                    debug!("Spawning program {}.", program.to_str().unwrap());
                     tokio::process::Command::new(program)
                         .args(run)
                         .current_dir(&self.paths.repo_root)
@@ -502,7 +502,7 @@ impl RunContext {
                         .await?
                         .exit_ok()?;
                 } else {
-                    println!("Spawning default shell.");
+                    debug!("Spawning default shell.");
                     default_shell()
                         .run_shell()?
                         .current_dir(&self.paths.repo_root)

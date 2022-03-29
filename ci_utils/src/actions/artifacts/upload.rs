@@ -42,10 +42,7 @@ impl ArtifactUploader {
     pub async fn new(client: SessionClient, artifact_name: impl Into<String>) -> Result<Self> {
         let artifact_name = artifact_name.into();
         let container = client.create_container(&artifact_name).await?;
-        println!(
-            "Created a container {} for artifact '{}'.",
-            container.container_id, artifact_name
-        );
+        debug!("Created a container {} for artifact '{}'.", container.container_id, artifact_name);
         Ok(Self {
             client,
             artifact_name,
@@ -70,7 +67,7 @@ impl ArtifactUploader {
         files_to_upload: impl futures::Stream<Item = FileToUpload> + Send + 'static,
         options: &UploadOptions,
     ) -> Result {
-        println!(
+        debug!(
             "File Concurrency: {}, and Chunk Size: {}.  URL: {}",
             options.file_concurrency, options.chunk_size, self.upload_url
         );
@@ -79,44 +76,44 @@ impl ArtifactUploader {
         let (result_tx, result_rx) = flume::unbounded();
 
         tokio::task::spawn(async move {
-            println!("Spawned the file discovery worker.");
+            debug!("Spawned the file discovery worker.");
             files_to_upload
-                .inspect(|f| println!("File {} discovered for upload.", f.local_path.display()))
+                .inspect(|f| debug!("File {} discovered for upload.", f.local_path.display()))
                 .map(Ok)
                 .forward(work_tx.into_sink())
                 .await
                 .unwrap();
-            println!("File discovery complete.");
+            debug!("File discovery complete.");
         });
 
         for task_index in 0..options.file_concurrency {
-            println!("Preparing file upload worker #{}.", task_index);
+            debug!("Preparing file upload worker #{}.", task_index);
             let _continue_on_error = options.continue_on_error; // TODO
             let uploader = self.uploader(options);
             let mut job_receiver = work_rx.clone().into_stream();
             let result_sender = result_tx.clone();
 
             let task = async move {
-                println!("Upload worker #{} has spawned.", task_index);
+                debug!("Upload worker #{} has spawned.", task_index);
                 while let Some(file_to_upload) = job_receiver.next().await {
-                    // println!(
+                    // debug!(
                     //     "#{}: Will upload {} to {}.",
                     //     task_index,
                     //     &file_to_upload.local_path.display(),
                     //     &file_to_upload.remote_path.display()
                     // );
                     let result = uploader.upload_file(&file_to_upload).await;
-                    // println!(
+                    // debug!(
                     //     "Uploading result for {}: {:?}",
                     //     &file_to_upload.local_path.display(),
                     //     result
                     // );
                     result_sender.send(result).unwrap();
                 }
-                println!("Upload worker #{} finished.", task_index);
+                debug!("Upload worker #{} finished.", task_index);
             };
 
-            println!("Spawning the upload worker #{}.", task_index);
+            debug!("Spawning the upload worker #{}.", task_index);
             tokio::spawn(task);
         }
 
@@ -127,7 +124,7 @@ impl ArtifactUploader {
             .fold(0, |len_so_far, result| ready(len_so_far + result.total_size));
 
         let uploaded = collect_results.await;
-        println!("Uploaded in total {} bytes.", uploaded);
+        debug!("Uploaded in total {} bytes.", uploaded);
         self.total_size.fetch_add(uploaded, Ordering::SeqCst);
         Ok(())
     }
@@ -162,7 +159,7 @@ impl FileUploader {
                 successful_upload_size: len,
             },
             Err(e) => {
-                println!("Upload failed: {:?}", e);
+                debug!("Upload failed: {:?}", e);
                 UploadResult {
                     is_success:             false,
                     total_size:             0,

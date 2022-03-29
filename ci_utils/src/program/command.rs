@@ -75,7 +75,7 @@ impl Command {
 
     pub fn run_ok(&mut self) -> BoxFuture<'static, Result<()>> {
         let pretty = self.describe();
-        println!("Will run: {}", pretty);
+        debug!("Will run: {}", pretty);
         let status = self.status();
         let status_checker = self.status_checker.clone();
         async move {
@@ -88,14 +88,14 @@ impl Command {
     // FIXME check exit code
     pub fn output_ok(&mut self) -> BoxFuture<'static, Result<Output>> {
         let pretty = self.describe();
-        println!("Will run: {}", pretty);
+        debug!("Will run: {}", pretty);
         let output = self.output();
         async move { output.await.context(format!("Command failed: {}", pretty)) }.boxed()
     }
 
     pub fn spawn(&mut self) -> Result<Child> {
         let pretty = self.describe();
-        println!("Spawning {}", pretty);
+        debug!("Spawning {}", pretty);
         self.inner.spawn().context(format!("Failed to spawn: {}", pretty))
     }
 }

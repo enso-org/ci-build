@@ -11,37 +11,37 @@ use ide_ci::actions::artifacts::run_session::SessionClient;
 async fn main() -> Result {
     let dir = std::env::current_exe()?.parent().unwrap().to_owned();
 
-    println!("Will upload {}", dir.display());
+    debug!("Will upload {}", dir.display());
     let provider = artifacts::discover_recursive(dir);
     artifacts::upload(provider, "MyPrecious", default()).await?;
 
 
     let file = std::env::current_exe()?;
-    println!("Will upload {}", file.display());
+    debug!("Will upload {}", file.display());
     let artifact_name = file.file_name().unwrap().to_str().unwrap();
     let provider = artifacts::single_file_provider(file.clone())?;
     artifacts::upload(provider, artifact_name, default()).await?;
-    println!("Upload done!");
+    debug!("Upload done!");
     // artifacts::upload_single_file(file, )
 
     let context = artifacts::context::Context::new_from_env()?;
     let session = SessionClient::new(&context)?;
 
-    // println!("Checking artifacts through official API");
+    // debug!("Checking artifacts through official API");
     // let octocrab = setup_octocrab()?;
     // let run_id = ide_ci::actions::env::run_id()?;
-    // println!("Got run ID {run_id}");
+    // debug!("Got run ID {run_id}");
     // let run = octocrab.workflows("enso-org", "ci-build").get(run_id).await?;
-    // println!("Got run information {run:?}");
+    // debug!("Got run information {run:?}");
     // let artifacts = octocrab
     //     .actions()
     //     .list_workflow_run_artifacts("enso-org", "ci-build", run_id)
     //     .send()
     //     .await?;
-    // println!("Got artifacts information {artifacts:?}");
+    // debug!("Got artifacts information {artifacts:?}");
 
 
-    println!("Checking artifacts through runtime API");
+    debug!("Checking artifacts through runtime API");
     let list = session.list_artifacts().await?;
     dbg!(&list);
 

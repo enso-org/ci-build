@@ -103,7 +103,7 @@ pub fn remove_if_exists(path: impl AsRef<Path>) -> Result {
 /// Recreate directory, so it exists and is empty.
 pub fn reset_dir(path: impl AsRef<Path>) -> Result {
     let path = path.as_ref();
-    println!("Will reset directory {}", path.display());
+    debug!("Will reset directory {}", path.display());
     remove_dir_if_exists(&path)?;
     create_dir_if_missing(&path)?;
     Ok(())
@@ -111,7 +111,7 @@ pub fn reset_dir(path: impl AsRef<Path>) -> Result {
 
 pub fn require_exist(path: impl AsRef<Path>) -> Result {
     if path.as_ref().exists() {
-        println!("{} does exist.", path.as_ref().display());
+        debug!("{} does exist.", path.as_ref().display());
         Ok(())
     } else {
         bail!("{} does not exist.", path.as_ref().display())
@@ -121,7 +121,7 @@ pub fn require_exist(path: impl AsRef<Path>) -> Result {
 pub fn copy_to(source_file: impl AsRef<Path>, dest_dir: impl AsRef<Path>) -> Result {
     require_exist(&source_file)?;
     create_dir_if_missing(dest_dir.as_ref())?;
-    println!("Will copy {} to {}", source_file.as_ref().display(), dest_dir.as_ref().display());
+    debug!("Will copy {} to {}", source_file.as_ref().display(), dest_dir.as_ref().display());
     let mut options = CopyOptions::new();
     options.overwrite = true;
     fs_extra::copy_items(&[source_file], dest_dir, &options)?;
@@ -131,7 +131,7 @@ pub fn copy_to(source_file: impl AsRef<Path>, dest_dir: impl AsRef<Path>) -> Res
 pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -> Result {
     let source_file = source_file.as_ref();
     let destination_file = destination_file.as_ref();
-    println!("Will copy {} => {}", source_file.display(), destination_file.display());
+    debug!("Will copy {} => {}", source_file.display(), destination_file.display());
     if let Some(parent) = destination_file.parent() {
         create_dir_if_missing(parent)?;
         if source_file.is_dir() {
@@ -183,7 +183,7 @@ pub fn expect_file(path: impl AsRef<Path>) -> Result {
 pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
     use crate::anyhow::ResultExt;
     use std::os::unix::prelude::*;
-    println!("Setting executable permission on {}", path.as_ref().display());
+    debug!("Setting executable permission on {}", path.as_ref().display());
     let metadata = path.as_ref().metadata()?;
     let mut permissions = metadata.permissions();
     let mode = permissions.mode();

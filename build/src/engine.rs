@@ -54,7 +54,7 @@ pub async fn download_project_templates(client: reqwest::Client, enso_root: Path
     }
 
     let _result = ide_ci::future::try_join_all(futures, AsyncPolicy::FutureParallelism).await?;
-    println!("Completed downloading templates");
+    debug!("Completed downloading templates");
     Ok(())
 }
 
@@ -249,7 +249,7 @@ impl BuiltBundleArtifacts {
 pub async fn create_packages(paths: &Paths) -> Result<Vec<PathBuf>> {
     let mut ret = Vec::new();
     if paths.launcher.root.exists() {
-        println!("Packaging launcher.");
+        debug!("Packaging launcher.");
         ret.push(package_component(&paths.launcher).await?);
     }
     Ok(ret)

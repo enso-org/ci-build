@@ -22,10 +22,10 @@ pub fn deduce_repository_path() -> Option<PathBuf> {
     ];
     for candidate in candidate_paths {
         if let Some(path) = candidate && looks_like_enso_repository_root(&path) {
-            println!("Deduced repository path to be {}.", path.display());
+            debug!("Deduced repository path to be {}.", path.display());
             return Some(path)
         }
     }
-    println!("Failed to deduce the repository path.");
+    debug!("Failed to deduce the repository path.");
     None
 }

@@ -197,7 +197,7 @@ pub mod tests {
     #[test]
     fn pack_command_test() {
         let cmd = Tar.pack_cmd("output.tar.gz", &["target.bmp"]).unwrap();
-        println!("{:?}", cmd);
+        debug!("{:?}", cmd);
         dbg!(cmd);
     }
 }

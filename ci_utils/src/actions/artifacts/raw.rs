@@ -103,7 +103,7 @@ pub mod endpoints {
             .await?
             .json::<serde_json::Value>()
             .await?;
-        println!("{}", serde_json::to_string_pretty(&body)?);
+        debug!("{}", serde_json::to_string_pretty(&body)?);
         serde_json::from_value(body).anyhow_err()
     }
 
@@ -114,7 +114,7 @@ pub mod endpoints {
         artifact_name: impl AsRef<str>,
         size: usize,
     ) -> Result<PatchArtifactSizeResponse> {
-        println!("Patching the artifact `{}` size.", artifact_name.as_ref());
+        debug!("Patching the artifact `{}` size.", artifact_name.as_ref());
         let artifact_url = artifact_url.clone();
 
         let patch_request = json_client
@@ -131,7 +131,7 @@ pub mod endpoints {
         bin_client: &reqwest::Client,
         artifact_location: Url,
     ) -> Result<Pin<Box<dyn AsyncRead + Send>>> {
-        // println!("Downloading {} to {}.", artifact_location, destination.as_ref().display());
+        // debug!("Downloading {} to {}.", artifact_location, destination.as_ref().display());
         // let file = tokio::fs::File::create(destination);
 
         let response = bin_client.get(artifact_location).send().await?;
@@ -171,7 +171,12 @@ pub async fn upload_file(
     let file = tokio::fs::File::open(local_path.as_ref()).await?;
     // TODO [mwu] note that metadata can lie about file size, e.g. named pipes on Linux
     let len = file.metadata().await?.len() as usize;
-    println!("Will upload file {} of size {}", local_path.as_ref().display(), len);
+    debug!(
+        "Will upload file {} of size {} to remote path {}",
+        local_path.as_ref().display(),
+        len,
+        remote_path.as_ref()
+    );
     if len < chunk_size && len > 0 {
         let range = ContentRange::whole(len as usize);
         endpoints::upload_file_chunk(client, upload_url.clone(), file, range, &remote_path).await

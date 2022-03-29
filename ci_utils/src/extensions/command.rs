@@ -55,7 +55,7 @@ impl CommandExt for tokio::process::Command {
     }
     // fn run_ok(&mut self) -> BoxFuture<'static, Result<()>> {
     //     let pretty = self.describe();
-    //     println!("Will run: {}", pretty);
+    //     debug!("Will run: {}", pretty);
     //     let status = self.status();
     //     async move { status.await?.exit_ok().context(format!("Command failed: {}", pretty)) }
     //         .boxed()
@@ -63,14 +63,14 @@ impl CommandExt for tokio::process::Command {
     //
     // fn output_ok(&mut self) -> BoxFuture<'static, Result<Output>> {
     //     let pretty = self.describe();
-    //     println!("Will run: {}", pretty);
+    //     debug!("Will run: {}", pretty);
     //     let output = self.output();
     //     async move { output.await.context(format!("Command failed: {}", pretty)) }.boxed()
     // }
     //
     // fn spawn_nicer(&mut self) -> Result<Child> {
     //     let pretty = self.describe();
-    //     println!("Spawning {}", pretty);
+    //     debug!("Spawning {}", pretty);
     //     self.spawn().context(format!("Failed to spawn: {}", pretty))
     // }
 }

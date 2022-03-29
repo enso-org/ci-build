@@ -60,7 +60,7 @@ impl Manifest {
         let (nightlies, non_nightlies) =
             self.editions.iter().partition::<Vec<_>, _>(|e| e.is_nightly());
         let nightlies_count_to_remove = (1 + nightlies.len()).saturating_sub(nightlies_count_limit);
-        println!(
+        debug!(
             "Will remove {} nightly editions from {} found.",
             nightlies_count_to_remove,
             nightlies.len()
@@ -138,13 +138,13 @@ pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Resul
     );
 
     let manifest = bucket_context.get_yaml::<Manifest>(MANIFEST_FILENAME).await?;
-    println!("Got manifest index from S3: {:#?}", manifest);
+    debug!("Got manifest index from S3: {:#?}", manifest);
 
 
     let (new_manifest, nightlies_to_remove) =
         manifest.with_new_nightly(new_edition_name, NIGHTLY_EDITIONS_LIMIT);
     for nightly_to_remove in nightlies_to_remove {
-        println!("Should remove {}", nightly_to_remove);
+        debug!("Should remove {}", nightly_to_remove);
     }
 
     let new_edition_filename = new_edition_path.file_name().unwrap().to_str().unwrap();

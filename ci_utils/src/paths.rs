@@ -91,7 +91,7 @@ impl Node {
     }
 
     pub fn add_child(&mut self, node: Node) {
-        println!("Adding {} to {}", node.value, self.value);
+        debug!("Adding {} to {}", node.value, self.value);
         match &mut self.shape {
             Shape::File => {
                 self.shape = Shape::Directory(vec![node]);
@@ -339,7 +339,7 @@ pub fn collect_parameters(value: &mut Node) {
     let own_parameters = PARAMETER.find_all(&value.value).into_iter().map(ToString::to_string);
     value.parameters.extend(own_parameters);
     value.parameters.extend(child_parameters);
-    println!("{} has {} parameters", value.value, value.parameters.len());
+    debug!("{} has {} parameters", value.value, value.parameters.len());
 }
 
 pub fn convert(value: &serde_yaml::Value) -> Result<Vec<Node>> {
@@ -377,7 +377,7 @@ mod tests {
     fn generate() -> Result {
         let yaml_contents = include_bytes!("../../build/ide-paths.yaml");
         let code = crate::paths::process(yaml_contents.as_slice())?;
-        println!("{}", code);
+        debug!("{}", code);
         Ok(())
     }
 }

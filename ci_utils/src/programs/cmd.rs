@@ -136,7 +136,7 @@ pub fn is_path_like(variable_name: impl AsRef<str>) -> bool {
 }
 
 pub fn parse_dumped_env(output: &str) -> Result<BTreeMap<UniCase<String>, String>> {
-    // println!("Got env:\n{}\n\n\n", output);
+    // debug!("Got env:\n{}\n\n\n", output);
     let non_empty_lines = output.lines().map(|line| line.trim()).filter(|line| !line.is_empty());
     non_empty_lines
         .map(|line| match line.split_once('=') {

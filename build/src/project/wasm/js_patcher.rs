@@ -51,7 +51,7 @@ pub fn js_workaround_patcher(code: impl Into<String>) -> Result<String> {
 }
 
 pub fn patch_js_glue(input_path: impl AsRef<Path>, output_path: impl AsRef<Path>) -> Result {
-    println!("Patching {}.", output_path.as_ref().display());
+    debug!("Patching {}.", output_path.as_ref().display());
     let code = ide_ci::fs::read_to_string(&input_path)?;
     let patched_code = js_workaround_patcher(code)?;
     ide_ci::fs::write(output_path, patched_code)?;

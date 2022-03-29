@@ -30,7 +30,7 @@ impl EndpointConfiguration {
     /// Tries to deduce what endpoint should be used for a spawned Postgres service.
     pub fn deduce() -> Result<Self> {
         if let Ok(container_name) = std::env::var("ENSO_RUNNER_CONTAINER_NAME") {
-            iprintln!("Assuming that I am in the Docker container named {container_name}.");
+            debug!("Assuming that I am in the Docker container named {container_name}.");
             Ok(Self::Container { owner: ContainerId(container_name) })
         } else {
             // If we are running on the bare machine (i.e. not in container), we spawn postgres
@@ -66,10 +66,10 @@ impl Configuration {
             ("ENSO_DATABASE_TEST_DB_NAME", self.database_name.clone()),
             match &self.endpoint {
                 EndpointConfiguration::Host { port } =>
-                    ("ENSO_DATABASE_TEST_HOST", iformat!("localhost:{port}")),
+                    ("ENSO_DATABASE_TEST_HOST", format!("localhost:{port}")),
                 EndpointConfiguration::Container { .. } => (
                     "ENSO_DATABASE_TEST_HOST",
-                    iformat!("localhost:{POSTGRES_CONTAINER_DEFAULT_PORT}"),
+                    format!("localhost:{POSTGRES_CONTAINER_DEFAULT_PORT}"),
                 ),
             },
             ("ENSO_DATABASE_TEST_DB_USER", self.user.clone()),
@@ -98,7 +98,7 @@ impl Configuration {
 
 /// Retrieve input from asynchronous reader line by line and feed them into the given function.
 pub async fn process_lines<R: AsyncRead + Unpin>(reader: R, f: impl Fn(String)) -> Result<R> {
-    println!("Started line processor.");
+    debug!("Started line processor.");
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
     while reader.read_line(&mut line).await? != 0 {
@@ -133,15 +133,15 @@ impl Drop for PostgresContainer {
     fn drop(&mut self) {
         self.config.clear_enso_test_env();
 
-        println!("Will remove the postgres container");
+        debug!("Will remove the postgres container");
         let cleanup_future = self.config.cleanup();
         if let Err(e) = futures::executor::block_on(cleanup_future) {
-            println!(
+            debug!(
                 "Failed to kill the Postgres container named {}: {}",
                 self.config.postgres_container, e
             );
         } else {
-            println!("Postgres container killed.");
+            debug!("Postgres container killed.");
         }
     }
 }
@@ -179,7 +179,7 @@ impl Postgresql {
 
         // Wait until container is ready.
         let check_line = |line: &str| {
-            println!("ERR: {}", line);
+            debug!("ERR: {}", line);
             line.contains("database system is ready to accept connections")
         };
         let stderr = process_lines_until(stderr, &check_line).await?;

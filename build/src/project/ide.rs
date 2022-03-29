@@ -179,7 +179,7 @@ impl IsTarget for Ide {
 //         .await?;
 //
 //
-//     println!("{}", paths.temp.display());
+//     debug!("{}", paths.temp.display());
 //     std::mem::forget(paths.temp);
 //
 //     // Command::new(r"H:\NBO\enso5\dist\client\win-unpacked\Enso.exe").run_ok().await?;

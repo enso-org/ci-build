@@ -30,7 +30,7 @@ impl Context {
 
     pub fn artifact_url(&self) -> Result<Url> {
         let Context { runtime_url, run_id, api_version, .. } = self;
-        let url_text = iformat!(
+        let url_text = format!(
             "{runtime_url}_apis/pipelines/workflows/{run_id}/artifacts?api-version={api_version}"
         );
         Url::parse(&url_text).anyhow_err()

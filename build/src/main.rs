@@ -10,11 +10,11 @@ async fn main() -> anyhow::Result<()> {
     // diagnostics will be first and only thing that is output.
     let args: Args = argh::from_env();
 
-    println!("Initial environment:");
+    debug!("Initial environment:");
     for (key, value) in std::env::vars() {
-        println!("\t{key}={value}");
+        debug!("\t{key}={value}");
     }
-    println!("\n===End of the environment dump===\n");
+    debug!("\n===End of the environment dump===\n");
 
     let ctx = RunContext::new(&args).await?;
     ctx.execute().await?;

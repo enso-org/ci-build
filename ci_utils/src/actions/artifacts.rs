@@ -30,7 +30,7 @@ pub async fn execute_dbg<T: DeserializeOwned + std::fmt::Debug>(
     let response = client.execute(request).await?;
     dbg!(&response);
     let text = response.text().await?;
-    println!("{}", &text);
+    debug!("{}", &text);
     let deserialized = serde_json::from_str(&text)?;
     dbg!(&deserialized);
     Ok(deserialized)

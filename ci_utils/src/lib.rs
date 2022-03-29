@@ -61,9 +61,14 @@ pub mod prelude {
     pub use futures_util::TryStream;
     pub use futures_util::TryStreamExt;
     pub use ifmt::iformat;
-    pub use ifmt::iprintln;
     pub use itertools::Itertools;
     pub use lazy_static::lazy_static;
+    pub use log::debug;
+    pub use log::error;
+    pub use log::info;
+    pub use log::log;
+    pub use log::trace;
+    pub use log::warn;
     pub use octocrab::Octocrab;
     pub use path_absolutize::*;
     pub use platforms::target::Arch;
@@ -159,6 +164,6 @@ mod tests {
     #[test]
     #[ignore]
     pub fn get_free_port_test() {
-        println!("{:?}", get_free_port());
+        debug!("{:?}", get_free_port());
     }
 }

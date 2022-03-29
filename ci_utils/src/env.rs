@@ -152,16 +152,16 @@ impl Modification {
         let normalized_name = &*self.variable_name;
         match &self.action {
             Action::Remove => {
-                println!("Removing {}", self.variable_name);
+                debug!("Removing {}", self.variable_name);
                 std::env::remove_var(normalized_name)
             }
             Action::Set(value) => {
-                println!("Setting {}={}", self.variable_name, value);
+                debug!("Setting {}={}", self.variable_name, value);
                 std::env::set_var(normalized_name, &value);
             }
             Action::PrependPaths(paths_to_prepend) =>
                 if let Ok(old_value) = std::env::var(normalized_name) {
-                    println!(
+                    debug!(
                         "Prepending to {} the following paths: {:?}",
                         self.variable_name, paths_to_prepend
                     );
