@@ -175,7 +175,7 @@ pub async fn upload_file(
         "Will upload file {} of size {} to remote path {}",
         local_path.as_ref().display(),
         len,
-        remote_path.as_ref()
+        remote_path.as_ref().display()
     );
     if len < chunk_size && len > 0 {
         let range = ContentRange::whole(len as usize);
