@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use anyhow::Context;
-use ide_ci::actions::workflow::is_in_env;
 use octocrab::models::RunId;
 use octocrab::params::actions::ArchiveFormat;
 
@@ -13,10 +12,8 @@ use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
-use crate::project::Source;
 use ide_ci::env::Variable;
 use ide_ci::models::config::RepoContext;
-use ide_ci::programs::WasmPack;
 
 pub mod js_patcher;
 
@@ -103,7 +100,7 @@ pub async fn build_wasm(
         .await?
         .exit_ok()?;
 
-    let mut ret = RepoRootDistWasm::new(output_dir.as_ref());
+    let ret = RepoRootDistWasm::new(output_dir.as_ref());
     patch_js_glue_in_place(&ret.wasm_glue)?;
     ide_ci::fs::rename(&ret.wasm_main_raw, &ret.wasm_main)?;
     let ret = Artifacts(ret);

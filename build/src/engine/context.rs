@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use anyhow::Context;
+
 use ide_ci::env::Variable;
 use platforms::TARGET_ARCH;
 use platforms::TARGET_OS;
@@ -405,12 +405,16 @@ impl RunContext {
                 test $engineversion = $refversion || (echo "Tag version $refversion and the engine version $engineversion do not match" && false)
             */
 
-
-
-            verify_generated_package(&sbt, "engine", &self.paths.engine.dir).await?;
-            verify_generated_package(&sbt, "launcher", &self.paths.launcher.dir).await?;
-            verify_generated_package(&sbt, "project-manager", &self.paths.project_manager.dir)
-                .await?;
+            if self.config.build_engine_package() {
+                verify_generated_package(&sbt, "engine", &self.paths.engine.dir).await?;
+            }
+            if self.config.build_launcher_package() {
+                verify_generated_package(&sbt, "launcher", &self.paths.launcher.dir).await?;
+            }
+            if self.config.build_project_manager_package() {
+                verify_generated_package(&sbt, "project-manager", &self.paths.project_manager.dir)
+                    .await?;
+            }
             for libname in ["Base", "Table", "Image", "Database"] {
                 verify_generated_package(
                     &sbt,

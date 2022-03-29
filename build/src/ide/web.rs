@@ -1,14 +1,9 @@
 use crate::prelude::*;
 use futures_util::future::try_join;
 use futures_util::future::try_join3;
-use ide_ci::actions::workflow::is_in_env;
 use tempfile::TempDir;
 
-use crate::engine::bundle::ProjectManager;
-use crate::ide::web::Workspaces::Content;
 use crate::paths::generated;
-use crate::paths::generated::RepoRootDistWasm;
-use crate::paths::TargetTriple;
 use crate::project::ide::BuildInfo;
 use crate::project::wasm::Artifacts;
 use ide_ci::io::download_all;
@@ -16,10 +11,10 @@ use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
 use ide_ci::programs::Npm;
 
-/// Path to the file with build information that is consumed by the JS part of the IDE.
-///
-/// The file must follow the schema of type [`BuildInfo`].
 lazy_static! {
+    /// Path to the file with build information that is consumed by the JS part of the IDE.
+    ///
+    /// The file must follow the schema of type [`BuildInfo`].
     pub static ref BUILD_INFO: PathBuf = PathBuf::from("build.json");
 }
 

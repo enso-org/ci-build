@@ -182,3 +182,33 @@ impl Command {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::AsyncBufReadExt;
+    use tokio::io::BufReader;
+
+    #[tokio::test]
+    async fn aabhgf() -> Result {
+        let mut cmd = Command::new("cargo");
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        let mut child = cmd.spawn()?;
+        let out = child.stdout.take().unwrap();
+
+
+        let bufread = BufReader::new(out);
+        tokio::task::spawn(async move {
+            let mut lines = bufread.lines();
+            while let Some(line) = lines.next_line().await? {
+                println!("[cargo out] {}", line)
+            }
+            println!("[cargo out] <ENDUT>");
+            Result::Ok(())
+        });
+
+        child.wait().await?;
+        Ok(())
+    }
+}

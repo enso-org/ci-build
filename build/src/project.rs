@@ -1,10 +1,6 @@
 use crate::prelude::*;
 use std::marker::PhantomData;
 
-use crate::ide::web::IdeDesktop;
-use crate::paths::generated::RepoRoot;
-use gui::Gui;
-use gui::GuiInputs;
 use ide_ci::actions::workflow::is_in_env;
 
 pub mod gui;

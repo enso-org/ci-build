@@ -7,14 +7,10 @@ use proc_macro2::Ident;
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
-use quote::ToTokens;
 use regex::Regex;
 use serde_yaml::Value;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::iter::zip;
-use syn::parse_quote;
 
 
 fn to_ident(name: impl AsRef<str>) -> Ident {

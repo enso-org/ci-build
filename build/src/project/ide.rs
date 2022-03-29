@@ -2,7 +2,6 @@ use crate::paths::generated::RepoRoot;
 use crate::prelude::*;
 use crate::project::IsTarget;
 use futures_util::future::try_join;
-use futures_util::future::try_join3;
 
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

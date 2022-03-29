@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use std::env::consts::EXE_SUFFIX;
-use std::lazy::Lazy;
 use std::lazy::SyncLazy;
 
 use crate::engine::BuildConfiguration;
@@ -12,7 +11,6 @@ use platforms::TARGET_OS;
 
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
-use crate::project::Source;
 use crate::version::Versions;
 
 #[derive(Clone, Debug)]

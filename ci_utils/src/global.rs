@@ -1,8 +1,6 @@
 use crate::prelude::*;
 
-use indicatif::MultiProgress;
 use indicatif::ProgressBar;
-use std::cell::RefCell;
 use std::lazy::SyncLazy;
 use std::sync::Mutex;
 use std::sync::Weak;
@@ -54,7 +52,7 @@ pub fn progress_bar(f: impl FnOnce() -> ProgressBar) -> Arc<ProgressBar> {
 }
 
 pub fn new_spinner(message: impl Into<Cow<'static, str>>) -> Arc<ProgressBar> {
-    let mut ret = progress_bar(indicatif::ProgressBar::new_spinner);
+    let ret = progress_bar(indicatif::ProgressBar::new_spinner);
     ret.set_message(message);
     ret
 }

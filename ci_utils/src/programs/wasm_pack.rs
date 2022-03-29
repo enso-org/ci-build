@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-use crate::fs::create_dir_if_missing;
 use tempfile::TempDir;
 
 use crate::programs::Cargo;

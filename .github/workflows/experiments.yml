@@ -28,6 +28,7 @@ jobs:
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          RUST_LOG: info,ide_ci=trace,enso_build2=trace
 #
 #      - name: Upload Content Artifacts
 #        uses: actions/upload-artifact@v2

@@ -1,4 +1,3 @@
-#![feature(adt_const_params)]
 #![feature(explicit_generic_args_with_impl_trait)]
 
 use anyhow::Context;
@@ -12,8 +11,6 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use enso_build::args::BuildKind;
-use enso_build::ide::web::IdeDesktop;
-use enso_build::paths::generated::RepoRoot;
 use enso_build::paths::TargetTriple;
 use enso_build::project::gui::Gui;
 use enso_build::project::gui::GuiInputs;
@@ -21,16 +18,11 @@ use enso_build::project::ide::BuildInfo;
 use enso_build::project::ide::Ide;
 use enso_build::project::project_manager::ProjectManager;
 use enso_build::project::wasm::Wasm;
-use enso_build::project::wasm::WasmSource;
 use enso_build::project::IsTarget;
 use enso_build::setup_octocrab;
-use enso_build::version::Versions;
 use ide_ci::models::config::RepoContext;
-use ide_ci::platform::default_shell;
-use ide_ci::programs::tar::Tar;
 use ide_ci::programs::Git;
 use lazy_static::lazy_static;
-use octocrab::models::RunId;
 
 lazy_static! {
     pub static ref DIST_WASM: PathBuf = PathBuf::from_iter(["dist", "wasm"]);
@@ -278,6 +270,8 @@ pub struct BuildContext {
 #[tokio::main]
 async fn main() -> Result {
     pretty_env_logger::init();
+
+
     DEFAULT_REPO_PATH.as_ref().map(|path| path.as_str());
 
     let cli = Cli::try_parse()?;
@@ -299,7 +293,7 @@ async fn main() -> Result {
 
     let commit = match ide_ci::actions::env::Sha.fetch() {
         Ok(commit) => commit,
-        Err(e) => Git::new(&cli.repo_path).head_hash().await?,
+        Err(_e) => Git::new(&cli.repo_path).head_hash().await?,
     };
 
     let info_for_js = BuildInfo {
@@ -332,7 +326,7 @@ async fn main() -> Result {
                     // let gui = Gui.get(source, inputs, wasm_source.output_path.clone()).await?;
                 }
                 GuiCommand::Watch => {
-                    let gui = Gui.watch(inputs).await?;
+                    let _gui = Gui.watch(inputs).await?;
                 }
             }
         }
