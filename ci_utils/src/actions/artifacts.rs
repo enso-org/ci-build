@@ -85,6 +85,7 @@ pub fn upload_directory(
     artifact_name: impl AsRef<str>,
 ) -> impl Future<Output = Result> {
     let dir = dir.into();
+    info!("Uploading directory {}.", dir.display());
     let files = single_dir_provider(&dir);
     (async move || -> Result { upload(files?, artifact_name, default()).await })()
 }

@@ -174,6 +174,7 @@ impl<Target: IsTargetSource> TargetSourceArg<Target> {
             if should_upload_artifact {
                 let upload_job = target.upload_artifact(ready(Ok(artifact.clone())));
                 tokio::spawn(upload_job);
+                info!("Spawned upload job for {}.", type_name::<Target>());
             }
             Ok(artifact)
         }
