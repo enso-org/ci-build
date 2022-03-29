@@ -180,7 +180,7 @@ pub struct FileToUpload {
 }
 
 impl FileToUpload {
-    pub fn new(path: impl Into<PathBuf>) -> Result<Self> {
+    pub fn new_in_root(path: impl Into<PathBuf>) -> Result<Self> {
         let local_path = path.into();
         let remote_path = local_path.file_name().map(into).ok_or_else(|| {
             anyhow!("Path {} does not contain a valid filename.", local_path.display())
@@ -188,7 +188,7 @@ impl FileToUpload {
         Ok(Self { local_path, remote_path })
     }
 
-    pub fn new_under_root(
+    pub fn new_relative(
         root_path: impl AsRef<Path>,
         local_path: impl Into<PathBuf>,
     ) -> Result<Self> {

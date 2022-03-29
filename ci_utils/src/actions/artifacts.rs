@@ -40,7 +40,7 @@ pub fn discover_and_feed(root_path: impl AsRef<Path>, sender: Sender<FileToUploa
     walkdir::WalkDir::new(&root_path).into_iter().try_for_each(|entry| {
         let entry = entry?;
         if entry.file_type().is_file() {
-            let file = FileToUpload::new_under_root(&root_path, entry.path())?;
+            let file = FileToUpload::new_relative(&root_path, entry.path())?;
             sender
                 .send(file)
                 .context("Stopping discovery in progress, because all listeners were dropped.")?;
@@ -112,7 +112,7 @@ pub async fn download_single_file_artifact(
 pub fn single_file_provider(
     path: impl Into<PathBuf>,
 ) -> Result<impl Stream<Item = FileToUpload> + 'static> {
-    let file = FileToUpload::new(path)?;
+    let file = FileToUpload::new_in_root(path)?;
     Ok(futures::stream::iter([file]))
 }
 
@@ -123,7 +123,7 @@ pub fn single_dir_provider(path: &Path) -> Result<impl Stream<Item = FileToUploa
         .collect_result()?
         .into_iter()
         .filter(|entry| !entry.file_type().is_dir())
-        .map(|entry| FileToUpload::new(entry.path()))
+        .map(|entry| FileToUpload::new_relative(path, entry.path()))
         .collect_result()?;
 
     Ok(futures::stream::iter(files))
@@ -134,6 +134,7 @@ mod tests {
     use super::*;
     use crate::actions::artifacts::models::CreateArtifactResponse;
     use reqwest::StatusCode;
+    use tempfile::TempDir;
     use wiremock::matchers::method;
     use wiremock::Mock;
     use wiremock::MockServer;
@@ -175,6 +176,16 @@ mod tests {
         //let client = reqwest::Client::builder().default_headers().
     }
 
+    #[tokio::test]
+    async fn discover_files_in_dir() -> Result {
+        let dir = TempDir::new()?;
+        crate::fs::create(dir.join_many(["file"]))?;
+        crate::fs::create(dir.join_many(["subdir/nested_file"]))?;
+        let stream = single_dir_provider(dir.as_ref())?;
+        let v = stream.collect::<Vec<_>>().await;
+        dbg!(v);
+        Ok(())
+    }
 
     #[test]
     fn deserialize_response() -> Result {
