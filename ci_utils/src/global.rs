@@ -69,7 +69,7 @@ pub fn spawn(f: impl Future<Output = Result> + Send + 'static) {
 }
 
 
-pub async fn complete_tasks(rt: &Runtime) -> Result {
+pub async fn complete_tasks() -> Result {
     info!("Waiting for remaining tasks to complete.");
     while let tasks = std::mem::replace(&mut GLOBAL.lock().unwrap().ongoing_tasks, default()) && !tasks.is_empty() {
         info!("Found {} tasks to wait upon.", tasks.len());

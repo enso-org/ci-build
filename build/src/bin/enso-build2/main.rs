@@ -26,7 +26,6 @@ use ide_ci::global;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::Git;
 use lazy_static::lazy_static;
-use log::__log_module_path;
 use tokio::runtime::Runtime;
 
 lazy_static! {
@@ -358,7 +357,7 @@ async fn main_internal() -> Result {
         }
     };
     info!("Completed main job.");
-    global::complete_tasks(&rt);
+    global::complete_tasks().await?;
     Ok(())
 }
 
