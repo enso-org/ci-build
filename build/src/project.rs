@@ -111,7 +111,8 @@ pub trait IsTarget: Sized {
             // Note that this will not attempt getting artifact if it does not need it.
             if is_in_env() {
                 let output = output.await?;
-                ide_ci::actions::artifacts::upload_directory(output.as_ref(), name).await?;
+                ide_ci::actions::artifacts::upload_directory(output.as_ref(), &name).await?;
+                info!("Completed upload of {name}.");
             } else {
                 warn!(
                     "Aborting upload of {name} because we are not in GitHub Actions environment."

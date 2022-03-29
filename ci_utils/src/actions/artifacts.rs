@@ -127,6 +127,7 @@ pub fn single_dir_provider(path: &Path) -> Result<impl Stream<Item = FileToUploa
         .map(|entry| FileToUpload::new_relative(path, entry.path()))
         .collect_result()?;
 
+    info!("Discovered {} files under the {}.", files.len(), path.display());
     Ok(futures::stream::iter(files))
 }
 

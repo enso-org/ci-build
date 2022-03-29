@@ -22,6 +22,7 @@ use enso_build::project::project_manager::ProjectManager;
 use enso_build::project::wasm::Wasm;
 use enso_build::project::IsTarget;
 use enso_build::setup_octocrab;
+use ide_ci::global;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::Git;
 use lazy_static::lazy_static;
@@ -173,7 +174,7 @@ impl<Target: IsTargetSource> TargetSourceArg<Target> {
             );
             if should_upload_artifact {
                 let upload_job = target.upload_artifact(ready(Ok(artifact.clone())));
-                tokio::spawn(upload_job);
+                global::spawn(upload_job);
                 info!("Spawned upload job for {}.", type_name::<Target>());
             }
             Ok(artifact)
@@ -363,6 +364,7 @@ async fn main_internal() -> Result {
 fn main() -> Result {
     let rt = Runtime::new()?;
     rt.block_on(async { main_internal().await })?;
+    global::complete_tasks(&rt);
     rt.shutdown_timeout(Duration::from_secs(60 * 30));
     Ok(())
 }

@@ -9,6 +9,7 @@ use std::sync::Mutex;
 
 use crate::actions::artifacts::raw;
 use crate::actions::artifacts::run_session::SessionClient;
+use crate::global;
 
 
 #[derive(Clone, Debug)]
@@ -111,10 +112,11 @@ impl ArtifactUploader {
                     result_sender.send(result).unwrap();
                 }
                 debug!("Upload worker #{} finished.", task_index);
+                Ok(())
             };
 
             debug!("Spawning the upload worker #{}.", task_index);
-            tokio::spawn(task);
+            global::spawn(task);
         }
 
         drop(result_tx);

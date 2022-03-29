@@ -1,3 +1,4 @@
+#![feature(let_chains)]
 #![feature(min_specialization)]
 #![feature(exit_status_error)]
 #![feature(option_result_contains)]

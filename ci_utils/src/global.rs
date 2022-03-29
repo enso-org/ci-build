@@ -1,17 +1,22 @@
 use crate::prelude::*;
 
+use crate::future::try_join_all;
+use crate::future::AsyncPolicy;
 use indicatif::ProgressBar;
 use std::lazy::SyncLazy;
 use std::sync::Mutex;
 use std::sync::Weak;
 use std::time::Duration;
+use tokio::runtime::Runtime;
+use tokio::task::JoinHandle;
 
 const REFRESHES_PER_SECOND: u32 = 50;
 
 #[derive(Debug)]
 struct GlobalState {
-    bars:         Vec<Weak<ProgressBar>>,
-    _tick_thread: std::thread::JoinHandle<()>,
+    bars:          Vec<Weak<ProgressBar>>,
+    _tick_thread:  std::thread::JoinHandle<()>,
+    ongoing_tasks: Vec<JoinHandle<Result>>,
 }
 
 impl GlobalState {
@@ -34,11 +39,12 @@ impl GlobalState {
 impl Default for GlobalState {
     fn default() -> Self {
         GlobalState {
-            bars:         default(),
-            _tick_thread: std::thread::spawn(|| {
+            bars:          default(),
+            _tick_thread:  std::thread::spawn(|| {
                 GLOBAL.lock().unwrap().tick();
                 std::thread::sleep(Duration::SECOND / REFRESHES_PER_SECOND);
             }),
+            ongoing_tasks: default(),
         }
     }
 }
@@ -55,4 +61,17 @@ pub fn new_spinner(message: impl Into<Cow<'static, str>>) -> Arc<ProgressBar> {
     let ret = progress_bar(indicatif::ProgressBar::new_spinner);
     ret.set_message(message);
     ret
+}
+
+pub fn spawn(f: impl Future<Output = Result> + Send + 'static) {
+    let join_handle = tokio::spawn(f);
+    GLOBAL.lock().unwrap().ongoing_tasks.push(join_handle);
+}
+
+pub fn complete_tasks(rt: &Runtime) -> Result {
+    while let tasks = std::mem::replace(&mut GLOBAL.lock().unwrap().ongoing_tasks, default()) && !tasks.is_empty() {
+        let tasks = try_join_all(tasks, AsyncPolicy::FutureParallelism);
+         rt.block_on(tasks)?;
+    }
+    Ok(())
 }
