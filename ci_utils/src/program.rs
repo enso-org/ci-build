@@ -38,7 +38,7 @@ pub const EMPTY_ARGS: [&str; 0] = [];
 // `Sized + 'static` bounds are due to using `Self` as type parameter for `Command` constructor.
 #[async_trait]
 pub trait Program: Sized + 'static {
-    type Command: MyCommand + Send + Sync = Command;
+    type Command: MyCommand<Self> + Send + Sync = Command;
 
     /// The name used to find and invoke the program.
     ///
@@ -93,7 +93,7 @@ pub trait Program: Sized + 'static {
 
     fn cmd(&self) -> Result<Self::Command> {
         let program_path = self.lookup()?;
-        let mut command = Self::Command::new_program::<Self, _>(program_path);
+        let mut command = Self::Command::new_program(program_path);
         if let Some(current_dir) = self.current_directory() {
             command.borrow_mut().current_dir(current_dir);
         }

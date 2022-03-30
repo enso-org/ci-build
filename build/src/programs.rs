@@ -5,6 +5,14 @@ pub mod project_manager {
 
     use ide_ci::program::command::MyCommand;
 
+    pub struct ProjectManager;
+
+    impl Program for ProjectManager {
+        fn executable_name() -> &'static str {
+            "project-manager"
+        }
+    }
+
     #[derive(Shrinkwrap)]
     #[shrinkwrap(mutable)]
     pub struct Command(pub ide_ci::program::Command);
@@ -15,5 +23,5 @@ pub mod project_manager {
         }
     }
 
-    impl MyCommand for Command {}
+    impl<P: Program> MyCommand<P> for Command {}
 }

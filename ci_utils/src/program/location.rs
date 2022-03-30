@@ -26,6 +26,6 @@ impl<P: Program> Location<P> {
     }
 
     pub fn cmd(&self) -> P::Command {
-        P::Command::new_program::<P, _>(self)
+        P::Command::new_program(self)
     }
 }

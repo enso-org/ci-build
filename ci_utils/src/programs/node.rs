@@ -20,7 +20,7 @@ impl From<Command> for NpmCommand {
     }
 }
 
-impl MyCommand for NpmCommand {}
+impl MyCommand<Npm> for NpmCommand {}
 
 impl NpmCommand {
     pub fn install(&mut self) -> &mut Self {

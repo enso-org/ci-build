@@ -10,15 +10,16 @@ use std::process::Output;
 use std::process::Stdio;
 use tokio::process::Child;
 
-pub trait MyCommand: BorrowMut<Command> + From<Command> {
-    fn new_program<P: Program + 'static, S: AsRef<OsStr>>(program: S) -> Self {
-        let inner = Command::new_program::<P, S>(program);
+pub trait MyCommand<P: Program>: BorrowMut<Command> + From<Command> {
+    fn new_program<S: AsRef<OsStr>>(program: S) -> Self {
+        let inner = tokio::process::Command::new(program);
+        let inner = Command::new_over::<P>(inner);
         Self::from(inner)
     }
 }
 
-impl MyCommand for Command {
-    fn new_program<P: Program + 'static, S: AsRef<OsStr>>(program: S) -> Self {
+impl<P: Program> MyCommand<P> for Command {
+    fn new_program<S: AsRef<OsStr>>(program: S) -> Self {
         let inner = tokio::process::Command::new(program);
         Self::new_over::<P>(inner)
     }
