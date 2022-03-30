@@ -7,7 +7,6 @@ use std::lazy::SyncLazy;
 use std::sync::Mutex;
 use std::sync::Weak;
 use std::time::Duration;
-use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
 const REFRESHES_PER_SECOND: u32 = 50;

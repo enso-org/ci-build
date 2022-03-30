@@ -173,8 +173,10 @@ impl<Target: IsTargetSource> TargetSourceArg<Target> {
             );
             if should_upload_artifact {
                 let upload_job = target.upload_artifact(ready(Ok(artifact.clone())));
-                global::spawn(upload_job);
-                info!("Spawned upload job for {}.", type_name::<Target>());
+                // global::spawn(upload_job);
+                // info!("Spawned upload job for {}.", type_name::<Target>());
+                warn!("Forcing the job.");
+                upload_job.await?;
             }
             Ok(artifact)
         }
