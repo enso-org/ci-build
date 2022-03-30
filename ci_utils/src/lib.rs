@@ -80,6 +80,7 @@ pub mod prelude {
     pub use shrinkwraprs::Shrinkwrap;
     pub use snafu::Snafu;
     pub use std::borrow::Borrow;
+    pub use std::borrow::BorrowMut;
     pub use std::borrow::Cow;
     pub use std::collections::BTreeMap;
     pub use std::default::default;
@@ -94,6 +95,7 @@ pub mod prelude {
     pub use std::io::Seek;
     pub use std::iter::once;
     pub use std::iter::FromIterator;
+    pub use std::marker::PhantomData;
     pub use std::ops::Range;
     pub use std::path::Path;
     pub use std::path::PathBuf;

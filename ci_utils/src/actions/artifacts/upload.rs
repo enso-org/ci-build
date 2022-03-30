@@ -116,7 +116,7 @@ impl ArtifactUploader {
             };
 
             debug!("Spawning the upload worker #{}.", task_index);
-            global::spawn(task);
+            global::spawn("uploader", task);
         }
 
         drop(result_tx);
@@ -199,7 +199,7 @@ impl FileToUpload {
             remote_path: local_path
                 .strip_prefix(&root_path)
                 .context(format!(
-                    "Failed to strip prefix {} from path {}",
+                    "Failed to strip prefix {} from path {}.",
                     root_path.as_ref().display(),
                     local_path.display()
                 ))?

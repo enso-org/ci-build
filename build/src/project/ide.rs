@@ -1,11 +1,11 @@
-use crate::paths::generated::RepoRoot;
 use crate::prelude::*;
-use crate::project::IsTarget;
+
+use crate::paths::generated::RepoRoot;
+
 use futures_util::future::try_join;
 use ide_ci::actions::artifacts::upload_directory;
 use ide_ci::actions::artifacts::upload_single_file;
 use platforms::TARGET_OS;
-use std::lazy::SyncLazy;
 
 pub struct Artifact {
     pub unpacked:       PathBuf,
@@ -59,7 +59,6 @@ impl Ide {
         async move {
             let (gui, project_manager) = try_join(input.gui, input.project_manager).await?;
             ide_desktop.dist(&gui, &project_manager, &output_path).await?;
-            // Ok(output_path.as_ref().to_path_buf());
             Ok(Artifact::new(&input.version, output_path.as_ref()))
         }
         .boxed()

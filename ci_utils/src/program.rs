@@ -1,13 +1,14 @@
 use crate::prelude::*;
-use std::borrow::BorrowMut;
 
 pub mod command;
+mod location;
 pub mod resolver;
 pub mod shell;
 pub mod version;
 pub mod with_cwd;
 
 pub use command::Command;
+use location::Location;
 
 
 use crate::program::command::MyCommand;
@@ -29,6 +30,7 @@ pub const EMPTY_ARGS: [&str; 0] = [];
 // impl<P:Program> Locator {
 //
 // }
+
 
 /// A set of utilities for using a known external program.
 ///
@@ -63,8 +65,10 @@ pub trait Program: Sized + 'static {
     ///
     /// The lookup locations are program-defined, they typically include Path environment variable
     /// and program-specific default locations.
-    fn lookup(&self) -> anyhow::Result<PathBuf> {
-        Resolver::new(Self::executable_names(), self.default_locations())?.lookup()
+    fn lookup(&self) -> anyhow::Result<Location<Self>> {
+        Resolver::new(Self::executable_names(), self.default_locations())?
+            .lookup()
+            .map(Location::new)
     }
 
     async fn require_present(&self) -> Result<String> {

@@ -3,7 +3,6 @@
 use anyhow::Context;
 use enso_build::prelude::*;
 use std::any::type_name;
-use std::marker::PhantomData;
 use std::ops::Deref;
 use std::time::Duration;
 
@@ -22,9 +21,6 @@ use enso_build::project::project_manager::ProjectManager;
 use enso_build::project::wasm::Wasm;
 use enso_build::project::IsTarget;
 use enso_build::setup_octocrab;
-use ide_ci::actions::artifacts::raw::upload_file;
-use ide_ci::actions::artifacts::upload_directory;
-use ide_ci::actions::artifacts::upload_single_file;
 use ide_ci::actions::workflow::is_in_env;
 use ide_ci::global;
 use ide_ci::models::config::RepoContext;

@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use std::marker::PhantomData;
 
 use ide_ci::actions::workflow::is_in_env;
 
