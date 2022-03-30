@@ -4,7 +4,7 @@ use futures_util::future::try_join3;
 use tempfile::TempDir;
 
 use crate::paths::generated;
-use crate::project::ide::BuildInfo;
+use crate::project::gui::BuildInfo;
 use crate::project::wasm::Artifacts;
 use ide_ci::io::download_all;
 use ide_ci::program::EMPTY_ARGS;

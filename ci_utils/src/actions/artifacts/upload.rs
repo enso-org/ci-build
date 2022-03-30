@@ -43,7 +43,7 @@ impl ArtifactUploader {
     pub async fn new(client: SessionClient, artifact_name: impl Into<String>) -> Result<Self> {
         let artifact_name = artifact_name.into();
         let container = client.create_container(&artifact_name).await?;
-        debug!("Created a container {} for artifact '{}'.", container.container_id, artifact_name);
+        info!("Created a container {} for artifact '{}'.", container.container_id, artifact_name);
         Ok(Self {
             client,
             artifact_name,

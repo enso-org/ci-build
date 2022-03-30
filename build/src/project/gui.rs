@@ -2,7 +2,6 @@ use crate::prelude::*;
 
 use crate::ide::web::IdeDesktop;
 use crate::paths::generated::RepoRoot;
-use crate::project::ide::BuildInfo;
 use crate::project::wasm;
 use crate::project::IsTarget;
 use crate::project::PlainArtifact;
@@ -49,4 +48,13 @@ impl IsTarget for Gui {
         }
         .boxed()
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildInfo {
+    pub commit:         String,
+    pub version:        Version,
+    pub engine_version: Version,
+    pub name:           String,
 }

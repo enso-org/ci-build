@@ -14,14 +14,18 @@ use clap::Parser;
 use clap::Subcommand;
 use enso_build::args::BuildKind;
 use enso_build::paths::TargetTriple;
+use enso_build::project::gui::BuildInfo;
 use enso_build::project::gui::Gui;
 use enso_build::project::gui::GuiInputs;
-use enso_build::project::ide::BuildInfo;
 use enso_build::project::ide::Ide;
 use enso_build::project::project_manager::ProjectManager;
 use enso_build::project::wasm::Wasm;
 use enso_build::project::IsTarget;
 use enso_build::setup_octocrab;
+use ide_ci::actions::artifacts::raw::upload_file;
+use ide_ci::actions::artifacts::upload_directory;
+use ide_ci::actions::artifacts::upload_single_file;
+use ide_ci::actions::workflow::is_in_env;
 use ide_ci::global;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::Git;
@@ -62,11 +66,6 @@ pub fn normalize_path(path: &str) -> Result<PathBuf> {
     let ret = ret.absolutize()?;
     Ok(ret.to_path_buf())
 }
-
-// pub struct RunContext {
-//     repo: RepoContext,
-//     run:  RunId,
-// }
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum GuiCommand {
@@ -162,7 +161,9 @@ impl<Target: IsTargetSource> TargetSourceArg<Target> {
     {
         let output_path = self.output_path.clone();
         let source = self.resolve();
-        let should_upload_artifact = self.source == TargetSource::Build;
+        // We upload only built artifacts. There would be no point in uploading something that we've
+        // just downloaded.
+        let should_upload_artifact = self.source == TargetSource::Build && is_in_env();
         async move {
             info!("Getting target {}.", type_name::<Target>());
             let artifact = target.get(source?, move || Ok(inputs), output_path).await?;
@@ -281,6 +282,7 @@ pub struct BuildContext {
 
 
 async fn main_internal() -> Result {
+    console_subscriber::init();
     pretty_env_logger::init();
     debug!("Setting up.");
     DEFAULT_REPO_PATH.as_ref().map(|path| path.as_str());
@@ -350,12 +352,15 @@ async fn main_internal() -> Result {
                 build_info: info_for_js,
                 repo_root:  paths.clone(),
             };
-            let ide_inputs = enso_build::project::ide::Inputs {
+            let ide_inputs = enso_build::project::ide::BuildInput {
                 repo_root:       paths.clone(),
+                version:         gui_inputs.build_info.version.clone(),
                 gui:             gui_source.get(Gui, gui_inputs).boxed(),
                 project_manager: project_manager_source.get(ProjectManager, pm_inputs).boxed(),
             };
-            ide_source.get(Ide, ide_inputs).await?;
+            let output_path = ide_source.output_path.clone();
+            let ide = Ide.build(ide_inputs, output_path).await?;
+            ide.upload().await?;
         }
     };
     info!("Completed main job.");

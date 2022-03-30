@@ -171,7 +171,7 @@ pub async fn upload_file(
     let file = tokio::fs::File::open(local_path.as_ref()).await?;
     // TODO [mwu] note that metadata can lie about file size, e.g. named pipes on Linux
     let len = file.metadata().await?.len() as usize;
-    debug!(
+    trace!(
         "Will upload file {} of size {} to remote path {}",
         local_path.as_ref().display(),
         len,
