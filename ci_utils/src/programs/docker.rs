@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-use anyhow::Context;
 use platforms::TARGET_OS;
 use shrinkwraprs::Shrinkwrap;
 use std::collections::HashMap;
@@ -80,14 +79,7 @@ impl Docker {
         let mut command = self.cmd()?;
         command.arg("build").args(options.args());
         debug!("{:?}", command);
-        let output = command.output().await?;
-        output.status.exit_ok().with_context(|| {
-            format!(
-                "Stdout:\n{}\n\nStderr:\n{}\n",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr),
-            )
-        })?;
+        let output = command.output_ok().await?;
         let built_image_id = std::str::from_utf8(&output.stdout)?
             .lines()
             .inspect(|line| debug!("{}", line))
@@ -112,8 +104,8 @@ impl Docker {
     }
 
     pub async fn create(&self, options: &RunOptions) -> Result<ContainerId> {
-        let output = self.cmd()?.arg("create").args(options.args()).output().await?;
-        Ok(ContainerId(output.run_ok_single_line_stdout()?))
+        let output = self.cmd()?.arg("create").args(options.args()).output_ok().await?;
+        Ok(ContainerId(output.single_line_stdout()?))
     }
 
     pub async fn remove_container(&self, name: &ContainerId, force: bool) -> Result {
@@ -122,9 +114,10 @@ impl Docker {
     }
 
     pub async fn run_detached(&self, options: &RunOptions) -> Result<ContainerId> {
-        let output = dbg!(self.cmd()?.arg("run").arg("-d").args(options.args())).output().await?;
+        let output =
+            dbg!(self.cmd()?.arg("run").arg("-d").args(options.args())).output_ok().await?;
         // dbg!(&output);
-        Ok(ContainerId(output.run_ok_single_line_stdout()?))
+        Ok(ContainerId(output.single_line_stdout()?))
         // output.status.exit_ok()?;
     }
 
@@ -162,7 +155,7 @@ impl Docker {
             .args(["network", "create", "--driver", driver.as_ref(), name.as_ref()])
             .output_ok()
             .await?
-            .run_ok_single_line_stdout()?)
+            .single_line_stdout()?)
     }
 
     /// Returns network ID.
@@ -172,14 +165,14 @@ impl Docker {
             .args(["network", "rm", name_or_id.as_ref()])
             .output_ok()
             .await?
-            .run_ok_single_line_stdout()?)
+            .single_line_stdout()?)
     }
 
     pub async fn list_networks(&self) -> Result<Vec<NetworkInfo>> {
         let mut cmd = Docker.cmd()?;
         cmd.args(["network", "ls", "--no-trunc"]);
         cmd.stdout(Stdio::piped());
-        let stdout = cmd.output().await?.stdout;
+        let stdout = cmd.output_ok().await?.stdout;
         let stdout = String::from_utf8(stdout)?;
 
         let mut ret = Vec::new();

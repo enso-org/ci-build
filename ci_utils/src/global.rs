@@ -2,6 +2,7 @@ use crate::prelude::*;
 
 use crate::future::try_join_all;
 use crate::future::AsyncPolicy;
+use indicatif::MultiProgress;
 use indicatif::ProgressBar;
 use std::lazy::SyncLazy;
 use std::sync::Mutex;
@@ -9,10 +10,11 @@ use std::sync::Weak;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
-const REFRESHES_PER_SECOND: u32 = 50;
+const REFRESHES_PER_SECOND: u32 = 100;
 
 #[derive(Debug)]
 struct GlobalState {
+    mp:            MultiProgress,
     bars:          Vec<Weak<ProgressBar>>,
     _tick_thread:  std::thread::JoinHandle<()>,
     ongoing_tasks: Vec<JoinHandle<Result>>,
@@ -38,6 +40,7 @@ impl GlobalState {
 impl Default for GlobalState {
     fn default() -> Self {
         GlobalState {
+            mp:            MultiProgress::new(),
             bars:          default(),
             _tick_thread:  std::thread::spawn(|| {
                 GLOBAL.lock().unwrap().tick();
@@ -51,7 +54,9 @@ impl Default for GlobalState {
 static GLOBAL: SyncLazy<Mutex<GlobalState>> = SyncLazy::new(default);
 
 pub fn progress_bar(f: impl FnOnce() -> ProgressBar) -> Arc<ProgressBar> {
-    let ret = Arc::new(f());
+    let ret = f();
+    let ret = GLOBAL.lock().unwrap().mp.add(ret);
+    let ret = Arc::new(ret);
     GLOBAL.lock().unwrap().bars.push(Arc::downgrade(&ret));
     ret
 }
@@ -61,6 +66,10 @@ pub fn new_spinner(message: impl Into<Cow<'static, str>>) -> Arc<ProgressBar> {
     ret.set_message(message);
     ret
 }
+//
+// pub fn println(msg: impl AsRef<str>) {
+//     GLOBAL.lock().unwrap().mp.println(msg);
+// }
 
 pub fn spawn(name: impl AsRef<str>, f: impl Future<Output = Result> + Send + 'static) {
     info!("Spawning a new global task named '{}'.", name.as_ref());

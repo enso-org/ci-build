@@ -118,9 +118,8 @@ pub trait Program: Sized + 'static {
     }
 
     async fn version_string(&self) -> Result<String> {
-        let output = self.version_command()?.borrow_mut().output().await?;
-        let string = String::from_utf8(output.stdout)?;
-        Ok(string.trim().to_string())
+        let output = self.version_command()?.borrow_mut().run_stdout().await?;
+        Ok(output.trim().to_string())
     }
 
     // TODO if such need appears, likely Version should be made an associated type

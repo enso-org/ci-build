@@ -169,9 +169,8 @@ impl RunContext {
             .arg("install")
             .arg("native-image")
             .args(conditional_components)
-            .status()
-            .await?
-            .exit_ok()?;
+            .run_ok()
+            .await?;
         Ok(())
     }
 

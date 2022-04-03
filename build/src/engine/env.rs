@@ -1,6 +1,6 @@
 //! Environment variables used by the engine's SBT-based build system.
 
-use crate::prelude::*;
+//use crate::prelude::*;
 
 use ide_ci::env::Variable;
 

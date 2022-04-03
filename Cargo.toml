@@ -4,3 +4,8 @@ members = [
     "build",
     "ci_utils",
 ]
+
+[profile.release]
+opt-level = 1
+lto = true
+debug = true

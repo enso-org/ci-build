@@ -22,11 +22,7 @@ impl Git {
     }
 
     pub async fn head_hash(&self) -> Result<String> {
-        self.cmd()?
-            .args(["rev-parse", "--verify", "HEAD"])
-            .output()
-            .await?
-            .run_ok_single_line_stdout()
+        self.cmd()?.args(["rev-parse", "--verify", "HEAD"]).output_ok().await?.single_line_stdout()
     }
 
     pub async fn clean_xfd(&self) -> Result {

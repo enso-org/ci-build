@@ -17,6 +17,7 @@
 #![feature(duration_constants)]
 
 use crate::prelude::*;
+use anyhow::Context;
 use ide_ci::programs::java;
 use regex::Regex;
 
@@ -84,8 +85,15 @@ pub fn get_java_major_version(build_sbt_contents: &str) -> Result<java::Language
 }
 
 pub fn retrieve_github_access_token() -> Result<String> {
+    fn get_token_from_file() -> Result<String> {
+        let path =
+            dirs::home_dir().context("Failed to locate home directory.")?.join("GITHUB_TOKEN");
+        ide_ci::fs::read_to_string(path)
+    }
+
     ide_ci::env::expect_var("GITHUB_TOKEN")
         .inspect(|_| debug!("Will use GITHUB_TOKEN environment variable."))
+        .or_else(|_| get_token_from_file())
 }
 
 pub fn setup_octocrab() -> Result<Octocrab> {

@@ -118,16 +118,7 @@ impl Program for BuiltEnso {
     }
 
     async fn version_string(&self) -> Result<String> {
-        let output = self.cmd()?.args(["version", "--json", "--only-launcher"]).output().await?;
-        output.status.exit_ok().map_err(|e| {
-            anyhow!(
-                "Failed to get version: {}. \nStdout: {}\nStderr: {}",
-                e,
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            )
-        })?;
-        String::from_utf8(output.stdout).anyhow_err()
+        self.cmd()?.args(["version", "--json", "--only-launcher"]).run_stdout().await
     }
 
     async fn version(&self) -> Result<Version> {

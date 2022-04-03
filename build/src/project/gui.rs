@@ -12,7 +12,7 @@ pub type Artifact = PlainArtifact<Gui>;
 pub struct GuiInputs {
     pub repo_root:  RepoRoot,
     pub wasm:       BoxFuture<'static, Result<wasm::Artifacts>>,
-    pub build_info: BuildInfo,
+    pub build_info: BoxFuture<'static, Result<BuildInfo>>,
 }
 
 #[derive(Clone, Debug)]
@@ -21,7 +21,7 @@ pub struct Gui;
 impl Gui {
     pub async fn watch(&self, input: GuiInputs) -> Result {
         let ide = IdeDesktop::new(&input.repo_root.app.ide_desktop);
-        ide.watch(input.wasm, &input.build_info).await?;
+        ide.watch(input.wasm, &input.build_info.await?).await?;
         Ok(())
     }
 }
@@ -43,7 +43,7 @@ impl IsTarget for Gui {
     ) -> BoxFuture<'static, Result<Self::Output>> {
         async move {
             let ide = IdeDesktop::new(&input.repo_root.app.ide_desktop);
-            ide.build(input.wasm, &input.build_info, &output_path).await?;
+            ide.build(input.wasm, &input.build_info.await?, &output_path).await?;
             Ok(Artifact::new(output_path.as_ref()))
         }
         .boxed()

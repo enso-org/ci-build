@@ -24,7 +24,7 @@ impl Artifact {
         let image = dist_dir.join(match TARGET_OS {
             OS::Linux => format!("enso-linux-{}.AppImage", version),
             OS::MacOS => format!("enso-mac-{}.dmg", version),
-            OS::Windows => format!("enso-win-{}.dmg", version),
+            OS::Windows => format!("enso-win-{}.exe", version),
             _ => todo!("{TARGET_OS} is not supported"),
         });
 
@@ -46,6 +46,17 @@ pub struct BuildInput {
     pub gui:             BoxFuture<'static, Result<crate::project::gui::Artifact>>,
 }
 
+pub enum OutputPath {
+    /// The job must place the artifact under given path.
+    Required(PathBuf),
+    /// THe job may place the artifact anywhere, though it should use the suggested path if it has
+    /// no "better idea" (like reusing existing cache).
+    Suggested(PathBuf),
+    /// The job is responsible for finding a place for artifacts.
+    Whatever,
+}
+
+
 #[derive(Clone, Debug)]
 pub struct Ide;
 
@@ -64,3 +75,29 @@ impl Ide {
         .boxed()
     }
 }
+//
+// impl IsTarget for Ide {
+//     type BuildInput = BuildInput;
+//     type Output = Artifact;
+//
+//     fn artifact_name(&self) -> &str {
+//         // Version is not part of the name intentionally. We want to refer to PM bundles as
+//         // artifacts without knowing their version.
+//         static NAME: SyncLazy<String> = SyncLazy::new(|| format!("gui-{}", TARGET_OS));
+//         &*NAME
+//     }
+//
+//     fn build(
+//         &self,
+//         input: Self::BuildInput,
+//         output_path: impl AsRef<Path> + Send + Sync + 'static,
+//     ) -> BoxFuture<'static, Result<Self::Output>> {
+//         let ide_desktop = crate::ide::web::IdeDesktop::new(&input.repo_root.app.ide_desktop);
+//         async move {
+//             let (gui, project_manager) = try_join(input.gui, input.project_manager).await?;
+//             ide_desktop.dist(&gui, &project_manager, &output_path).await?;
+//             Ok(Artifact::new(&input.version, output_path.as_ref()))
+//         }
+//         .boxed()
+//     }
+// }

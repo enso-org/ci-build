@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+use crate::new_command_type;
 use tempfile::TempDir;
 
 use crate::programs::Cargo;
@@ -7,10 +8,24 @@ use crate::programs::Cargo;
 pub struct WasmPack;
 
 impl Program for WasmPack {
+    type Command = WasmPackCommand;
     fn executable_name() -> &'static str {
         "wasm-pack"
     }
 }
+
+
+
+new_command_type! {WasmPack, WasmPackCommand}
+
+impl WasmPackCommand {
+    pub fn build(mut self) -> WasmPackBuildCommand {
+        self.arg("build");
+        self.into_inner().into()
+    }
+}
+
+new_command_type! {WasmPack, WasmPackBuildCommand}
 
 pub async fn install_if_missing() -> Result {
     let temp = TempDir::new()?;

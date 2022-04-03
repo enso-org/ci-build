@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use anyhow::Context;
+use std::time::Duration;
 
 use crate::archive::Format;
 use crate::global::progress_bar;
@@ -14,7 +15,7 @@ pub async fn download(url: impl IntoUrl) -> Result<impl Stream<Item = reqwest::R
 pub async fn download_all(url: impl IntoUrl) -> anyhow::Result<Bytes> {
     let url = url.into_url()?;
     let bar = progress_bar(indicatif::ProgressBar::new_spinner);
-    bar.enable_steady_tick(10);
+    bar.enable_steady_tick(Duration::from_millis(100));
     bar.set_message(format!("Downloading {}", url));
     let response = reqwest::get(url).await?;
     if let Some(e) = response.error_for_status_ref().err() {

@@ -2,7 +2,6 @@ use crate::prelude::*;
 
 use ide_ci::env::Variable;
 use ide_ci::programs::Go;
-use std::process::Stdio;
 use tokio::process::Child;
 
 pub mod env {
@@ -21,9 +20,7 @@ pub struct Spawned {
 
 pub async fn get_and_spawn_httpbin(port: u16) -> Result<Spawned> {
     Go.call_args(["get", "-v", "github.com/ahmetb/go-httpbin/cmd/httpbin"]).await?;
-    let gopath = String::from_utf8(
-        Go.cmd()?.args(["env", "GOPATH"]).stdout(Stdio::piped()).output().await?.stdout,
-    )?;
+    let gopath = Go.cmd()?.args(["env", "GOPATH"]).run_stdout().await?;
     let gopath = gopath.trim();
     let gopath = PathBuf::from(gopath); // be careful of trailing newline!
     let program = gopath.join("bin").join("httpbin");

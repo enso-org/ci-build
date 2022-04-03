@@ -22,9 +22,8 @@ impl VsWhere {
             .args(Option::Required(vec![component]).format_arguments())
             .args(Option::ForceUTF8.format_arguments());
 
-        let stdout = command.output().await?.stdout;
-        let out = String::from_utf8(stdout)?;
-        serde_json::from_str(&out).anyhow_err()
+        let stdout = command.run_stdout().await?;
+        serde_json::from_str(&stdout).anyhow_err()
     }
 
     pub async fn find_with(component: Component) -> Result<InstanceInfo> {
@@ -35,9 +34,8 @@ impl VsWhere {
             .args(Option::ForceUTF8.format_arguments())
             .args(["-products", "*"]); // FIXME add types
 
-        let stdout = command.output().await?.stdout;
-        let out = String::from_utf8(stdout)?;
-        let instances = serde_json::from_str::<Vec<InstanceInfo>>(&out)?;
+        let stdout = command.run_stdout().await?;
+        let instances = serde_json::from_str::<Vec<InstanceInfo>>(&stdout)?;
         Ok(instances.into_iter().next().ok_or(NoMsvcInstallation)?)
     }
 

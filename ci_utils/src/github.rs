@@ -1,8 +1,14 @@
 use crate::prelude::*;
 use anyhow::Context;
+use octocrab::models::ArtifactId;
 use octocrab::models::ReleaseId;
+use octocrab::models::RunId;
+use std::io::Cursor;
 
+use crate::global::new_spinner;
 use octocrab::models::repos::Release;
+use octocrab::models::workflows::WorkflowListArtifact;
+use octocrab::params::actions::ArchiveFormat;
 
 const MAX_PER_PAGE: u8 = 100;
 
@@ -81,6 +87,49 @@ pub trait RepoPointer: Display {
             .into_iter()
             .find(|release| release.tag_name.contains(text))
             .ok_or_else(|| anyhow!("No release with tag matching {}", text))
+    }
+
+    async fn find_artifact_by_name(
+        &self,
+        client: &Octocrab,
+        run_id: RunId,
+        name: &str,
+    ) -> Result<WorkflowListArtifact> {
+        let artifacts = client
+            .actions()
+            .list_workflow_run_artifacts(self.owner(), self.name(), run_id)
+            .per_page(100)
+            .send()
+            .await?
+            .value
+            .context(format!("Failed to find any artifacts."))?;
+
+        artifacts
+            .into_iter()
+            .find(|artifact| artifact.name == name)
+            .context(format!("Failed to find artifact by name '{name}'."))
+    }
+
+    async fn download_artifact(&self, client: &Octocrab, artifact_id: ArtifactId) -> Result<Bytes> {
+        let _bar = new_spinner(format!("Downloading artifact id={}", artifact_id));
+        client
+            .actions()
+            .download_artifact(self.owner(), self.name(), artifact_id, ArchiveFormat::Zip)
+            .await
+            .anyhow_err()
+    }
+
+    async fn download_and_unpack_artifact(
+        &self,
+        client: &Octocrab,
+        artifact_id: ArtifactId,
+        output_dir: &Path,
+    ) -> Result {
+        let bytes = self.download_artifact(client, artifact_id).await?;
+        let _bar = new_spinner(format!("Extracting artifact id={}", artifact_id));
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
+        archive.extract(output_dir)?;
+        Ok(())
     }
 }
 

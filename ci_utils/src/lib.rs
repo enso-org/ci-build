@@ -96,6 +96,8 @@ pub mod prelude {
     pub use std::iter::once;
     pub use std::iter::FromIterator;
     pub use std::marker::PhantomData;
+    pub use std::ops::Deref;
+    pub use std::ops::DerefMut;
     pub use std::ops::Range;
     pub use std::path::Path;
     pub use std::path::PathBuf;
@@ -119,6 +121,7 @@ pub mod prelude {
     pub use crate::github::RepoPointer;
     pub use crate::goodie::Goodie;
     pub use crate::program::command::Command;
+    pub use crate::program::command::IsCommandWrapper;
     pub use crate::program::Program;
     pub use crate::program::ProgramExt;
     pub use crate::program::Shell;

@@ -1,6 +1,7 @@
 use crate::prelude::*;
 
-use ide_ci::actions::workflow::is_in_env;
+use ide_ci::models::config::RepoContext;
+use octocrab::models::RunId;
 
 pub mod gui;
 pub mod ide;
@@ -69,37 +70,7 @@ pub trait IsTarget: Sized {
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Self::Output>>;
 
-    fn get(
-        &self,
-        source: Source,
-        get_inputs: impl FnOnce() -> Result<Self::BuildInput> + Send + 'static,
-        output: PathBuf,
-    ) -> BoxFuture<'static, Result<Self::Output>> {
-        match source {
-            Source::BuildLocally => match get_inputs() {
-                Ok(inputs) => self.build(inputs, output),
-                Err(e) => ready(Err(e)).boxed(),
-            },
-            Source::OngoingCiRun => {
-                let artifact_name = self.artifact_name().to_string();
-                async move {
-                    ide_ci::actions::artifacts::download_single_file_artifact(
-                        artifact_name,
-                        output.as_path(),
-                    )
-                    .await?;
-                    Self::Output::from_existing(output).await
-                }
-                .boxed()
-            }
-            Source::LocalFile(source_dir) => async move {
-                ide_ci::fs::mirror_directory(source_dir, output.as_path()).await?;
-                Self::Output::from_existing(output).await
-            }
-            .boxed(),
-        }
-    }
-
+    /// Upload artifact to the current GitHub Actions run.
     fn upload_artifact(
         &self,
         output: impl Future<Output = Result<Self::Output>> + Send + 'static,
@@ -107,25 +78,38 @@ pub trait IsTarget: Sized {
         let name = self.artifact_name().to_string();
         async move {
             info!("Starting upload of {name}.");
-            // Note that this will not attempt getting artifact if it does not need it.
-            if is_in_env() {
-                let output = output.await?;
-                ide_ci::actions::artifacts::upload_directory(output.as_ref(), &name).await?;
-                info!("Completed upload of {name}.");
-            } else {
-                warn!(
-                    "Aborting upload of {name} because we are not in GitHub Actions environment."
-                );
-            }
+            let output = output.await?;
+            ide_ci::actions::artifacts::upload_directory(output.as_ref(), &name).await?;
+            info!("Completed upload of {name}.");
             Ok(())
+        }
+        .boxed()
+    }
+
+    fn download_artifact(
+        &self,
+        ci_run: CiRunSource,
+        output_path: impl AsRef<Path> + Send + Sync + 'static,
+    ) -> BoxFuture<'static, Result<Self::Output>> {
+        let CiRunSource { run_id, artifact_name, repository, octocrab } = ci_run;
+        let artifact_name = artifact_name.unwrap_or_else(|| self.artifact_name().to_string());
+        async move {
+            let artifact =
+                repository.find_artifact_by_name(&octocrab, run_id, &artifact_name).await?;
+            info!("Will download artifact: {:#?}", artifact);
+            ide_ci::fs::reset_dir(&output_path)?;
+            repository
+                .download_and_unpack_artifact(&octocrab, artifact.id, output_path.as_ref())
+                .await?;
+            Self::Output::from_existing(output_path).await
         }
         .boxed()
     }
 }
 
-
-pub enum Source {
-    BuildLocally,
-    OngoingCiRun,
-    LocalFile(PathBuf),
+pub struct CiRunSource {
+    pub octocrab:      Octocrab,
+    pub repository:    RepoContext,
+    pub run_id:        RunId,
+    pub artifact_name: Option<String>,
 }

@@ -80,7 +80,7 @@ pub async fn compare_env(
     cmd.args(COMMAND_GLUE.iter());
     f(&mut cmd);
     add_next_command(&mut cmd, ["set"]);
-    let output = cmd.output().await?;
+    let output = cmd.output_ok().await?;
     let outputs =
         split_command_outputs(&output.stdout).map(std::str::from_utf8).collect_result()?;
 

@@ -30,7 +30,7 @@ glob = "0.3.0"
 graphql_client = "0.10.0"
 ifmt = "0.3.3"
 indexmap = "1.7.0"
-indicatif = "0.16.2"
+indicatif = "0.17.0-rc.9"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
 log = "0.4.14"
@@ -62,7 +62,7 @@ syn = "1.0.86"
 sysinfo = "0.22.2"
 tar = "0.4.37"
 tempfile = "3.2.0"
-tokio = { version = "1.15.0", features = ["full"] }
+tokio = { version = "1.15.0", features = ["full", "tracing"] }
 tokio-util = {version = "0.6.9", features = ["full"] }
 unicase = "2.6.0"
 url = "2.2.2"
