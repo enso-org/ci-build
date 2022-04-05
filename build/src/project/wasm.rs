@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use anyhow::Context;
 
 use crate::project::wasm::js_patcher::patch_js_glue_in_place;
 // use crate::paths::generated::Parameters;
@@ -14,12 +15,14 @@ use ide_ci::programs::Cargo;
 use tokio::process::Child;
 
 pub mod js_patcher;
+pub mod test;
 
 
 pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
 pub const OUTPUT_NAME: &str = "ide";
 pub const TARGET_CRATE: &str = "app/gui";
 
+#[derive(Clone, Debug)]
 pub struct BuildInput {
     pub repo_root:  RepoRoot,
     /// Path to the crate to be compiled to WAM. Relative to the repository root.
@@ -27,7 +30,7 @@ pub struct BuildInput {
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Wasm;
 
 #[async_trait]
@@ -113,6 +116,9 @@ impl IsArtifact for Artifacts {
 
 impl Wasm {
     pub fn watch(&self, input: BuildInput, output_path: PathBuf) -> Result<Watcher> {
+        // TODO
+        // This is not nice, as this module should not be aware of the CLI parsing/generation.
+        // Rather than using `cargo watch` this should be implemented directly in Rust.
         let child = Cargo
             .cmd()?
             .arg("watch")
@@ -122,10 +128,88 @@ impl Wasm {
             .args(["--repo-path", input.repo_root.as_str()])
             // FIXME crate name
             .arg("wasm")
+            .arg("build")
             .args(["--wasm-output-path", output_path.as_str()])
             .spawn()?;
         let ret = RepoRootDistWasm::new(output_path);
         Ok(Watcher { artifacts: Artifacts(ret), watch_process: child })
+    }
+
+    pub async fn check(&self) -> Result {
+        Cargo
+            .cmd()?
+            .args(["check", "--workspace", "-p", "enso-integration-test", "--all-targets"])
+            .run_ok()
+            .await
+    }
+
+    pub async fn test(&self, repo_root: PathBuf, wasm: bool, native: bool) -> Result {
+        async fn maybe_run<Fut: Future<Output = Result>>(
+            name: &str,
+            enabled: bool,
+            f: impl (FnOnce() -> Fut),
+        ) -> Result {
+            if enabled {
+                info!("Will run {name} tests.");
+                f().await.context(format!("Running {name} tests."))
+            } else {
+                info!("Skipping {name} tests.");
+                Ok(())
+            }
+        }
+
+        maybe_run("native", native, async || {
+            Cargo
+                .cmd()?
+                .current_dir(repo_root.clone())
+                .arg("test")
+                .arg("--workspace")
+                .run_ok()
+                .await
+        })
+        .await?;
+
+        maybe_run("wasm", wasm, || test::test_all(repo_root.clone())).await?;
+        // let native_job = async move  {
+        //     if native {
+        //         info!("Will run native tests.");
+        //         Cargo.cmd()?.arg("test").arg("--workspace").run_ok().await
+        //     } else {
+        //         info!("Skipping native tests.");
+        //         Ok(())
+        //     }
+        // };
+        // let wasm_job = async move  {
+        //     if wasm {
+        //         info!("Will run WASM tests.");
+        //         Cargo.cmd()?.arg("test").arg("--workspace").run_ok().await
+        //     } else {
+        //         info!("Skipping WASM tests.");
+        //         Ok(())
+        //     }
+        // };
+        // let wasm_job = Cargo
+        //     .cmd()?
+        //     .arg("run")
+        //     .args(["--manifest-path", "build/rust-scripts/Cargo.toml"])
+        //     .args(["--bin", "test_all"])
+        //     .arg("--")
+        //     .arg("--headless")
+        //     .arg("--chrome")
+        //     .env("WASM_BINDGEN_TEST_TIMEOUT", "60")
+        //     .run_ok();
+
+        // if (argv.native) {
+        //     console.log(`Running Rust test suite.`)
+        //     await run_cargo('cargo', ['test', '--workspace'])
+        // }
+        //
+        // if (argv.wasm) {
+        //     console.log(`Running Rust WASM test suite.`)
+        //     process.env.WASM_BINDGEN_TEST_TIMEOUT = 60
+        //     await run_cargo('cargo', args)
+        // }
+        Ok(())
     }
 }
 

@@ -53,7 +53,7 @@ impl<T> PlainArtifact<T> {
 
 pub trait IsTarget: Sized {
     /// All the data needed to build this target that are not placed in `self`.
-    type BuildInput: Send + 'static;
+    type BuildInput: Debug + Send + 'static;
 
     /// A location-like value with the directory where the artifacts are placed.
     type Output: IsArtifact;
@@ -107,6 +107,7 @@ pub trait IsTarget: Sized {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct CiRunSource {
     pub octocrab:      Octocrab,
     pub repository:    RepoContext,

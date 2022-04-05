@@ -97,7 +97,12 @@ pub trait Program: Sized + 'static {
         if let Some(current_dir) = self.current_directory() {
             command.borrow_mut().current_dir(current_dir);
         }
+        self.init_command(&mut command);
         Ok(command)
+    }
+
+    fn init_command<'a>(&self, cmd: &'a mut Self::Command) -> &'a mut Self::Command {
+        cmd
     }
 
     fn current_directory(&self) -> Option<PathBuf> {

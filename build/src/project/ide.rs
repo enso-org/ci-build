@@ -9,6 +9,7 @@ use platforms::TARGET_OS;
 
 pub struct Artifact {
     pub unpacked:       PathBuf,
+    // pub packed:         PathBuf,
     pub image:          PathBuf,
     pub image_checksum: PathBuf,
 }
@@ -38,11 +39,21 @@ impl Artifact {
         Ok(())
     }
 }
+//
+// impl IsArtifact for Artifact {
+//     fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
+//         todo!()
+//     }
+// }
 
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 pub struct BuildInput {
     pub repo_root:       RepoRoot,
     pub version:         Version,
+    #[derivative(Debug = "ignore")]
     pub project_manager: BoxFuture<'static, Result<crate::project::project_manager::Artifact>>,
+    #[derivative(Debug = "ignore")]
     pub gui:             BoxFuture<'static, Result<crate::project::gui::Artifact>>,
 }
 
@@ -75,7 +86,7 @@ impl Ide {
         .boxed()
     }
 }
-//
+
 // impl IsTarget for Ide {
 //     type BuildInput = BuildInput;
 //     type Output = Artifact;

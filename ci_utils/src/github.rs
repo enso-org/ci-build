@@ -100,7 +100,8 @@ pub trait RepoPointer: Display {
             .list_workflow_run_artifacts(self.owner(), self.name(), run_id)
             .per_page(100)
             .send()
-            .await?
+            .await
+            .context(format!("Failed to list artifacts of run {run_id} in {}.", self))?
             .value
             .context(format!("Failed to find any artifacts."))?;
 

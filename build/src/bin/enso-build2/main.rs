@@ -1,5 +1,7 @@
 #![feature(explicit_generic_args_with_impl_trait)]
 #![feature(once_cell)]
+#![feature(exit_status_error)]
+#![feature(associated_type_defaults)]
 
 pub mod arg;
 pub use enso_build::prelude;
@@ -7,25 +9,18 @@ pub use enso_build::prelude;
 use enso_build::prelude::*;
 
 use crate::arg::Cli;
-use crate::arg::GuiCommand;
-use crate::arg::GuiTarget;
-use crate::arg::IdeCommand;
-use crate::arg::IdeTarget;
 use crate::arg::IsTargetSource;
-use crate::arg::ProjectManagerTarget;
 use crate::arg::Target;
-use crate::arg::TargetSource;
-use crate::arg::TargetSourceArg;
-use crate::arg::WasmTarget;
 use anyhow::Context;
 use clap::Parser;
 use enso_build::args::BuildKind;
 use enso_build::paths::generated::RepoRoot;
 use enso_build::paths::TargetTriple;
-use enso_build::project::gui::BuildInfo;
+use enso_build::project::gui;
 use enso_build::project::gui::Gui;
-use enso_build::project::gui::GuiInputs;
+use enso_build::project::ide;
 use enso_build::project::ide::Ide;
+use enso_build::project::project_manager;
 use enso_build::project::project_manager::ProjectManager;
 use enso_build::project::wasm;
 use enso_build::project::wasm::Wasm;
@@ -42,14 +37,22 @@ use std::any::type_name;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 
-pub enum Source {
-    BuildLocally,
+#[derive(Debug)]
+pub enum Source<Target: IsTarget> {
+    BuildLocally(Target::BuildInput),
     OngoingCiRun,
     CiRun(CiRunSource),
     LocalFile(PathBuf),
 }
 
-/// The basic, common information provided by this entry point.
+#[derive(Debug)]
+pub struct GetTargetJob<Target: IsTarget> {
+    pub source:      Source<Target>,
+    pub destination: PathBuf,
+}
+
+/// The basic, common information available in this application.
+#[derive(Clone, Debug)]
 pub struct BuildContext {
     /// GitHub API client.
     ///
@@ -94,13 +97,20 @@ impl BuildContext {
         })
     }
 
-    pub fn resolve<T: IsTargetSource>(&self, source: &TargetSourceArg<T>) -> Result<Source> {
-        Ok(match source.source {
-            TargetSource::Build => Source::BuildLocally,
-            TargetSource::Local => Source::LocalFile(
+    pub fn resolve<T: IsTargetSource + IsTarget>(
+        &self,
+        source: arg::Source<T>,
+    ) -> Result<GetTargetJob<T>>
+    where
+        T: Resolvable,
+    {
+        let destination = source.output_path.output_path;
+        let source = match source.source {
+            arg::SourceKind::Build => Source::BuildLocally(T::resolve(self, source.build_args)?),
+            arg::SourceKind::Local => Source::LocalFile(
                 source.path.clone().context("Missing path to the local artifacts!")?,
             ),
-            TargetSource::CiRun => Source::CiRun(CiRunSource {
+            arg::SourceKind::CiRun => Source::CiRun(CiRunSource {
                 octocrab:      self.octocrab.clone(),
                 run_id:        source.run_id.context(format!(
                     "Missing run ID, please provide {} argument.",
@@ -109,12 +119,10 @@ impl BuildContext {
                 repository:    self.remote_repo.clone(),
                 artifact_name: source.artifact_name.clone(),
             }),
-            // TargetSource::OngoingCiRun => Source::OngoingCiRun,
-            TargetSource::Whatever => {
-                todo!()
-            }
-        })
+        };
+        Ok(GetTargetJob { source, destination })
     }
+
 
     pub fn commit(&self) -> BoxFuture<'static, Result<String>> {
         let root = self.source_root.clone();
@@ -127,18 +135,11 @@ impl BuildContext {
         .boxed()
     }
 
-    pub fn wasm_build_input(&self) -> wasm::BuildInput {
-        wasm::BuildInput {
-            crate_path: PathBuf::from(wasm::TARGET_CRATE), // FIXME name as arg
-            repo_root:  self.repo_root(),
-        }
-    }
-
-    pub fn js_build_info(&self) -> BoxFuture<'static, Result<BuildInfo>> {
+    pub fn js_build_info(&self) -> BoxFuture<'static, Result<gui::BuildInfo>> {
         let triple = self.triple.clone();
         let commit = self.commit();
         async move {
-            Ok(BuildInfo {
+            Ok(gui::BuildInfo {
                 commit:         commit.await?,
                 name:           "Enso IDE".into(),
                 version:        triple.versions.version.clone(),
@@ -156,20 +157,33 @@ impl BuildContext {
         }
     }
 
-    pub fn get<Target: IsTarget + IsTargetSource + Send + Sync + 'static>(
+    pub fn resolve_inputs<T: Resolvable>(
+        &self,
+        inputs: <T as IsTargetSource>::BuildInput,
+    ) -> Result<<T as IsTarget>::BuildInput> {
+        T::resolve(self, inputs)
+    }
+
+    pub fn get<Target>(
         &self,
         target: Target,
-        target_source: TargetSourceArg<Target>,
-        inputs: Target::BuildInput,
-    ) -> BoxFuture<'static, Result<Target::Output>> {
-        let output_path = target_source.output_path.clone();
-        let source = self.resolve(&target_source);
-        // We upload only built artifacts. There would be no point in uploading something that we've
-        // just downloaded.
-        let should_upload_artifact = target_source.source == TargetSource::Build && is_in_env();
+        target_source: arg::Source<Target>,
+    ) -> BoxFuture<'static, Result<Target::Output>>
+    where
+        Target: IsTarget + IsTargetSource + Send + Sync + 'static,
+        Target: Resolvable,
+    {
+        let get_task = self.resolve(target_source);
+
         async move {
             info!("Getting target {}.", type_name::<Target>());
-            let artifact = get_target(&target, source?, move || Ok(inputs), output_path).await?;
+            let get_task = get_task?;
+
+            // We upload only built artifacts. There would be no point in uploading something that
+            // we've just downloaded.
+            let should_upload_artifact =
+                matches!(get_task.source, Source::BuildLocally(_)) && is_in_env();
+            let artifact = get_target(&target, get_task).await?;
             info!(
                 "Got target {}, should it be uploaded? {}",
                 type_name::<Target>(),
@@ -191,113 +205,280 @@ impl BuildContext {
         RepoRoot::new(&self.source_root, &self.triple.to_string())
     }
 
-    pub fn get_wasm(&self, source: WasmTarget) -> BoxFuture<'static, Result<wasm::Artifacts>> {
-        let input = self.wasm_build_input();
-        self.get(Wasm, source.wasm, input)
-    }
-
-    pub fn gui_inputs(&self, wasm: TargetSourceArg<Wasm>) -> GuiInputs {
-        let wasm = self.get_wasm(WasmTarget { wasm });
-        let build_info = self.js_build_info().boxed();
-        let repo_root = self.repo_root();
-        GuiInputs { wasm, build_info, repo_root }
-    }
-
-    pub fn get_gui(&self, source: GuiTarget) -> BoxFuture<'static, Result> {
-        match source.command {
-            GuiCommand::Build => {
-                let inputs = self.gui_inputs(source.wasm.clone());
-                let build = self.get(Gui, source.gui, inputs);
-                build.map(|_| Ok(())).boxed()
-            }
-            GuiCommand::Watch => {
-                let build_info = self.js_build_info().boxed();
-                let repo_root = self.repo_root();
-                let watcher = Wasm.watch(self.wasm_build_input(), source.wasm.output_path);
+    pub fn handle_wasm(&self, wasm: arg::wasm::Target) -> BoxFuture<'static, Result> {
+        match wasm.command {
+            arg::wasm::Command::Watch { params, output_path } => {
+                let inputs = self.resolve_inputs::<Wasm>(params);
                 async move {
-                    let wasm::Watcher { mut watch_process, artifacts } = watcher?;
-                    let inputs =
-                        GuiInputs { wasm: ready(Ok(artifacts)).boxed(), build_info, repo_root };
-                    let js_watch = Gui.watch(inputs);
-                    try_join(watch_process.wait().map_err(anyhow::Error::from), js_watch)
-                        .map_ok(|_| ())
-                        .await
-                }
-                .boxed()
-            }
-        }
-    }
-
-    pub fn get_project_manager(
-        &self,
-        source: ProjectManagerTarget,
-    ) -> BoxFuture<'static, Result<enso_build::project::project_manager::Artifact>> {
-        let input = enso_build::project::project_manager::BuildInput {
-            repo_root: self.source_root.clone(),
-            versions:  self.triple.versions.clone(),
-            octocrab:  self.octocrab.clone(),
-        };
-        self.get(ProjectManager, source.project_manager, input)
-    }
-
-    pub fn get_ide(&self, source: IdeTarget) -> BoxFuture<'static, Result> {
-        match source.command {
-            IdeCommand::Build => {
-                let input = enso_build::project::ide::BuildInput {
-                    repo_root:       self.repo_root(),
-                    version:         self.triple.versions.version.clone(),
-                    project_manager: self.get_project_manager(ProjectManagerTarget {
-                        project_manager: source.project_manager,
-                    }),
-                    gui:             self.get(Gui, source.gui, self.gui_inputs(source.wasm)),
-                };
-                async move {
-                    Ide.build(input, source.ide_output_path).await?;
+                    let mut watcher = Wasm.watch(inputs?, output_path.output_path)?;
+                    watcher.watch_process.wait().await?.exit_ok()?;
                     Ok(())
                 }
                 .boxed()
             }
-            IdeCommand::Watch => {
-                todo!()
+            arg::wasm::Command::Build { params, output_path } => {
+                let inputs = self.resolve_inputs::<Wasm>(params);
+                async move { Wasm.build(inputs?, output_path.output_path).map_ok(|_| ()).await }
+            }
+            .boxed(),
+            arg::wasm::Command::Check => Wasm.check().boxed(),
+            arg::wasm::Command::Test { no_wasm, no_native } =>
+                Wasm.test(self.repo_root().path, !no_wasm, !no_native).boxed(),
+            arg::wasm::Command::Get { source } => {
+                let source = self.resolve(source);
+                async move {
+                    get_target(&Wasm, source?).await?;
+                    Ok(())
+                }
+                .boxed()
             }
         }
-        // let input = enso_build::project::ide::BuildInput {
-        //     repo_root: self.repo_root(),
-        //     version:  self.triple.versions.version.clone(),
-        //     project_manager: self.get_project_manager(source.project_manager_source),
-        //     gui:             self.gBoxFuture<'static, Result<crate::project::gui::Artifact>>,
-        // };
-        // self.get(Ide, source.ide_source, input)
+    }
+
+    pub fn handle_gui(&self, gui: arg::gui::Target) -> BoxFuture<'static, Result> {
+        match gui.command {
+            arg::gui::Command::Get { source } => {
+                let job = self.get(Gui, source);
+                async move {
+                    job.await?;
+                    Ok(())
+                }
+                .boxed()
+            }
+            arg::gui::Command::Watch { wasm } => {
+                let wasm = self.resolve(wasm);
+
+                let (wasm_artifact, wasm_watcher) = match wasm {
+                    Ok(job) => match job.source {
+                        Source::BuildLocally(wasm_input) => {
+                            let watcher = Wasm.watch(wasm_input, job.destination.clone());
+                            let artifact = wasm::Artifacts::from_existing(&job.destination);
+                            (artifact, watcher.ok())
+                        }
+                        external_source => (
+                            get_target(&Wasm, GetTargetJob {
+                                destination: job.destination,
+                                source:      external_source,
+                            }),
+                            None,
+                        ),
+                    },
+                    Err(e) =>
+                        return async move { bail!("Failed to resolve wasm description: {e}") }
+                            .boxed(),
+                };
+
+                let input = gui::GuiInputs {
+                    repo_root:  self.repo_root(),
+                    build_info: self.js_build_info(),
+                    wasm:       wasm_artifact,
+                };
+
+                async move {
+                    let gui_watcher = Gui.watch(input);
+                    if let Some(mut wasm_watcher) = wasm_watcher {
+                        try_join(
+                            wasm_watcher.watch_process.wait().map_err(anyhow::Error::from),
+                            gui_watcher,
+                        )
+                        .await?;
+                    } else {
+                        gui_watcher.await?;
+                    }
+                    Ok(())
+                }
+                .boxed()
+            }
+        }
+    }
+
+    pub fn handle_project_manager(
+        &self,
+        project_manager: arg::project_manager::Target,
+    ) -> BoxFuture<'static, Result> {
+        let job = self.get(ProjectManager, project_manager.source);
+        async move {
+            job.await?;
+            Ok(())
+        }
+        .boxed()
+    }
+
+    pub fn handle_ide(&self, ide: arg::ide::Target) -> BoxFuture<'static, Result> {
+        let input = ide::BuildInput {
+            gui:             self.get(Gui, ide.gui),
+            project_manager: self.get(ProjectManager, ide.project_manager),
+            repo_root:       self.repo_root(),
+            version:         self.triple.versions.version.clone(),
+        };
+        async move {
+            Ide.build(input, ide.output_path).await?;
+            Ok(())
+        }
+        .boxed()
+        // let job = self.get(ProjectManager, project_manager.source);
+        // async move {
+        //     job.await?;
+        //     Ok(())
+        // }
+        // .boxed()
+    }
+    // pub fn gui_inputs(&self, wasm: arg::TargetSource<Wasm>) -> GuiInputs {
+    //     let wasm = self.handle_wasm(WasmTarget { wasm });
+    //     let build_info = self.js_build_info().boxed();
+    //     let repo_root = self.repo_root();
+    //     GuiInputs { wasm, build_info, repo_root }
+    // }
+    //
+    // pub fn get_gui(&self, source: GuiTarget) -> BoxFuture<'static, Result> {
+    //     match source.command {
+    //         GuiCommand::Build => {
+    //             let inputs = self.gui_inputs(source.wasm.clone());
+    //             let build = self.get(Gui, source.gui, inputs);
+    //             build.map(|_| Ok(())).boxed()
+    //         }
+    //         GuiCommand::Watch => {
+    //             let build_info = self.js_build_info().boxed();
+    //             let repo_root = self.repo_root();
+    //             let watcher = Wasm.watch(self.wasm_build_input(), source.wasm.output_path);
+    //             async move {
+    //                 let wasm::Watcher { mut watch_process, artifacts } = watcher?;
+    //                 let inputs =
+    //                     GuiInputs { wasm: ready(Ok(artifacts)).boxed(), build_info, repo_root };
+    //                 let js_watch = Gui.watch(inputs);
+    //                 try_join(watch_process.wait().map_err(anyhow::Error::from), js_watch)
+    //                     .map_ok(|_| ())
+    //                     .await
+    //             }
+    //             .boxed()
+    //         }
+    //     }
+    // }
+    //
+    // pub fn get_project_manager(
+    //     &self,
+    //     source: ProjectManagerTarget,
+    // ) -> BoxFuture<'static, Result<enso_build::project::project_manager::Artifact>> {
+    //     let input = enso_build::project::project_manager::BuildInput {
+    //         repo_root: self.source_root.clone(),
+    //         versions:  self.triple.versions.clone(),
+    //         octocrab:  self.octocrab.clone(),
+    //     };
+    //     self.get(ProjectManager, source.project_manager, input)
+    // }
+    //
+    // pub fn get_ide(&self, source: IdeTarget) -> BoxFuture<'static, Result> {
+    //     match source.command {
+    //         IdeCommand::Build => {
+    //             let input = enso_build::project::ide::BuildInput {
+    //                 repo_root:       self.repo_root(),
+    //                 version:         self.triple.versions.version.clone(),
+    //                 project_manager: self.get_project_manager(ProjectManagerTarget {
+    //                     project_manager: source.project_manager,
+    //                 }),
+    //                 gui:             self.get(Gui, source.gui, self.gui_inputs(source.wasm)),
+    //             };
+    //             async move {
+    //                 Ide.build(input, source.ide_output_path).await?;
+    //                 Ok(())
+    //             }
+    //             .boxed()
+    //         }
+    //         IdeCommand::Watch => {
+    //             todo!()
+    //         }
+    //     }
+    // }
+}
+
+pub trait Resolvable: IsTarget + IsTargetSource {
+    fn resolve(
+        ctx: &BuildContext,
+        from: <Self as IsTargetSource>::BuildInput,
+    ) -> Result<<Self as IsTarget>::BuildInput>;
+}
+
+impl Resolvable for Wasm {
+    fn resolve(
+        ctx: &BuildContext,
+        from: <Self as IsTargetSource>::BuildInput,
+    ) -> Result<<Self as IsTarget>::BuildInput> {
+        Ok(wasm::BuildInput { repo_root: ctx.repo_root(), crate_path: from.crate_path })
     }
 }
 
+impl Resolvable for Gui {
+    fn resolve(
+        ctx: &BuildContext,
+        from: <Self as IsTargetSource>::BuildInput,
+    ) -> Result<<Self as IsTarget>::BuildInput> {
+        Ok(gui::GuiInputs {
+            wasm:       ctx.get(Wasm, from.wasm),
+            repo_root:  ctx.repo_root(),
+            build_info: ctx.js_build_info(),
+        })
+    }
+}
+
+impl Resolvable for ProjectManager {
+    fn resolve(
+        ctx: &BuildContext,
+        _from: <Self as IsTargetSource>::BuildInput,
+    ) -> Result<<Self as IsTarget>::BuildInput> {
+        Ok(project_manager::BuildInput {
+            repo_root: ctx.repo_root().path,
+            octocrab:  ctx.octocrab.clone(),
+            versions:  ctx.triple.versions.clone(),
+        })
+    }
+}
+
+//
+// pub async fn get_external<Target: IsTarget>(
+//     target: Target,
+//     source: ExternalSource,
+//     output: PathBuf,
+// ) -> Result<Target::Output> {
+//     match source {
+//         Source::CiRun(ci_run) => target.download_artifact(ci_run, output).await,
+//         Source::OngoingCiRun => {
+//             let artifact_name = target.artifact_name().to_string();
+//             ide_ci::actions::artifacts::download_single_file_artifact(
+//                 artifact_name,
+//                 output.as_path(),
+//             )
+//             .await?;
+//             Target::Output::from_existing(output).await
+//         }
+//         Source::LocalFile(source_dir) => {
+//             ide_ci::fs::mirror_directory(source_dir, output.as_path()).await?;
+//             Target::Output::from_existing(output).await
+//         }
+//     }
+// }
+
 pub fn get_target<Target: IsTarget>(
     target: &Target,
-    source: Source,
-    get_inputs: impl FnOnce() -> Result<Target::BuildInput> + Send + 'static,
-    output: PathBuf,
+    job: GetTargetJob<Target>,
 ) -> BoxFuture<'static, Result<Target::Output>> {
-    match source {
-        Source::BuildLocally => match get_inputs() {
-            Ok(inputs) => target.build(inputs, output),
-            Err(e) => ready(Err(e)).boxed(),
-        },
-        Source::CiRun(ci_run) => target.download_artifact(ci_run, output),
+    match job.source {
+        Source::BuildLocally(inputs) => target.build(inputs, job.destination),
+        Source::CiRun(ci_run) => target.download_artifact(ci_run, job.destination),
         Source::OngoingCiRun => {
             let artifact_name = target.artifact_name().to_string();
             async move {
                 ide_ci::actions::artifacts::download_single_file_artifact(
                     artifact_name,
-                    output.as_path(),
+                    job.destination.as_path(),
                 )
                 .await?;
-                Target::Output::from_existing(output).await
+                Target::Output::from_existing(job.destination).await
             }
             .boxed()
         }
         Source::LocalFile(source_dir) => async move {
-            ide_ci::fs::mirror_directory(source_dir, output.as_path()).await?;
-            Target::Output::from_existing(output).await
+            ide_ci::fs::mirror_directory(source_dir, job.destination.as_path()).await?;
+            Target::Output::from_existing(job.destination).await
         }
         .boxed(),
     }
@@ -311,50 +492,17 @@ async fn main_internal() -> Result {
     trace!("Parsed CLI arguments: {cli:#?}");
 
     let ctx = BuildContext::new(&cli).await?;
-
     match cli.target {
-        Target::Wasm(wasm) => {
-            ctx.get_wasm(wasm).await?;
-        }
-        Target::Gui(gui) => {
-            ctx.get_gui(gui).await?;
-        }
-        Target::ProjectManager(project_manager) => {
-            ctx.get_project_manager(project_manager).await?;
-        }
-        Target::Ide(ide) => {
-            ctx.get_ide(ide).await?;
-        }
+        Target::Wasm(wasm) => ctx.handle_wasm(wasm).await?,
+        Target::Gui(gui) => ctx.handle_gui(gui).await?,
+        Target::ProjectManager(project_manager) =>
+            ctx.handle_project_manager(project_manager).await?,
+        Target::Ide(ide) => ctx.handle_ide(ide).await?,
     };
     info!("Completed main job.");
     global::complete_tasks().await?;
     Ok(())
 }
-
-// #[tokio::test]
-// async fn watcher() -> Result {
-//     pretty_env_logger::init();
-//     debug!("Test is starting!");
-//     let mut initial_config = WorkingData::default();
-//     initial_config.pathset = vec![r"H:\NBO\enso5".into()];
-//     let (tx, rx) = tokio::sync::watch::channel(initial_config.clone());
-//     tx.send(initial_config)?;
-//     let (errors_tx, errors_rx) = tokio::sync::mpsc::channel(1024);
-//     let (event_tx, mut event_rx) = tokio::sync::mpsc::channel(1024);
-//
-//     let l1 = async move {
-//         debug!("Awaiting events");
-//         while let Some(msg) = event_rx.recv().await {
-//             dbg!(&msg);
-//             warn!("{msg:#?}");
-//         }
-//     };
-//
-//     tokio::spawn(l1);
-//     let worker = watchexec::fs::worker(rx, errors_tx, event_tx);
-//     worker.await?;
-//     Ok(())
-// }
 
 fn main() -> Result {
     let rt = Runtime::new()?;

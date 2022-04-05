@@ -1,20 +1,23 @@
 use crate::prelude::*;
 
+pub mod gui;
+pub mod ide;
+pub mod project_manager;
+pub mod wasm;
+
 use clap::Arg;
 use clap::ArgEnum;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use enso_build::args::BuildKind;
-use enso_build::project::gui::Gui;
-use enso_build::project::ide::Ide;
-use enso_build::project::project_manager::ProjectManager;
-use enso_build::project::wasm::Wasm;
 use ide_ci::models::config::RepoContext;
 use octocrab::models::RunId;
 
 lazy_static! {
     pub static ref DIST_IDE: PathBuf = PathBuf::from_iter(["dist", "ide"]);
+    pub static ref DEFAULT_REPO_PATH: Option<String> =
+        enso_build::repo::deduce_repository_path().map(|p| p.display().to_string());
 }
 
 pub trait ArgExt<'h>: Sized + 'h {
@@ -32,10 +35,6 @@ impl<'h> ArgExt<'h> for Arg<'h> {
     }
 }
 
-lazy_static! {
-    static ref DEFAULT_REPO_PATH: Option<String> =
-        enso_build::repo::deduce_repository_path().map(|p| p.display().to_string());
-}
 
 /// We pass CLI paths through this to make sure that they are absolutized against the initial
 /// working directory, not whatever it will be set to later.
@@ -45,20 +44,8 @@ pub fn normalize_path(path: &str) -> Result<PathBuf> {
     Ok(ret.to_path_buf())
 }
 
-#[derive(Subcommand, Clone, Debug, PartialEq)]
-pub enum GuiCommand {
-    Build,
-    Watch,
-}
-
-#[derive(Subcommand, Clone, Debug, PartialEq)]
-pub enum IdeCommand {
-    Build,
-    Watch,
-}
-
 #[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
-pub enum TargetSource {
+pub enum TargetSourceKind {
     /// Target will be built from the target repository's sources.
     Build,
     /// Target will be copied from the local path.
@@ -68,6 +55,9 @@ pub enum TargetSource {
     Whatever,
 }
 
+#[derive(Args, Clone, Copy, Debug, PartialEq)]
+pub struct NoArgs {}
+
 pub trait IsTargetSource {
     const SOURCE_NAME: &'static str;
     const PATH_NAME: &'static str;
@@ -75,99 +65,33 @@ pub trait IsTargetSource {
     const RUN_ID_NAME: &'static str;
     const ARTIFACT_NAME_NAME: &'static str;
     const DEFAULT_OUTPUT_PATH: &'static str;
+
+    type BuildInput: Args = NoArgs;
 }
 
+#[macro_export]
 macro_rules! source_args_hlp {
-    ($target:ident, $prefix:literal) => {
-        impl IsTargetSource for $target {
+    ($target:ty, $prefix:literal, $inputs:ty) => {
+        impl $crate::arg::IsTargetSource for $target {
             const SOURCE_NAME: &'static str = concat!($prefix, "-", "source");
             const PATH_NAME: &'static str = concat!($prefix, "-", "path");
             const OUTPUT_PATH_NAME: &'static str = concat!($prefix, "-", "output-path");
             const RUN_ID_NAME: &'static str = concat!($prefix, "-", "run-id");
             const ARTIFACT_NAME_NAME: &'static str = concat!($prefix, "-", "artifact-name");
             const DEFAULT_OUTPUT_PATH: &'static str = concat!("dist/", $prefix);
+
+            type BuildInput = $inputs;
         }
     };
 }
 
-source_args_hlp!(Wasm, "wasm");
-source_args_hlp!(Gui, "gui");
-source_args_hlp!(ProjectManager, "project-manager");
-source_args_hlp!(Ide, "ide");
-
-/// This is the CLI representation of a [`Source`] for a given target.
-#[derive(Args, Clone, Debug)]
-pub struct TargetSourceArg<Target: IsTargetSource> {
-    #[clap(name = Target::SOURCE_NAME, arg_enum, default_value_t = TargetSource::Build, long)]
-    pub source: TargetSource,
-
-    /// If source is `local`, this argument is required to give the path.
-    #[clap(name = Target::PATH_NAME, long, required_if_eq(Target::SOURCE_NAME, "local"))]
-    pub path: Option<PathBuf>,
-
-    /// Directory where artifacts should be placed.
-    #[clap(name = Target::RUN_ID_NAME, long, required_if_eq(Target::SOURCE_NAME, "ci-run"))]
-    pub run_id: Option<RunId>,
-
-    /// Artifact name to be used when downloading a run artifact. If not set, the default name can
-    /// be used.
-    #[clap(name = Target::ARTIFACT_NAME_NAME, long)]
-    pub artifact_name: Option<String>,
-
-    /// Directory where artifacts should be placed.
-    #[clap(name = Target::OUTPUT_PATH_NAME, long)]
-    #[clap(parse(try_from_str=normalize_path), default_value=Target::DEFAULT_OUTPUT_PATH)]
-    pub output_path: PathBuf,
-
-    #[clap(skip)]
-    pub phantom: PhantomData<Target>,
-}
-
-#[derive(Args, Clone, Debug)]
-pub struct WasmTarget {
-    #[clap(flatten)]
-    pub wasm: TargetSourceArg<Wasm>,
-}
-
-#[derive(Args, Clone, Debug)]
-pub struct GuiTarget {
-    #[clap(flatten)]
-    pub wasm:    TargetSourceArg<Wasm>,
-    #[clap(flatten)]
-    pub gui:     TargetSourceArg<Gui>,
-    /// Command for GUI package.
-    #[clap(subcommand)]
-    pub command: GuiCommand,
-}
-
-#[derive(Args, Clone, Debug)]
-pub struct ProjectManagerTarget {
-    #[clap(flatten)]
-    pub project_manager: TargetSourceArg<ProjectManager>,
-}
-
-#[derive(Args, Clone, Debug)]
-pub struct IdeTarget {
-    #[clap(flatten)]
-    pub project_manager: TargetSourceArg<ProjectManager>,
-    #[clap(flatten)]
-    pub wasm:            TargetSourceArg<Wasm>,
-    #[clap(flatten)]
-    pub gui:             TargetSourceArg<Gui>,
-    #[clap(default_value=DIST_IDE.as_str())]
-    pub ide_output_path: PathBuf,
-    /// Command for IDE package.
-    #[clap(subcommand)]
-    pub command:         IdeCommand,
-}
-
 #[derive(Subcommand, Clone, Debug)]
 pub enum Target {
-    Wasm(WasmTarget),
-    Gui(GuiTarget),
-    /// Build a bundle with Project Manager. Bundle includes Engine and Runtime.
-    ProjectManager(ProjectManagerTarget),
-    Ide(IdeTarget),
+    Wasm(wasm::Target),
+    Gui(gui::Target),
+    /// Build a bundle with Project Manager. Bundle includes Enso Engine with GraalVM Runtime.
+    ProjectManager(project_manager::Target),
+    Ide(ide::Target),
 }
 
 /// Build, test and packave Enso Engine.
@@ -191,4 +115,59 @@ pub struct Cli {
 
     #[clap(subcommand)]
     pub target: Target,
+}
+
+
+/// Describe where to get a target artifacts from.
+///
+/// This is the CLI representation of a [`Source`] for a given target.
+#[derive(Args, Clone, Debug, PartialEq)]
+pub struct Source<Target: IsTargetSource> {
+    #[clap(name = Target::SOURCE_NAME, arg_enum, long, default_value_t= SourceKind::Build)]
+    pub source: SourceKind,
+
+    /// If source is `local`, this argument is required to give the path.
+    #[clap(name = Target::PATH_NAME, long, required_if_eq(Target::SOURCE_NAME, "local"))]
+    pub path: Option<PathBuf>,
+
+    /// Identifier of the CI run from which the artifacts should be downloaded.
+    #[clap(name = Target::RUN_ID_NAME, long, required_if_eq(Target::SOURCE_NAME, "ci-run"))]
+    pub run_id: Option<RunId>,
+
+    /// Artifact name to be used when downloading a run artifact. If not set, the default name can
+    /// be used.
+    #[clap(name = Target::ARTIFACT_NAME_NAME, long)]
+    pub artifact_name: Option<String>,
+
+    #[clap(flatten)]
+    pub build_args: Target::BuildInput,
+
+    #[clap(flatten)]
+    pub output_path: OutputPath<Target>,
+
+    #[clap(skip)]
+    pub phantom: PhantomData<Target>,
+}
+
+#[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
+pub enum SourceKind {
+    Build,
+    Local,
+    CiRun,
+}
+
+#[derive(Args, Clone, Debug, PartialEq)]
+pub struct OutputPath<Target: IsTargetSource> {
+    /// Directory where artifacts should be placed.
+    #[clap(name = Target::OUTPUT_PATH_NAME, long)]
+    #[clap(parse(try_from_str=normalize_path), default_value=Target::DEFAULT_OUTPUT_PATH)]
+    pub output_path: PathBuf,
+    #[clap(skip)]
+    pub phantom:     PhantomData<Target>,
+}
+
+impl<Target: IsTargetSource> AsRef<Path> for OutputPath<Target> {
+    fn as_ref(&self) -> &Path {
+        self.output_path.as_path()
+    }
 }

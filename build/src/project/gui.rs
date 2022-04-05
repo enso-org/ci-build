@@ -9,13 +9,17 @@ use crate::BoxFuture;
 
 pub type Artifact = PlainArtifact<Gui>;
 
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 pub struct GuiInputs {
     pub repo_root:  RepoRoot,
+    #[derivative(Debug = "ignore")]
     pub wasm:       BoxFuture<'static, Result<wasm::Artifacts>>,
+    #[derivative(Debug = "ignore")]
     pub build_info: BoxFuture<'static, Result<BuildInfo>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Gui;
 
 impl Gui {
