@@ -40,6 +40,7 @@ pub mod programs;
 pub mod project;
 pub mod project_manager;
 pub mod repo;
+pub mod source;
 pub mod version;
 
 /// Get version of Enso from the `build.sbt` file contents.

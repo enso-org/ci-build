@@ -10,6 +10,8 @@ use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
+use crate::project::IsWatchable;
+use crate::project::IsWatcher;
 use ide_ci::env::Variable;
 use ide_ci::programs::Cargo;
 use tokio::process::Child;
@@ -36,7 +38,7 @@ pub struct Wasm;
 #[async_trait]
 impl IsTarget for Wasm {
     type BuildInput = BuildInput;
-    type Output = Artifacts;
+    type Artifact = Artifact;
 
     fn artifact_name(&self) -> &str {
         WASM_ARTIFACT_NAME
@@ -46,7 +48,7 @@ impl IsTarget for Wasm {
         &self,
         input: Self::BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
-    ) -> BoxFuture<'static, Result<Self::Output>> {
+    ) -> BoxFuture<'static, Result<Self::Artifact>> {
         // TODO:
         //   Old script intentionally built everything into temp directory first.
         //   To be checked if this was actually useful for something.
@@ -75,8 +77,38 @@ impl IsTarget for Wasm {
             let ret = RepoRootDistWasm::new(output_path.as_ref());
             patch_js_glue_in_place(&ret.wasm_glue)?;
             ide_ci::fs::rename(&ret.wasm_main_raw, &ret.wasm_main)?;
-            let ret = Artifacts(ret);
+            let ret = Artifact(ret);
             Ok(ret)
+        }
+        .boxed()
+    }
+}
+
+impl IsWatchable for Wasm {
+    fn setup_watcher(
+        &self,
+        input: Self::BuildInput,
+        output_path: impl AsRef<Path> + Send + Sync + 'static,
+    ) -> BoxFuture<'static, Result<Self::Watcher>> {
+        // TODO
+        // This is not nice, as this module should not be aware of the CLI parsing/generation.
+        // Rather than using `cargo watch` this should be implemented directly in Rust.
+        async move {
+            let watch_process = Cargo
+                .cmd()?
+                .current_dir(&input.repo_root)
+                .arg("watch")
+                .args(["--ignore", "README.md"])
+                .arg("--")
+                .args(["enso-build2"])
+                .args(["--repo-path", input.repo_root.as_str()])
+                // FIXME crate name
+                .arg("wasm")
+                .arg("build")
+                .args(["--wasm-output-path", output_path.as_str()])
+                .spawn()?;
+            let artifact = Artifact(RepoRootDistWasm::new(output_path.as_ref()));
+            Ok(Self::Watcher { artifact, watch_process })
         }
         .boxed()
     }
@@ -85,9 +117,9 @@ impl IsTarget for Wasm {
 
 
 #[derive(Clone, Debug, Display)]
-pub struct Artifacts(RepoRootDistWasm);
+pub struct Artifact(RepoRootDistWasm);
 
-impl Artifacts {
+impl Artifact {
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self(RepoRootDistWasm::new(path))
     }
@@ -102,39 +134,19 @@ impl Artifacts {
     }
 }
 
-impl AsRef<Path> for Artifacts {
+impl AsRef<Path> for Artifact {
     fn as_ref(&self) -> &Path {
         self.0.as_path()
     }
 }
 
-impl IsArtifact for Artifacts {
+impl IsArtifact for Artifact {
     fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
-        ready(Ok(Artifacts::new(path.as_ref()))).boxed()
+        ready(Ok(Artifact::new(path.as_ref()))).boxed()
     }
 }
 
 impl Wasm {
-    pub fn watch(&self, input: BuildInput, output_path: PathBuf) -> Result<Watcher> {
-        // TODO
-        // This is not nice, as this module should not be aware of the CLI parsing/generation.
-        // Rather than using `cargo watch` this should be implemented directly in Rust.
-        let child = Cargo
-            .cmd()?
-            .arg("watch")
-            .args(["--ignore", "README.md"])
-            .arg("--")
-            .args(["enso-build2"])
-            .args(["--repo-path", input.repo_root.as_str()])
-            // FIXME crate name
-            .arg("wasm")
-            .arg("build")
-            .args(["--wasm-output-path", output_path.as_str()])
-            .spawn()?;
-        let ret = RepoRootDistWasm::new(output_path);
-        Ok(Watcher { artifacts: Artifacts(ret), watch_process: child })
-    }
-
     pub async fn check(&self) -> Result {
         Cargo
             .cmd()?
@@ -212,21 +224,6 @@ impl Wasm {
         Ok(())
     }
 }
-
-pub struct Watcher {
-    /// Where the watcher outputs artifacts.
-    pub artifacts:     Artifacts,
-    /// The process performing the watch.
-    ///
-    /// In this case, an instance of cargo-watch.
-    pub watch_process: Child,
-}
-
-pub enum Watched {
-    Watcher(Watcher),
-    Static(Artifacts),
-}
-
 
 // #[derive(Clone, Debug)]
 // pub enum WasmSource {

@@ -24,10 +24,14 @@ use enso_build::project::project_manager;
 use enso_build::project::project_manager::ProjectManager;
 use enso_build::project::wasm;
 use enso_build::project::wasm::Wasm;
-use enso_build::project::CiRunSource;
-use enso_build::project::IsArtifact;
 use enso_build::project::IsTarget;
+use enso_build::project::IsWatchable;
+use enso_build::project::IsWatcher;
 use enso_build::setup_octocrab;
+use enso_build::source::CiRunSource;
+use enso_build::source::ExternalSource;
+use enso_build::source::GetTargetJob;
+use enso_build::source::Source;
 use futures_util::future::try_join;
 use futures_util::FutureExt as _;
 use ide_ci::actions::workflow::is_in_env;
@@ -39,20 +43,6 @@ use ide_ci::programs::Git;
 use std::any::type_name;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-
-#[derive(Debug)]
-pub enum Source<Target: IsTarget> {
-    BuildLocally(Target::BuildInput),
-    OngoingCiRun,
-    CiRun(CiRunSource),
-    LocalFile(PathBuf),
-}
-
-#[derive(Debug)]
-pub struct GetTargetJob<Target: IsTarget> {
-    pub source:      Source<Target>,
-    pub destination: PathBuf,
-}
 
 /// The basic, common information available in this application.
 #[derive(Clone, Debug)]
@@ -110,10 +100,10 @@ impl BuildContext {
         let destination = source.output_path.output_path;
         let source = match source.source {
             arg::SourceKind::Build => Source::BuildLocally(T::resolve(self, source.build_args)?),
-            arg::SourceKind::Local => Source::LocalFile(
+            arg::SourceKind::Local => Source::External(ExternalSource::LocalFile(
                 source.path.clone().context("Missing path to the local artifacts!")?,
-            ),
-            arg::SourceKind::CiRun => Source::CiRun(CiRunSource {
+            )),
+            arg::SourceKind::CiRun => Source::External(ExternalSource::CiRun(CiRunSource {
                 octocrab:      self.octocrab.clone(),
                 run_id:        source.run_id.context(format!(
                     "Missing run ID, please provide {} argument.",
@@ -121,7 +111,7 @@ impl BuildContext {
                 ))?,
                 repository:    self.remote_repo.clone(),
                 artifact_name: source.artifact_name.clone(),
-            }),
+            })),
         };
         Ok(GetTargetJob { source, destination })
     }
@@ -171,7 +161,7 @@ impl BuildContext {
         &self,
         target: Target,
         target_source: arg::Source<Target>,
-    ) -> BoxFuture<'static, Result<Target::Output>>
+    ) -> BoxFuture<'static, Result<Target::Artifact>>
     where
         Target: IsTarget + IsTargetSource + Send + Sync + 'static,
         Target: Resolvable,
@@ -213,17 +203,15 @@ impl BuildContext {
             arg::wasm::Command::Watch { params, output_path } => {
                 let inputs = self.resolve_inputs::<Wasm>(params);
                 async move {
-                    let mut watcher = Wasm.watch(inputs?, output_path.output_path)?;
-                    watcher.watch_process.wait().await?.exit_ok()?;
-                    Ok(())
+                    let mut watcher = Wasm.setup_watcher(inputs?, output_path.output_path).await?;
+                    watcher.wait_ok().await
                 }
                 .boxed()
             }
             arg::wasm::Command::Build { params, output_path } => {
                 let inputs = self.resolve_inputs::<Wasm>(params);
-                async move { Wasm.build(inputs?, output_path.output_path).map_ok(|_| ()).await }
+                async move { Wasm.build(inputs?, output_path.output_path).void_ok().await }.boxed()
             }
-            .boxed(),
             arg::wasm::Command::Check => Wasm.check().boxed(),
             arg::wasm::Command::Test { no_wasm, no_native } =>
                 Wasm.test(self.repo_root().path, !no_wasm, !no_native).boxed(),
@@ -244,44 +232,19 @@ impl BuildContext {
                 let job = self.get(Gui, source);
                 job.void_ok().boxed()
             }
-            arg::gui::Command::Watch { wasm } => {
-                let wasm = self.resolve(wasm);
-
-                let (wasm_artifact, wasm_watcher) = match wasm {
-                    Ok(job) => match job.source {
-                        Source::BuildLocally(wasm_input) => {
-                            let watcher = Wasm.watch(wasm_input, job.destination.clone());
-                            let artifact = wasm::Artifacts::from_existing(&job.destination);
-                            (artifact, watcher.ok())
-                        }
-                        external_source => (
-                            get_target(&Wasm, GetTargetJob {
-                                destination: job.destination,
-                                source:      external_source,
-                            }),
-                            None,
-                        ),
-                    },
-                    Err(e) =>
-                        return async move { bail!("Failed to resolve wasm description: {e}") }
-                            .boxed(),
-                };
-
-                let input = gui::GuiInputs {
-                    repo_root:  self.repo_root(),
-                    build_info: self.js_build_info(),
-                    wasm:       wasm_artifact,
-                };
-
+            arg::gui::Command::Watch { wasm, output_path } => {
+                let wasm_watcher = self.resolve(wasm).map(|job| Wasm.watch(job));
+                let repo_root = self.repo_root();
+                let build_info = self.js_build_info();
                 async move {
-                    let gui_watcher = Gui.watch(input);
-                    if let Some(mut wasm_watcher) = wasm_watcher {
-                        try_join(wasm_watcher.watch_process.wait().anyhow_err(), gui_watcher)
-                            .await?;
-                    } else {
-                        gui_watcher.await?;
-                    }
-                    Ok(())
+                    let mut wasm_watcher = wasm_watcher?.await?;
+                    let input = gui::GuiInputs {
+                        repo_root,
+                        build_info,
+                        wasm: ready(Ok(wasm_watcher.as_ref().clone())).boxed(),
+                    };
+                    let mut gui_watcher = Gui.setup_watcher(input, output_path).await?;
+                    try_join(wasm_watcher.wait_ok(), gui_watcher.wait_ok()).void_ok().await
                 }
                 .boxed()
             }
@@ -305,7 +268,12 @@ impl BuildContext {
                     repo_root:       self.repo_root(),
                     version:         self.triple.versions.version.clone(),
                 };
-                Ide.build(input, params.output_path).void_ok().boxed()
+                async move {
+                    let artifacts = Ide.build(input, params.output_path).await?;
+                    artifacts.upload().await?;
+                    Ok(())
+                }
+                .boxed()
             }
             arg::ide::Command::Watch { project_manager, gui } => {
                 //self.aaa(gui)
@@ -317,38 +285,38 @@ impl BuildContext {
     }
 
 
-
-    pub async fn aaa(&self, source: arg::Source<Wasm>) -> Result {
-        let wasm = self.resolve(source).context("Failed to resolve wasm description.")?;
-        let (wasm_artifact, wasm_watcher) = match wasm.source {
-            Source::BuildLocally(wasm_input) => {
-                let watcher = Wasm.watch(wasm_input, wasm.destination.clone());
-                let artifact = wasm::Artifacts::from_existing(&wasm.destination);
-                (artifact, watcher.ok())
-            }
-            external_source => (
-                get_target(&Wasm, GetTargetJob {
-                    destination: wasm.destination,
-                    source:      external_source,
-                }),
-                None,
-            ),
-        };
-
-        let input = gui::GuiInputs {
-            repo_root:  self.repo_root(),
-            build_info: self.js_build_info(),
-            wasm:       wasm_artifact,
-        };
-
-        let gui_watcher = Gui.watch(input);
-        if let Some(mut wasm_watcher) = wasm_watcher {
-            try_join(wasm_watcher.watch_process.wait().anyhow_err(), gui_watcher).await?;
-        } else {
-            gui_watcher.await?;
-        }
-        Ok(())
-    }
+    //
+    // pub async fn aaa(&self, source: arg::Source<Wasm>) -> Result {
+    //     let wasm = self.resolve(source).context("Failed to resolve wasm description.")?;
+    //     let (wasm_artifact, wasm_watcher) = match wasm.source {
+    //         Source::BuildLocally(wasm_input) => {
+    //             let watcher = Wasm.watch(wasm_input, wasm.destination.clone());
+    //             let artifact = wasm::Artifact::from_existing(&wasm.destination);
+    //             (artifact, watcher.ok())
+    //         }
+    //         external_source => (
+    //             get_target(&Wasm, GetTargetJob {
+    //                 destination: wasm.destination,
+    //                 source:      external_source,
+    //             }),
+    //             None,
+    //         ),
+    //     };
+    //
+    //     let input = gui::GuiInputs {
+    //         repo_root:  self.repo_root(),
+    //         build_info: self.js_build_info(),
+    //         wasm:       wasm_artifact,
+    //     };
+    //
+    //     let gui_watcher = Gui.watch(input);
+    //     if let Some(mut wasm_watcher) = wasm_watcher {
+    //         try_join(wasm_watcher.watch_process.wait().anyhow_err(), gui_watcher).await?;
+    //     } else {
+    //         gui_watcher.await?;
+    //     }
+    //     Ok(())
+    // }
 
     // pub fn gui_inputs(&self, wasm: arg::TargetSource<Wasm>) -> GuiInputs {
     //     let wasm = self.handle_wasm(WasmTarget { wasm });
@@ -452,27 +420,10 @@ impl Resolvable for ProjectManager {
 pub fn get_target<Target: IsTarget>(
     target: &Target,
     job: GetTargetJob<Target>,
-) -> BoxFuture<'static, Result<Target::Output>> {
+) -> BoxFuture<'static, Result<Target::Artifact>> {
     match job.source {
         Source::BuildLocally(inputs) => target.build(inputs, job.destination),
-        Source::CiRun(ci_run) => target.download_artifact(ci_run, job.destination),
-        Source::OngoingCiRun => {
-            let artifact_name = target.artifact_name().to_string();
-            async move {
-                ide_ci::actions::artifacts::download_single_file_artifact(
-                    artifact_name,
-                    job.destination.as_path(),
-                )
-                .await?;
-                Target::Output::from_existing(job.destination).await
-            }
-            .boxed()
-        }
-        Source::LocalFile(source_dir) => async move {
-            ide_ci::fs::mirror_directory(source_dir, job.destination.as_path()).await?;
-            Target::Output::from_existing(job.destination).await
-        }
-        .boxed(),
+        Source::External(external) => target.get_external(external, job.destination),
     }
 }
 

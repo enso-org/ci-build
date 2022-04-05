@@ -2,10 +2,11 @@ use crate::prelude::*;
 use futures_util::future::try_join;
 use futures_util::future::try_join3;
 use tempfile::TempDir;
+use tokio::process::Child;
 
 use crate::paths::generated;
 use crate::project::gui::BuildInfo;
-use crate::project::wasm::Artifacts;
+use crate::project::wasm::Artifact;
 use ide_ci::io::download_all;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
@@ -147,7 +148,7 @@ impl IdeDesktop {
 
     pub async fn build(
         &self,
-        wasm: impl Future<Output = Result<Artifacts>>,
+        wasm: impl Future<Output = Result<Artifact>>,
         build_info: &BuildInfo,
         output_path: impl AsRef<Path>,
     ) -> Result {
@@ -171,9 +172,9 @@ impl IdeDesktop {
 
     pub async fn watch(
         &self,
-        wasm: impl Future<Output = Result<Artifacts>>,
+        wasm: impl Future<Output = Result<Artifact>>,
         build_info: &BuildInfo,
-    ) -> Result {
+    ) -> Result<Child> {
         // TODO deduplicate with build
         self.install().await?;
 
@@ -189,8 +190,7 @@ impl IdeDesktop {
         env::WasmPath.set_path(&wasm.wasm());
         env::JsGluePath.set_path(&wasm.js_glue());
         env::AssetsPath.set_path(&assets);
-        self.npm()?.workspace(Workspaces::Content).run("watch", EMPTY_ARGS).run_ok().await?;
-        Ok(())
+        self.npm()?.workspace(Workspaces::Content).run("watch", EMPTY_ARGS).spawn()
     }
 
     pub async fn dist(

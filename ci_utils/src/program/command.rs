@@ -238,8 +238,8 @@ impl Command {
             let program = program.to_string_lossy();
             let mut child = child?.into_inner();
             // FIXME unwraps
-            spawn_log_processor(format!("{program}:out"), child.stdout.take().unwrap());
-            spawn_log_processor(format!("{program}:err"), child.stderr.take().unwrap());
+            spawn_log_processor(format!("{program}📃"), child.stdout.take().unwrap());
+            spawn_log_processor(format!("{program}⚠️"), child.stderr.take().unwrap());
             let status = child.wait().await?;
             status_checker(status).context(format!("Command failed: {}", pretty))
         }

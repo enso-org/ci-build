@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+use crate::arg::OutputPath;
 use crate::arg::Source;
 use crate::source_args_hlp;
 use clap::Args;
@@ -29,7 +30,9 @@ pub enum Command {
     },
     Watch {
         #[clap(flatten)]
-        wasm: Source<Wasm>,
+        wasm:        Source<Wasm>,
+        #[clap(flatten)]
+        output_path: OutputPath<Gui>,
     },
 }
 

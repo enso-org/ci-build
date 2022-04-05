@@ -59,7 +59,7 @@ pub struct ProjectManager;
 #[async_trait]
 impl IsTarget for ProjectManager {
     type BuildInput = BuildInput;
-    type Output = Artifact;
+    type Artifact = Artifact;
 
     fn artifact_name(&self) -> &str {
         // Version is not part of the name intentionally. We want to refer to PM bundles as
@@ -72,7 +72,7 @@ impl IsTarget for ProjectManager {
         &self,
         input: Self::BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
-    ) -> BoxFuture<'static, Result<Self::Output>> {
+    ) -> BoxFuture<'static, Result<Self::Artifact>> {
         async move {
             let paths =
                 crate::paths::Paths::new_versions(&input.repo_root, input.versions.clone())?;

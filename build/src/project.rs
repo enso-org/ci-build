@@ -1,7 +1,9 @@
 use crate::prelude::*;
 
-use ide_ci::models::config::RepoContext;
-use octocrab::models::RunId;
+use crate::source::CiRunSource;
+use crate::source::ExternalSource;
+use crate::source::GetTargetJob;
+use crate::source::Source;
 
 pub mod gui;
 pub mod ide;
@@ -51,29 +53,57 @@ impl<T> PlainArtifact<T> {
     }
 }
 
-pub trait IsTarget: Sized {
+pub trait IsTarget: Sized + 'static {
     /// All the data needed to build this target that are not placed in `self`.
     type BuildInput: Debug + Send + 'static;
 
     /// A location-like value with the directory where the artifacts are placed.
-    type Output: IsArtifact;
+    type Artifact: IsArtifact;
 
     /// Identifier used when uploading build artifacts to run.
     ///
     /// Note that this is not related to the assets name in the release.
     fn artifact_name(&self) -> &str;
 
+    /// Produce an artifact from the external resource reference.
+    fn get_external(
+        &self,
+        source: ExternalSource,
+        destination: PathBuf,
+    ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        match source {
+            ExternalSource::OngoingCiRun => {
+                let artifact_name = self.artifact_name().to_string();
+                async move {
+                    ide_ci::actions::artifacts::download_single_file_artifact(
+                        artifact_name,
+                        &destination,
+                    )
+                    .await?;
+                    Self::Artifact::from_existing(destination).await
+                }
+                .boxed()
+            }
+            ExternalSource::CiRun(ci_run) => self.download_artifact(ci_run, destination),
+            ExternalSource::LocalFile(source_path) => async move {
+                ide_ci::fs::mirror_directory(source_path, &destination).await?;
+                Self::Artifact::from_existing(destination).await
+            }
+            .boxed(),
+        }
+    }
+
     /// Produce an artifact from build inputs.
     fn build(
         &self,
         input: Self::BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
-    ) -> BoxFuture<'static, Result<Self::Output>>;
+    ) -> BoxFuture<'static, Result<Self::Artifact>>;
 
     /// Upload artifact to the current GitHub Actions run.
     fn upload_artifact(
         &self,
-        output: impl Future<Output = Result<Self::Output>> + Send + 'static,
+        output: impl Future<Output = Result<Self::Artifact>> + Send + 'static,
     ) -> BoxFuture<'static, Result> {
         let name = self.artifact_name().to_string();
         async move {
@@ -90,7 +120,7 @@ pub trait IsTarget: Sized {
         &self,
         ci_run: CiRunSource,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
-    ) -> BoxFuture<'static, Result<Self::Output>> {
+    ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let CiRunSource { run_id, artifact_name, repository, octocrab } = ci_run;
         let artifact_name = artifact_name.unwrap_or_else(|| self.artifact_name().to_string());
         async move {
@@ -101,16 +131,96 @@ pub trait IsTarget: Sized {
             repository
                 .download_and_unpack_artifact(&octocrab, artifact.id, output_path.as_ref())
                 .await?;
-            Self::Output::from_existing(output_path).await
+            Self::Artifact::from_existing(output_path).await
         }
         .boxed()
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct CiRunSource {
-    pub octocrab:      Octocrab,
-    pub repository:    RepoContext,
-    pub run_id:        RunId,
-    pub artifact_name: Option<String>,
+pub enum PerhapsWatched<T: IsWatchable> {
+    Watched(T::Watcher),
+    Static(T::Artifact),
+}
+
+impl<T: IsWatchable> AsRef<T::Artifact> for PerhapsWatched<T> {
+    fn as_ref(&self) -> &T::Artifact {
+        match self {
+            PerhapsWatched::Watched(watcher) => watcher.as_ref(),
+            PerhapsWatched::Static(static_artifact) => &static_artifact,
+        }
+    }
+}
+
+impl<T: IsWatchable> PerhapsWatched<T> {
+    pub async fn wait_ok(&mut self) -> Result {
+        match self {
+            PerhapsWatched::Watched(watcher) => watcher.wait_ok().await,
+            PerhapsWatched::Static(_) => Ok(()),
+        }
+    }
+}
+
+pub struct Watcher<Target: IsWatchable> {
+    /// Where the watcher outputs artifacts.
+    pub artifact:      Target::Artifact,
+    /// The process performing the watch.
+    ///
+    /// In this case, an instance of cargo-watch.
+    pub watch_process: tokio::process::Child,
+}
+
+impl<Target: IsWatchable> AsRef<Target::Artifact> for Watcher<Target> {
+    fn as_ref(&self) -> &Target::Artifact {
+        &self.artifact
+    }
+}
+
+impl<Target: IsWatchable> IsWatcher<Target> for Watcher<Target> {
+    fn wait_ok(&mut self) -> BoxFuture<Result> {
+        async move { self.watch_process.wait().await?.exit_ok().anyhow_err() }.boxed()
+    }
+}
+
+pub trait IsWatcher<Target: IsTarget>: AsRef<Target::Artifact> {
+    fn wait_ok(&mut self) -> BoxFuture<Result>;
+}
+
+pub trait IsWatchable: IsTarget {
+    type Watcher: IsWatcher<Self> = Watcher<Self>;
+
+    fn setup_watcher(
+        &self,
+        input: Self::BuildInput,
+        output_path: impl AsRef<Path> + Send + Sync + 'static,
+    ) -> BoxFuture<'static, Result<Self::Watcher>>;
+
+    fn watch(&self, job: GetTargetJob<Self>) -> BoxFuture<'static, Result<PerhapsWatched<Self>>> {
+        match job.source {
+            Source::BuildLocally(input) => {
+                let watcher = self.setup_watcher(input, job.destination);
+                watcher.map_ok(PerhapsWatched::Watched).boxed()
+            }
+            Source::External(external) =>
+                self.get_external(external, job.destination).map_ok(PerhapsWatched::Static).boxed(),
+        }
+    }
+
+    // let input = gui::GuiInputs {
+    //     repo_root:  self.repo_root(),
+    //     build_info: self.js_build_info(),
+    //     wasm:       wasm_artifact,
+    // };
+    //
+    // async move {
+    //     let gui_watcher = Gui.watch(input);
+    //     if let Some(mut wasm_watcher) = wasm_watcher {
+    //         try_join(wasm_watcher.watch_process.wait().anyhow_err(), gui_watcher)
+    //             .await?;
+    //     } else {
+    //         gui_watcher.await?;
+    //     }
+    //     Ok(())
+    // }
+    //     .boxed()
+    // todo!()
 }
