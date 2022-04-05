@@ -29,7 +29,10 @@ use enso_build::project::IsArtifact;
 use enso_build::project::IsTarget;
 use enso_build::setup_octocrab;
 use futures_util::future::try_join;
+use futures_util::FutureExt as _;
 use ide_ci::actions::workflow::is_in_env;
+use ide_ci::extensions::future::FutureExt as _;
+use ide_ci::extensions::future::TryFutureExt as _;
 use ide_ci::global;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::Git;
@@ -239,11 +242,7 @@ impl BuildContext {
         match gui.command {
             arg::gui::Command::Get { source } => {
                 let job = self.get(Gui, source);
-                async move {
-                    job.await?;
-                    Ok(())
-                }
-                .boxed()
+                job.void_ok().boxed()
             }
             arg::gui::Command::Watch { wasm } => {
                 let wasm = self.resolve(wasm);
@@ -277,11 +276,8 @@ impl BuildContext {
                 async move {
                     let gui_watcher = Gui.watch(input);
                     if let Some(mut wasm_watcher) = wasm_watcher {
-                        try_join(
-                            wasm_watcher.watch_process.wait().map_err(anyhow::Error::from),
-                            gui_watcher,
-                        )
-                        .await?;
+                        try_join(wasm_watcher.watch_process.wait().anyhow_err(), gui_watcher)
+                            .await?;
                     } else {
                         gui_watcher.await?;
                     }
@@ -297,32 +293,63 @@ impl BuildContext {
         project_manager: arg::project_manager::Target,
     ) -> BoxFuture<'static, Result> {
         let job = self.get(ProjectManager, project_manager.source);
-        async move {
-            job.await?;
-            Ok(())
-        }
-        .boxed()
+        job.void_ok().boxed()
     }
 
     pub fn handle_ide(&self, ide: arg::ide::Target) -> BoxFuture<'static, Result> {
-        let input = ide::BuildInput {
-            gui:             self.get(Gui, ide.gui),
-            project_manager: self.get(ProjectManager, ide.project_manager),
-            repo_root:       self.repo_root(),
-            version:         self.triple.versions.version.clone(),
-        };
-        async move {
-            Ide.build(input, ide.output_path).await?;
-            Ok(())
+        match ide.command {
+            arg::ide::Command::Build { params } => {
+                let input = ide::BuildInput {
+                    gui:             self.get(Gui, params.gui),
+                    project_manager: self.get(ProjectManager, params.project_manager),
+                    repo_root:       self.repo_root(),
+                    version:         self.triple.versions.version.clone(),
+                };
+                Ide.build(input, params.output_path).void_ok().boxed()
+            }
+            arg::ide::Command::Watch { project_manager, gui } => {
+                //self.aaa(gui)
+                // let gui_watcher =
+                // async move { Ok(()) }.boxed()
+                todo!()
+            }
         }
-        .boxed()
-        // let job = self.get(ProjectManager, project_manager.source);
-        // async move {
-        //     job.await?;
-        //     Ok(())
-        // }
-        // .boxed()
     }
+
+
+
+    pub async fn aaa(&self, source: arg::Source<Wasm>) -> Result {
+        let wasm = self.resolve(source).context("Failed to resolve wasm description.")?;
+        let (wasm_artifact, wasm_watcher) = match wasm.source {
+            Source::BuildLocally(wasm_input) => {
+                let watcher = Wasm.watch(wasm_input, wasm.destination.clone());
+                let artifact = wasm::Artifacts::from_existing(&wasm.destination);
+                (artifact, watcher.ok())
+            }
+            external_source => (
+                get_target(&Wasm, GetTargetJob {
+                    destination: wasm.destination,
+                    source:      external_source,
+                }),
+                None,
+            ),
+        };
+
+        let input = gui::GuiInputs {
+            repo_root:  self.repo_root(),
+            build_info: self.js_build_info(),
+            wasm:       wasm_artifact,
+        };
+
+        let gui_watcher = Gui.watch(input);
+        if let Some(mut wasm_watcher) = wasm_watcher {
+            try_join(wasm_watcher.watch_process.wait().anyhow_err(), gui_watcher).await?;
+        } else {
+            gui_watcher.await?;
+        }
+        Ok(())
+    }
+
     // pub fn gui_inputs(&self, wasm: arg::TargetSource<Wasm>) -> GuiInputs {
     //     let wasm = self.handle_wasm(WasmTarget { wasm });
     //     let build_info = self.js_build_info().boxed();
@@ -351,41 +378,6 @@ impl BuildContext {
     //                     .await
     //             }
     //             .boxed()
-    //         }
-    //     }
-    // }
-    //
-    // pub fn get_project_manager(
-    //     &self,
-    //     source: ProjectManagerTarget,
-    // ) -> BoxFuture<'static, Result<enso_build::project::project_manager::Artifact>> {
-    //     let input = enso_build::project::project_manager::BuildInput {
-    //         repo_root: self.source_root.clone(),
-    //         versions:  self.triple.versions.clone(),
-    //         octocrab:  self.octocrab.clone(),
-    //     };
-    //     self.get(ProjectManager, source.project_manager, input)
-    // }
-    //
-    // pub fn get_ide(&self, source: IdeTarget) -> BoxFuture<'static, Result> {
-    //     match source.command {
-    //         IdeCommand::Build => {
-    //             let input = enso_build::project::ide::BuildInput {
-    //                 repo_root:       self.repo_root(),
-    //                 version:         self.triple.versions.version.clone(),
-    //                 project_manager: self.get_project_manager(ProjectManagerTarget {
-    //                     project_manager: source.project_manager,
-    //                 }),
-    //                 gui:             self.get(Gui, source.gui, self.gui_inputs(source.wasm)),
-    //             };
-    //             async move {
-    //                 Ide.build(input, source.ide_output_path).await?;
-    //                 Ok(())
-    //             }
-    //             .boxed()
-    //         }
-    //         IdeCommand::Watch => {
-    //             todo!()
     //         }
     //     }
     // }

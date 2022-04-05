@@ -12,7 +12,7 @@ source_args_hlp!(Gui, "gui", BuildInput);
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInput {
     #[clap(flatten)]
-    pub wasm: crate::arg::Source<Wasm>,
+    pub wasm: Source<Wasm>,
 }
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]

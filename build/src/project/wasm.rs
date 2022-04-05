@@ -214,9 +214,20 @@ impl Wasm {
 }
 
 pub struct Watcher {
+    /// Where the watcher outputs artifacts.
     pub artifacts:     Artifacts,
+    /// The process performing the watch.
+    ///
+    /// In this case, an instance of cargo-watch.
     pub watch_process: Child,
 }
+
+pub enum Watched {
+    Watcher(Watcher),
+    Static(Artifacts),
+}
+
+
 // #[derive(Clone, Debug)]
 // pub enum WasmSource {
 //     Build { repo_root: PathBuf },
