@@ -164,7 +164,7 @@ impl Paths {
     }
 
     pub fn manifest_file(&self) -> PathBuf {
-        self.distribution().join("manifest.yaml")
+        self.engine.dir.join("manifest.yaml")
     }
 
     // e.g. enso2\distribution\editions\2021.20-SNAPSHOT.yaml
