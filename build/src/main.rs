@@ -633,13 +633,15 @@ async fn main() -> anyhow::Result<()> {
                         .await?;
                 }
 
-                ide_ci::github::release::upload_asset(
-                    repo,
-                    &client,
-                    release.id,
-                    paths.manifest_file(),
-                )
-                .await?;
+                if TARGET_OS == OS::Linux {
+                    ide_ci::github::release::upload_asset(
+                        repo,
+                        &client,
+                        release.id,
+                        paths.manifest_file(),
+                    )
+                    .await?;
+                }
             }
             _ => {
                 package_component(&paths.engine).await?;
