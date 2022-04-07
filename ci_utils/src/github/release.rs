@@ -11,18 +11,6 @@ pub async fn upload_asset(
     release: ReleaseId,
     asset: impl AsRef<Path>,
 ) -> Result {
-    let asset_name = asset.as_ref().file_name().unwrap().to_string_lossy().to_string();
-    upload_asset_as(repo, client, release, &asset, asset_name).await
-}
-
-#[context("Failed to upload the asset {} as {}", asset.as_ref().display(), asset_name.as_ref())]
-pub async fn upload_asset_as(
-    repo: &impl RepoPointer,
-    client: &reqwest::Client,
-    release: ReleaseId,
-    asset: impl AsRef<Path>,
-    asset_name: impl AsRef<str>,
-) -> Result {
     let upload_url = format!(
         "https://uploads.github.com/repos/{}/{}/releases/{}/assets",
         repo.owner(),
@@ -35,6 +23,7 @@ pub async fn upload_asset_as(
     let file_size = file.metadata().await?.len();
     let file_contents_stream = tokio_util::io::ReaderStream::new(file);
     let body = Body::wrap_stream(file_contents_stream);
+    let asset_name = asset_path.file_name().unwrap().to_string_lossy();
     let request = client
         .post(upload_url)
         .query(&[("name", asset_name.as_ref())])

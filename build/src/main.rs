@@ -260,16 +260,6 @@ async fn main() -> anyhow::Result<()> {
                     .await?;
 
                 enso_build::env::ReleaseId.emit(&release.id)?;
-
-                let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
-                ide_ci::github::release::upload_asset_as(
-                    repo,
-                    &client,
-                    release.id,
-                    paths.edition_file(),
-                    "manifest.yaml",
-                )
-                .await?;
                 return Ok(());
             }
             ReleaseCommand::Publish => {
