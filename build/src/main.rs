@@ -624,23 +624,20 @@ async fn main() -> anyhow::Result<()> {
                     .context(format!("Failed to find release by id `{release_id}` in `{repo}`."))?;
 
                 let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
+                let upload_asset = |asset: PathBuf| {
+                    ide_ci::github::release::upload_asset(repo, &client, release.id, asset)
+                };
+
                 for package in packages {
-                    ide_ci::github::release::upload_asset(repo, &client, release.id, package)
-                        .await?;
+                    upload_asset(package).await?;
                 }
                 for bundle in bundles {
-                    ide_ci::github::release::upload_asset(repo, &client, release.id, bundle)
-                        .await?;
+                    upload_asset(bundle).await?;
                 }
 
                 if TARGET_OS == OS::Linux {
-                    ide_ci::github::release::upload_asset(
-                        repo,
-                        &client,
-                        release.id,
-                        paths.manifest_file(),
-                    )
-                    .await?;
+                    upload_asset(paths.manifest_file()).await?;
+                    upload_asset(paths.launcher_manifest_file()).await?;
                 }
             }
             _ => {

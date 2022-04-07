@@ -167,6 +167,10 @@ impl Paths {
         self.engine.dir.join("manifest.yaml")
     }
 
+    pub fn launcher_manifest_file(&self) -> PathBuf {
+        self.distribution().join("launcher-manifest.yaml")
+    }
+
     // e.g. enso2\distribution\editions\2021.20-SNAPSHOT.yaml
     pub fn edition_file(&self) -> PathBuf {
         self.distribution()
