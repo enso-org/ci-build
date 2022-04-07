@@ -632,6 +632,14 @@ async fn main() -> anyhow::Result<()> {
                     ide_ci::github::release::upload_asset(repo, &client, release.id, bundle)
                         .await?;
                 }
+
+                ide_ci::github::release::upload_asset(
+                    repo,
+                    &client,
+                    release.id,
+                    paths.manifest_file(),
+                )
+                .await?;
             }
             _ => {
                 package_component(&paths.engine).await?;

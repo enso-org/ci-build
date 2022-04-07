@@ -163,6 +163,10 @@ impl Paths {
         self.triple.versions.edition_name()
     }
 
+    pub fn manifest_file(&self) -> PathBuf {
+        self.distribution().join("manifest.yaml")
+    }
+
     // e.g. enso2\distribution\editions\2021.20-SNAPSHOT.yaml
     pub fn edition_file(&self) -> PathBuf {
         self.distribution()
