@@ -13,12 +13,35 @@ pub mod known;
 pub mod new {
     use super::*;
 
-    pub trait Variable {
+    pub trait RawVariable {
+        fn name(&self) -> &str;
+
+        fn get_raw(&self) -> Result<String> {
+            expect_var(self.name())
+        }
+        fn get_raw_os(&self) -> Result<OsString> {
+            expect_var_os(self.name())
+        }
+
+        fn set_raw(&self, value: impl AsRef<OsStr>) {
+            std::env::set_var(self.name(), value);
+        }
+    }
+
+    pub trait TypedVariable: RawVariable {
         type Value;
 
-        fn name(&self) -> &str;
         fn parse(&self, value: &str) -> Result<Self::Value>;
         fn generate(&self, value: &Self::Value) -> Result<String>;
+
+        fn get(&self) -> Result<Self::Value> {
+            self.parse(self.get_raw()?.as_str())
+        }
+
+        fn set(&self, value: &Self::Value) -> Result {
+            let value = self.generate(value)?;
+            Ok(self.set_raw(value))
+        }
     }
 
     pub struct SimpleVariable<Value> {
@@ -32,31 +55,32 @@ pub mod new {
         }
     }
 
-    impl<Value: FromString + ToString> Variable for SimpleVariable<Value> {
-        type Value = Value;
-
+    impl<Value> RawVariable for SimpleVariable<Value> {
         fn name(&self) -> &str {
             &self.name
         }
+    }
 
+    impl<Value: FromString + ToString> TypedVariable for SimpleVariable<Value> {
+        type Value = Value;
         fn parse(&self, value: &str) -> Result<Self::Value> {
             Value::from_str(&value)
         }
-
         fn generate(&self, value: &Self::Value) -> Result<String> {
             Ok(Value::to_string(value))
         }
     }
 
-    pub struct PathLike(&'static str);
+    pub struct PathLike(pub &'static str);
 
-    impl Variable for PathLike {
-        type Value = Vec<PathBuf>;
-
+    impl RawVariable for PathLike {
         fn name(&self) -> &str {
             self.0
         }
+    }
 
+    impl TypedVariable for PathLike {
+        type Value = Vec<PathBuf>;
         fn parse(&self, value: &str) -> Result<Self::Value> {
             Ok(std::env::split_paths(value).collect())
         }
@@ -65,6 +89,14 @@ pub mod new {
             std::env::join_paths(value)?
                 .into_string()
                 .map_err(|e| anyhow!("Not a valid UTF-8 string: '{}'.", e.to_string_lossy()))
+        }
+    }
+
+    impl PathLike {
+        pub fn prepend(&self, value: impl Into<PathBuf>) -> Result {
+            let mut paths = self.get()?;
+            paths.insert(0, value.into());
+            self.set(&paths)
         }
     }
 }

@@ -148,8 +148,18 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
     Ok(())
 }
 
+pub fn same_existing_path(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result<bool> {
+    Ok(wrappers::canonicalize(source)? == wrappers::canonicalize(destination)?)
+}
+
 pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
     create_parent_dir_if_missing(destination.as_ref())?;
+
+    // Robocopy seems to waste much time when running with the same path as source and destination.
+    if same_existing_path(&source, &destination)? {
+        return Ok(());
+    }
+
     if TARGET_OS == OS::Windows {
         crate::programs::robocopy::mirror_directory(source, destination).await
     } else {

@@ -1,7 +1,5 @@
 use crate::prelude::*;
 
-use ide_ci::programs::Git;
-
 pub fn looks_like_enso_repository_root(path: impl AsRef<Path>) -> bool {
     (move || -> Result<bool> {
         let cargo_toml = path.as_ref().join("Cargo.toml");

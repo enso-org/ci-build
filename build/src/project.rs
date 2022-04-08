@@ -1,7 +1,5 @@
 use crate::prelude::*;
 
-use ide_ci::extensions::child::ChildExt as _;
-use ide_ci::extensions::future::TryFutureExt as _;
 use tokio::process::Child;
 
 use crate::source::CiRunSource;

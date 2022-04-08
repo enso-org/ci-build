@@ -54,13 +54,13 @@ pub mod prelude {
     pub use futures_util::future::BoxFuture;
     pub use futures_util::stream::BoxStream;
     pub use futures_util::AsyncWrite;
-    pub use futures_util::FutureExt;
+    pub use futures_util::FutureExt as _;
     pub use futures_util::Stream;
-    pub use futures_util::StreamExt;
+    pub use futures_util::StreamExt as _;
     pub use futures_util::TryFuture;
-    pub use futures_util::TryFutureExt;
+    pub use futures_util::TryFutureExt as _;
     pub use futures_util::TryStream;
-    pub use futures_util::TryStreamExt;
+    pub use futures_util::TryStreamExt as _;
     pub use ifmt::iformat;
     pub use itertools::Itertools;
     pub use lazy_static::lazy_static;
@@ -112,11 +112,13 @@ pub mod prelude {
 
     pub use crate::anyhow::ResultExt;
     pub use crate::env::Variable as EnvironmentVariable;
-    pub use crate::extensions::command::CommandExt;
+    pub use crate::extensions::command::CommandExt as _;
     pub use crate::extensions::from_string::FromString;
+    pub use crate::extensions::future::FutureExt as _;
+    pub use crate::extensions::future::TryFutureExt as _;
     pub use crate::extensions::iterator::TryIteratorExt;
-    pub use crate::extensions::output::OutputExt;
-    pub use crate::extensions::path::PathExt;
+    pub use crate::extensions::output::OutputExt as _;
+    pub use crate::extensions::path::PathExt as _;
     pub use crate::extensions::str::StrLikeExt;
     pub use crate::github::RepoPointer;
     pub use crate::goodie::Goodie;

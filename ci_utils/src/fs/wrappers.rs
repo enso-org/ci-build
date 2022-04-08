@@ -35,7 +35,12 @@ pub fn create(path: impl AsRef<Path>) -> Result<File> {
     File::create(&path).anyhow_err()
 }
 
+#[context("Failed to canonicalize path: {}", path.as_ref().display())]
+pub fn canonicalize(path: impl AsRef<Path>) -> Result<PathBuf> {
+    std::fs::canonicalize(&path).anyhow_err()
+}
+
 #[context("Failed to create missing directories no path: {}", path.as_ref().display())]
-pub fn create_dir_all<P: AsRef<Path>>(path: P) -> Result {
+pub fn create_dir_all(path: impl AsRef<Path>) -> Result {
     std::fs::create_dir_all(&path).anyhow_err()
 }
