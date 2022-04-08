@@ -92,6 +92,7 @@ pub enum Target {
     /// Build a bundle with Project Manager. Bundle includes Enso Engine with GraalVM Runtime.
     ProjectManager(project_manager::Target),
     Ide(ide::Target),
+    Clean,
 }
 
 /// Build, test and packave Enso Engine.

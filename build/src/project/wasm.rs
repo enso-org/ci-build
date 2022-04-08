@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use anyhow::Context;
+use tokio::process::Child;
 
 use crate::project::wasm::js_patcher::patch_js_glue_in_place;
 // use crate::paths::generated::Parameters;
@@ -11,10 +12,8 @@ use crate::paths::generated::RepoRootDistWasm;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
-use crate::project::IsWatcher;
 use ide_ci::env::Variable;
 use ide_ci::programs::Cargo;
-use tokio::process::Child;
 
 pub mod js_patcher;
 pub mod test;
@@ -85,6 +84,8 @@ impl IsTarget for Wasm {
 }
 
 impl IsWatchable for Wasm {
+    type Watcher = crate::project::Watcher<Self, Child>;
+
     fn setup_watcher(
         &self,
         input: Self::BuildInput,
@@ -96,6 +97,7 @@ impl IsWatchable for Wasm {
         async move {
             let watch_process = Cargo
                 .cmd()?
+                .kill_on_drop(true)
                 .current_dir(&input.repo_root)
                 .arg("watch")
                 .args(["--ignore", "README.md"])
@@ -105,6 +107,7 @@ impl IsWatchable for Wasm {
                 // FIXME crate name
                 .arg("wasm")
                 .arg("build")
+                .args(["--crate-path", input.crate_path.as_str()])
                 .args(["--wasm-output-path", output_path.as_str()])
                 .spawn()?;
             let artifact = Artifact(RepoRootDistWasm::new(output_path.as_ref()));

@@ -1,5 +1,9 @@
 use crate::prelude::*;
 
+use ide_ci::extensions::child::ChildExt as _;
+use ide_ci::extensions::future::TryFutureExt as _;
+use tokio::process::Child;
+
 use crate::source::CiRunSource;
 use crate::source::ExternalSource;
 use crate::source::GetTargetJob;
@@ -160,33 +164,59 @@ impl<T: IsWatchable> PerhapsWatched<T> {
     }
 }
 
-pub struct Watcher<Target: IsWatchable> {
+pub trait ProcessWrapper {
+    fn inner(&mut self) -> &mut tokio::process::Child;
+
+    fn wait_ok(&mut self) -> BoxFuture<Result> {
+        ide_ci::extensions::child::ChildExt::wait_ok(self.inner()).boxed()
+    }
+    fn kill(&mut self) -> BoxFuture<Result> {
+        self.inner().kill().anyhow_err().boxed()
+    }
+}
+
+impl ProcessWrapper for tokio::process::Child {
+    fn inner(&mut self) -> &mut Child {
+        self
+    }
+}
+
+/// Watcher is an ongoing process that keeps updating the artifacts to follow changes to the
+/// target's source.
+pub struct Watcher<Target: IsWatchable, Proc> {
     /// Where the watcher outputs artifacts.
     pub artifact:      Target::Artifact,
     /// The process performing the watch.
     ///
     /// In this case, an instance of cargo-watch.
-    pub watch_process: tokio::process::Child,
+    pub watch_process: Proc,
 }
 
-impl<Target: IsWatchable> AsRef<Target::Artifact> for Watcher<Target> {
+impl<Target: IsWatchable, Proc: ProcessWrapper> ProcessWrapper for Watcher<Target, Proc> {
+    fn inner(&mut self) -> &mut Child {
+        self.watch_process.inner()
+    }
+}
+
+impl<Target: IsWatchable, Proc> AsRef<Target::Artifact> for Watcher<Target, Proc> {
     fn as_ref(&self) -> &Target::Artifact {
         &self.artifact
     }
 }
 
-impl<Target: IsWatchable> IsWatcher<Target> for Watcher<Target> {
+impl<Target: IsWatchable, Proc: ProcessWrapper> IsWatcher<Target> for Watcher<Target, Proc> {
     fn wait_ok(&mut self) -> BoxFuture<Result> {
-        async move { self.watch_process.wait().await?.exit_ok().anyhow_err() }.boxed()
+        self.watch_process.wait_ok()
     }
 }
+
 
 pub trait IsWatcher<Target: IsTarget>: AsRef<Target::Artifact> {
     fn wait_ok(&mut self) -> BoxFuture<Result>;
 }
 
 pub trait IsWatchable: IsTarget {
-    type Watcher: IsWatcher<Self> = Watcher<Self>;
+    type Watcher: IsWatcher<Self>;
 
     fn setup_watcher(
         &self,
@@ -204,23 +234,4 @@ pub trait IsWatchable: IsTarget {
                 self.get_external(external, job.destination).map_ok(PerhapsWatched::Static).boxed(),
         }
     }
-
-    // let input = gui::GuiInputs {
-    //     repo_root:  self.repo_root(),
-    //     build_info: self.js_build_info(),
-    //     wasm:       wasm_artifact,
-    // };
-    //
-    // async move {
-    //     let gui_watcher = Gui.watch(input);
-    //     if let Some(mut wasm_watcher) = wasm_watcher {
-    //         try_join(wasm_watcher.watch_process.wait().anyhow_err(), gui_watcher)
-    //             .await?;
-    //     } else {
-    //         gui_watcher.await?;
-    //     }
-    //     Ok(())
-    // }
-    //     .boxed()
-    // todo!()
 }

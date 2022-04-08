@@ -6,6 +6,7 @@ use clap::Args;
 use clap::Subcommand;
 use enso_build::project::gui::Gui;
 use enso_build::project::project_manager::ProjectManager;
+use enso_build::project::wasm::Wasm;
 
 source_args_hlp!(Target, "ide", BuildInput);
 
@@ -27,7 +28,7 @@ pub enum Command {
     },
     Watch {
         #[clap(flatten)]
-        gui:             Source<Gui>,
+        gui:             crate::arg::gui::WatchInput,
         #[clap(flatten)]
         project_manager: Source<ProjectManager>,
     },

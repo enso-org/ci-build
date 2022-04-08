@@ -16,6 +16,14 @@ pub struct BuildInput {
     pub wasm: Source<Wasm>,
 }
 
+#[derive(Args, Clone, Debug, PartialEq)]
+pub struct WatchInput {
+    #[clap(flatten)]
+    pub wasm:        Source<Wasm>,
+    #[clap(flatten)]
+    pub output_path: OutputPath<Gui>,
+}
+
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
     // Build {
@@ -30,9 +38,7 @@ pub enum Command {
     },
     Watch {
         #[clap(flatten)]
-        wasm:        Source<Wasm>,
-        #[clap(flatten)]
-        output_path: OutputPath<Gui>,
+        input: WatchInput,
     },
 }
 

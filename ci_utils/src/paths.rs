@@ -234,12 +234,6 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
 
     let opt_conversions = if parameter_vars.is_empty() {
         quote! {
-            impl From<#ty_name> for std::path::PathBuf {
-                fn from(value: #ty_name) -> Self {
-                    value.path
-                }
-            }
-
             impl From<std::path::PathBuf> for #ty_name {
                 fn from(value: std::path::PathBuf) -> Self {
                     #ty_name::new(value)
@@ -305,6 +299,12 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
                self.path.as_ref()
            }
        }
+
+        impl From<#ty_name> for std::path::PathBuf {
+            fn from(value: #ty_name) -> Self {
+                value.path
+            }
+        }
 
        impl std::ops::Deref for #ty_name {
            type Target = std::path::PathBuf;

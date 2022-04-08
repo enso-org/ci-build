@@ -1,22 +1,24 @@
 use crate::prelude::*;
 
-pub struct Resolver {
-    cwd:         PathBuf,
-    names:       Vec<OsString>,
-    lookup_dirs: OsString,
+pub struct Resolver<P> {
+    pub cwd:          PathBuf,
+    pub names:        Vec<OsString>,
+    pub lookup_dirs:  OsString,
+    pub phantom_data: PhantomData<P>,
 }
 
-impl Resolver {
+impl<P> Resolver<P> {
     pub fn new(names: Vec<&'static str>, fallback_dirs: Vec<PathBuf>) -> Result<Self> {
         let path = std::env::var_os("PATH").unwrap_or_default();
         let env_path_dirs = std::env::split_paths(&path);
         let lookup_dirs = std::env::join_paths(env_path_dirs.chain(fallback_dirs.clone()))?;
         let names = names.into_iter().map(OsString::from).collect();
         let cwd = std::env::current_dir()?;
-        Ok(Resolver { cwd, names, lookup_dirs })
+        let phantom_data = default();
+        Ok(Resolver { cwd, names, lookup_dirs, phantom_data })
     }
     pub fn lookup_all(self) -> impl Iterator<Item = PathBuf> {
-        let Self { names, lookup_dirs, cwd } = self;
+        let Self { names, lookup_dirs, cwd, phantom_data: _phantom_data } = self;
         names
             .into_iter()
             .map(move |name| {

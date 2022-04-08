@@ -233,7 +233,7 @@ impl RunContext {
 
         let git = Git::new(&self.paths.repo_root);
         if self.config.clean_repo {
-            git.clean_xfd().await?;
+            git.cmd()?.nice_clean().run_ok().await?;
             let lib_src = PathBuf::from_iter(["distribution", "lib"]);
             git.args(["checkout"])?.arg(lib_src).run_ok().await?;
         }

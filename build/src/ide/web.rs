@@ -7,6 +7,7 @@ use tokio::process::Child;
 use crate::paths::generated;
 use crate::project::gui::BuildInfo;
 use crate::project::wasm::Artifact;
+use crate::project::ProcessWrapper;
 use ide_ci::io::download_all;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
@@ -174,23 +175,26 @@ impl IdeDesktop {
         &self,
         wasm: impl Future<Output = Result<Artifact>>,
         build_info: &BuildInfo,
-    ) -> Result<Child> {
+    ) -> Result<Watcher> {
         // TODO deduplicate with build
         self.install().await?;
 
-        let wasm = wasm.await?;
-        let assets = TempDir::new()?;
-        download_js_assets(&assets).await?;
+        let wasm_artifacts = wasm.await?;
+        let asset_artifacts = TempDir::new()?;
+        download_js_assets(&asset_artifacts).await?;
+
 
         self.write_build_info(&build_info)?;
 
         // TODO: this should be set only on a child processes
         let output_path = TempDir::new()?;
         env::GuiDistPath.set_path(&output_path);
-        env::WasmPath.set_path(&wasm.wasm());
-        env::JsGluePath.set_path(&wasm.js_glue());
-        env::AssetsPath.set_path(&assets);
-        self.npm()?.workspace(Workspaces::Content).run("watch", EMPTY_ARGS).spawn()
+        env::WasmPath.set_path(&wasm_artifacts.wasm());
+        env::JsGluePath.set_path(&wasm_artifacts.js_glue());
+        env::AssetsPath.set_path(&asset_artifacts);
+        let child_process =
+            self.npm()?.workspace(Workspaces::Content).run("watch", EMPTY_ARGS).spawn()?;
+        Ok(Watcher { child_process, asset_artifacts, wasm_artifacts })
     }
 
     pub async fn dist(
@@ -219,6 +223,19 @@ impl IdeDesktop {
 impl From<&generated::RepoRoot> for IdeDesktop {
     fn from(value: &generated::RepoRoot) -> Self {
         Self { package_dir: value.app.ide_desktop.to_path_buf() }
+    }
+}
+
+#[derive(Debug)]
+pub struct Watcher {
+    pub asset_artifacts: TempDir,
+    pub wasm_artifacts:  crate::project::wasm::Artifact,
+    pub child_process:   Child,
+}
+
+impl ProcessWrapper for Watcher {
+    fn inner(&mut self) -> &mut Child {
+        &mut self.child_process
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use anyhow::Context;
 // use command_group::AsyncCommandGroup;
+use crate::program::argument::Argument;
 use std::borrow::BorrowMut;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -63,6 +64,13 @@ pub trait MyCommand<P: Program>: BorrowMut<Command> + From<Command> + Into<Comma
 
 pub trait IsCommandWrapper {
     fn borrow_mut_command(&mut self) -> &mut tokio::process::Command;
+
+    fn argument<A: Argument>(&mut self, argument: &A) -> &mut Self {
+        argument.apply(self)
+    }
+
+
+    ///////////
 
     fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Self {
         self.borrow_mut_command().arg(arg);
@@ -238,7 +246,7 @@ impl Command {
             let program = program.to_string_lossy();
             let mut child = child?.into_inner();
             // FIXME unwraps
-            spawn_log_processor(format!("{program}📃"), child.stdout.take().unwrap());
+            spawn_log_processor(format!("{program}ℹ️"), child.stdout.take().unwrap());
             spawn_log_processor(format!("{program}⚠️"), child.stderr.take().unwrap());
             let status = child.wait().await?;
             status_checker(status).context(format!("Command failed: {}", pretty))

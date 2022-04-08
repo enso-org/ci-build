@@ -1,4 +1,5 @@
 use crate::prelude::*;
+
 use anyhow::Context;
 use std::collections::BTreeSet;
 use std::env::join_paths;
@@ -8,6 +9,65 @@ use unicase::UniCase;
 
 
 pub mod known;
+
+pub mod new {
+    use super::*;
+
+    pub trait Variable {
+        type Value;
+
+        fn name(&self) -> &str;
+        fn parse(&self, value: &str) -> Result<Self::Value>;
+        fn generate(&self, value: &Self::Value) -> Result<String>;
+    }
+
+    pub struct SimpleVariable<Value> {
+        pub name:         Cow<'static, str>,
+        pub phantom_data: PhantomData<Value>,
+    }
+
+    impl<Value> SimpleVariable<Value> {
+        pub const fn new(name: &'static str) -> Self {
+            Self { name: Cow::Borrowed(name), phantom_data: PhantomData }
+        }
+    }
+
+    impl<Value: FromString + ToString> Variable for SimpleVariable<Value> {
+        type Value = Value;
+
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        fn parse(&self, value: &str) -> Result<Self::Value> {
+            Value::from_str(&value)
+        }
+
+        fn generate(&self, value: &Self::Value) -> Result<String> {
+            Ok(Value::to_string(value))
+        }
+    }
+
+    pub struct PathLike(&'static str);
+
+    impl Variable for PathLike {
+        type Value = Vec<PathBuf>;
+
+        fn name(&self) -> &str {
+            self.0
+        }
+
+        fn parse(&self, value: &str) -> Result<Self::Value> {
+            Ok(std::env::split_paths(value).collect())
+        }
+
+        fn generate(&self, value: &Self::Value) -> Result<String> {
+            std::env::join_paths(value)?
+                .into_string()
+                .map_err(|e| anyhow!("Not a valid UTF-8 string: '{}'.", e.to_string_lossy()))
+        }
+    }
+}
 
 //
 //

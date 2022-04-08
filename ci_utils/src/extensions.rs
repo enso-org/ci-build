@@ -1,3 +1,4 @@
+pub mod child;
 pub mod command;
 pub mod from_string;
 pub mod future;

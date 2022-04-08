@@ -3,11 +3,9 @@ use crate::prelude::*;
 use crate::ide::web::IdeDesktop;
 use crate::paths::generated::RepoRoot;
 use crate::project::wasm;
-use crate::project::wasm::Wasm;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
-use crate::project::PerhapsWatched;
 use crate::project::PlainArtifact;
 use crate::BoxFuture;
 
@@ -50,6 +48,8 @@ impl IsTarget for Gui {
 }
 
 impl IsWatchable for Gui {
+    type Watcher = crate::project::Watcher<Self, crate::ide::web::Watcher>;
+
     fn setup_watcher(
         &self,
         input: Self::BuildInput,

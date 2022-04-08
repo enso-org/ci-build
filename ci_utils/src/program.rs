@@ -1,7 +1,8 @@
 use crate::prelude::*;
 
+pub mod argument;
 pub mod command;
-mod location;
+pub mod location;
 pub mod resolver;
 pub mod shell;
 pub mod version;
@@ -20,16 +21,7 @@ pub use shell::Shell;
 // TODO: separate "what can be done with its command" from the rest of program (e.g. from name)
 
 pub const EMPTY_ARGS: [&str; 0] = [];
-//
-// pub trait Locator {
-//     fn foo(&self) -> Result<PathBuf>;
-// }
-//
-// pub struct DefaultLocator<P: Program> {}
-//
-// impl<P:Program> Locator {
-//
-// }
+
 
 
 /// A set of utilities for using a known external program.
@@ -53,6 +45,7 @@ pub trait Program: Sized + 'static {
         vec![]
     }
 
+    /// Additional directories that will be treated as-if appended to PATH.
     fn default_locations(&self) -> Vec<PathBuf> {
         Vec::new()
     }
@@ -66,7 +59,7 @@ pub trait Program: Sized + 'static {
     /// The lookup locations are program-defined, they typically include Path environment variable
     /// and program-specific default locations.
     fn lookup(&self) -> anyhow::Result<Location<Self>> {
-        Resolver::new(Self::executable_names(), self.default_locations())?
+        Resolver::<Self>::new(Self::executable_names(), self.default_locations())?
             .lookup()
             .map(Location::new)
     }

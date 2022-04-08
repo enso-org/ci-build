@@ -232,23 +232,26 @@ impl BuildContext {
                 let job = self.get(Gui, source);
                 job.void_ok().boxed()
             }
-            arg::gui::Command::Watch { wasm, output_path } => {
-                let wasm_watcher = self.resolve(wasm).map(|job| Wasm.watch(job));
-                let repo_root = self.repo_root();
-                let build_info = self.js_build_info();
-                async move {
-                    let mut wasm_watcher = wasm_watcher?.await?;
-                    let input = gui::GuiInputs {
-                        repo_root,
-                        build_info,
-                        wasm: ready(Ok(wasm_watcher.as_ref().clone())).boxed(),
-                    };
-                    let mut gui_watcher = Gui.setup_watcher(input, output_path).await?;
-                    try_join(wasm_watcher.wait_ok(), gui_watcher.wait_ok()).void_ok().await
-                }
-                .boxed()
-            }
+            arg::gui::Command::Watch { input } => self.watch_gui(input),
         }
+    }
+
+    pub fn watch_gui(&self, input: arg::gui::WatchInput) -> BoxFuture<'static, Result> {
+        let arg::gui::WatchInput { wasm, output_path } = input;
+        let wasm_watcher = self.resolve(wasm).map(|job| Wasm.watch(job));
+        let repo_root = self.repo_root();
+        let build_info = self.js_build_info();
+        async move {
+            let mut wasm_watcher = wasm_watcher?.await?;
+            let input = gui::GuiInputs {
+                repo_root,
+                build_info,
+                wasm: ready(Ok(wasm_watcher.as_ref().clone())).boxed(),
+            };
+            let mut gui_watcher = Gui.setup_watcher(input, output_path).await?;
+            try_join(wasm_watcher.wait_ok(), gui_watcher.wait_ok()).void_ok().await
+        }
+        .boxed()
     }
 
     pub fn handle_project_manager(
@@ -276,10 +279,14 @@ impl BuildContext {
                 .boxed()
             }
             arg::ide::Command::Watch { project_manager, gui } => {
-                //self.aaa(gui)
-                // let gui_watcher =
-                // async move { Ok(()) }.boxed()
-                todo!()
+                let gui_watcher = self.watch_gui(gui);
+                let get_project_manager = self.get(ProjectManager, project_manager);
+                let project_manager = async move {
+                    let project_manager = get_project_manager.await?;
+                    let p: &Path = project_manager.path.bin.project_managerexe.as_ref();
+                    Ok(Command::new(p).run_ok())
+                };
+                try_join(gui_watcher, project_manager).void_ok().boxed()
             }
         }
     }
@@ -428,10 +435,9 @@ pub fn get_target<Target: IsTarget>(
 }
 
 async fn main_internal() -> Result {
+    let cli = Cli::parse();
     // console_subscriber::init();
     pretty_env_logger::init();
-    debug!("Setting up.");
-    let cli = Cli::try_parse()?;
     trace!("Parsed CLI arguments: {cli:#?}");
 
     let ctx = BuildContext::new(&cli).await?;
@@ -441,6 +447,8 @@ async fn main_internal() -> Result {
         Target::ProjectManager(project_manager) =>
             ctx.handle_project_manager(project_manager).await?,
         Target::Ide(ide) => ctx.handle_ide(ide).await?,
+        // TODO: consider if out-of-source ./dist should be removed
+        Target::Clean => Git::new(ctx.repo_root()).cmd()?.nice_clean().run_ok().await?,
     };
     info!("Completed main job.");
     global::complete_tasks().await?;

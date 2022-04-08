@@ -4,8 +4,8 @@ use crate::program::command::MyCommand;
 
 #[derive(Clone, Debug)]
 pub struct Location<P> {
-    executable_path: PathBuf,
-    phantom_data:    PhantomData<P>,
+    pub executable_path: PathBuf,
+    pub phantom_data:    PhantomData<P>,
 }
 
 impl<P> AsRef<Path> for Location<P> {
