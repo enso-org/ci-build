@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-pub mod argument;
 pub mod command;
 pub mod location;
 pub mod resolver;

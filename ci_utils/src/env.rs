@@ -7,11 +7,20 @@ use std::env::set_var;
 use std::env::split_paths;
 use unicase::UniCase;
 
+#[macro_export]
+macro_rules! define_env_var {
+    ($name: ident, PathBuf) => {
+        pub const $name: $crate::env::new::PathBufVariable =
+            $crate::env::new::PathBufVariable(stringify!($name));
+    };
+}
+
 
 pub mod known;
 
 pub mod new {
     use super::*;
+    use crate::program::command::FallibleManipulator;
 
     pub trait RawVariable {
         fn name(&self) -> &str;
@@ -30,44 +39,95 @@ pub mod new {
 
     pub trait TypedVariable: RawVariable {
         type Value;
+        type Borrowed: ?Sized = Self::Value;
 
         fn parse(&self, value: &str) -> Result<Self::Value>;
-        fn generate(&self, value: &Self::Value) -> Result<String>;
+        fn generate(&self, value: &Self::Borrowed) -> Result<String>;
 
         fn get(&self) -> Result<Self::Value> {
             self.parse(self.get_raw()?.as_str())
         }
 
-        fn set(&self, value: &Self::Value) -> Result {
-            let value = self.generate(value)?;
+        fn set(&self, value: impl AsRef<Self::Borrowed>) -> Result {
+            let value = self.generate(value.as_ref())?;
             Ok(self.set_raw(value))
         }
     }
 
-    pub struct SimpleVariable<Value> {
-        pub name:         Cow<'static, str>,
-        pub phantom_data: PhantomData<Value>,
-    }
-
-    impl<Value> SimpleVariable<Value> {
-        pub const fn new(name: &'static str) -> Self {
-            Self { name: Cow::Borrowed(name), phantom_data: PhantomData }
+    impl<Variable: TypedVariable, Value: AsRef<Variable::Borrowed>> FallibleManipulator
+        for (Variable, Value)
+    {
+        fn try_applying<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) -> Result {
+            let value = self.0.generate(&self.1.as_ref())?;
+            command.env(self.0.name(), value);
+            Ok(())
         }
     }
 
-    impl<Value> RawVariable for SimpleVariable<Value> {
+    #[derive(Clone, Copy, Debug, Display, Ord, PartialOrd, Eq, PartialEq)]
+    pub struct PathBufVariable(pub &'static str);
+
+    impl const From<&'static str> for PathBufVariable {
+        fn from(value: &'static str) -> Self {
+            PathBufVariable(value)
+        }
+    }
+
+    impl RawVariable for PathBufVariable {
+        fn name(&self) -> &str {
+            self.0
+        }
+    }
+
+    impl TypedVariable for PathBufVariable {
+        type Value = PathBuf;
+        type Borrowed = Path;
+        fn parse(&self, value: &str) -> Result<Self::Value> {
+            PathBuf::from_str(value)
+        }
+        fn generate(&self, value: &Self::Borrowed) -> Result<String> {
+            value.to_str().context("Path is not a valid string.").map(ToString::to_string)
+        }
+    }
+
+    pub struct SimpleVariable<Value, Borrowed: ?Sized = Value> {
+        pub name:          Cow<'static, str>,
+        pub phantom_data:  PhantomData<Value>,
+        pub phantom_data2: PhantomData<Borrowed>,
+    }
+
+    impl<Value, Borrowed: ?Sized> From<&'static str> for SimpleVariable<Value, Borrowed> {
+        fn from(value: &'static str) -> Self {
+            SimpleVariable::new(value)
+        }
+    }
+
+    impl<Value, Borrowed: ?Sized> SimpleVariable<Value, Borrowed> {
+        pub const fn new(name: &'static str) -> Self {
+            Self {
+                name:          Cow::Borrowed(name),
+                phantom_data:  PhantomData,
+                phantom_data2: PhantomData,
+            }
+        }
+    }
+
+    impl<Value, Borrowed: ?Sized> RawVariable for SimpleVariable<Value, Borrowed> {
         fn name(&self) -> &str {
             &self.name
         }
     }
 
-    impl<Value: FromString + ToString> TypedVariable for SimpleVariable<Value> {
+    impl<Value: FromString, Borrowed: ToString + ?Sized> TypedVariable
+        for SimpleVariable<Value, Borrowed>
+    {
         type Value = Value;
+        type Borrowed = Borrowed;
         fn parse(&self, value: &str) -> Result<Self::Value> {
             Value::from_str(&value)
         }
-        fn generate(&self, value: &Self::Value) -> Result<String> {
-            Ok(Value::to_string(value))
+        fn generate(&self, value: &Self::Borrowed) -> Result<String> {
+            Ok(Borrowed::to_string(value))
         }
     }
 

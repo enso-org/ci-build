@@ -6,12 +6,16 @@ use tokio::process::Child;
 
 use crate::paths::generated;
 use crate::project::gui::BuildInfo;
+use crate::project::wasm;
 use crate::project::wasm::Artifact;
 use crate::project::ProcessWrapper;
 use ide_ci::io::download_all;
+use ide_ci::program::command;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
 use ide_ci::programs::Npm;
+
+use ide_ci::env::new::TypedVariable;
 
 lazy_static! {
     /// Path to the file with build information that is consumed by the JS part of the IDE.
@@ -28,48 +32,15 @@ pub const ARCHIVED_ASSET_FILE: &str = "ide-assets-main/content/assets/";
 
 pub mod env {
     use super::*;
+    use ide_ci::define_env_var;
 
-    pub struct IdeDistPath;
-    impl EnvironmentVariable for IdeDistPath {
-        const NAME: &'static str = "ENSO_BUILD_IDE";
-        type Value = PathBuf;
-    }
-
-    pub struct ProjectManager;
-    impl EnvironmentVariable for ProjectManager {
-        const NAME: &'static str = "ENSO_BUILD_PROJECT_MANAGER";
-        type Value = PathBuf;
-    }
-
-    pub struct GuiDistPath;
-    impl EnvironmentVariable for GuiDistPath {
-        const NAME: &'static str = "ENSO_BUILD_GUI";
-        type Value = PathBuf;
-    }
-
-    pub struct IconsPath;
-    impl EnvironmentVariable for IconsPath {
-        const NAME: &'static str = "ENSO_BUILD_ICONS";
-        type Value = PathBuf;
-    }
-
-    pub struct WasmPath;
-    impl EnvironmentVariable for WasmPath {
-        const NAME: &'static str = "ENSO_BUILD_GUI_WASM";
-        type Value = PathBuf;
-    }
-
-    pub struct JsGluePath;
-    impl EnvironmentVariable for JsGluePath {
-        const NAME: &'static str = "ENSO_BUILD_GUI_JS_GLUE";
-        type Value = PathBuf;
-    }
-
-    pub struct AssetsPath;
-    impl EnvironmentVariable for AssetsPath {
-        const NAME: &'static str = "ENSO_BUILD_GUI_ASSETS";
-        type Value = PathBuf;
-    }
+    define_env_var!(ENSO_BUILD_IDE, PathBuf);
+    define_env_var!(ENSO_BUILD_PROJECT_MANAGER, PathBuf);
+    define_env_var!(ENSO_BUILD_GUI, PathBuf);
+    define_env_var!(ENSO_BUILD_ICONS, PathBuf);
+    define_env_var!(ENSO_BUILD_GUI_WASM, PathBuf);
+    define_env_var!(ENSO_BUILD_GUI_JS_GLUE, PathBuf);
+    define_env_var!(ENSO_BUILD_GUI_ASSETS, PathBuf);
 }
 
 #[derive(Clone, Debug)]
@@ -116,6 +87,43 @@ pub enum Command {
     Watch,
 }
 
+/// Things that are common to `watch` and `build`.
+#[derive(Debug)]
+pub struct ContentEnvironment<Assets, Output> {
+    asset_dir:   Assets,
+    wasm:        wasm::Artifact,
+    output_path: Output,
+}
+
+impl<Output: AsRef<Path>> ContentEnvironment<TempDir, Output> {
+    pub async fn new(
+        ide: &IdeDesktop,
+        wasm: impl Future<Output = Result<Artifact>>,
+        build_info: &BuildInfo,
+        output_path: Output,
+    ) -> Result<Self> {
+        let installation = ide.install();
+        let asset_dir = TempDir::new()?;
+        let assets_download = download_js_assets(&asset_dir);
+        let (wasm, _, _) = try_join3(wasm, installation, assets_download).await?;
+        ide.write_build_info(&build_info)?;
+        Ok(ContentEnvironment { asset_dir, wasm, output_path })
+    }
+}
+
+impl<Assets: AsRef<Path>, Output: AsRef<Path>> command::FallibleManipulator
+    for ContentEnvironment<Assets, Output>
+{
+    fn try_applying<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) -> Result {
+        command
+            .set_env(env::ENSO_BUILD_GUI, &self.output_path)?
+            .set_env(env::ENSO_BUILD_GUI_WASM, &self.wasm.wasm())?
+            .set_env(env::ENSO_BUILD_GUI_JS_GLUE, &self.wasm.js_glue())?
+            .set_env(env::ENSO_BUILD_GUI_ASSETS, &self.asset_dir)?;
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct IdeDesktop {
     pub package_dir: PathBuf,
@@ -142,59 +150,46 @@ impl IdeDesktop {
     }
 
     pub async fn build_icons(&self, output_path: impl AsRef<Path>) -> Result<IconsArtifacts> {
-        env::IconsPath.set_path(&output_path);
+        // TypedVariable::
+        env::ENSO_BUILD_ICONS.set(output_path.as_ref());
         self.npm()?.workspace(Workspaces::Icons).run("build", EMPTY_ARGS).run_ok().await?;
         Ok(IconsArtifacts(output_path.as_ref().into()))
     }
 
-    pub async fn build(
+    pub async fn build_content(
         &self,
         wasm: impl Future<Output = Result<Artifact>>,
         build_info: &BuildInfo,
         output_path: impl AsRef<Path>,
     ) -> Result {
-        let installation = self.install();
-
-        let assets = TempDir::new()?;
-        let assets_download = download_js_assets(&assets);
-
-        let (wasm, _, _) = try_join3(wasm, installation, assets_download).await?;
-
-        self.write_build_info(&build_info)?;
-
-        // TODO: this should be set only on a child processes
-        env::GuiDistPath.set_path(&output_path);
-        env::WasmPath.set_path(&wasm.wasm());
-        env::JsGluePath.set_path(&wasm.js_glue());
-        env::AssetsPath.set_path(&assets);
-        self.npm()?.workspace(Workspaces::Content).run("build", EMPTY_ARGS).run_ok().await?;
+        let env = ContentEnvironment::new(self, wasm, build_info, output_path).await?;
+        //env.apply();
+        self.npm()?
+            .try_applying(&env)?
+            .workspace(Workspaces::Content)
+            .run("build", EMPTY_ARGS)
+            .run_ok()
+            .await?;
         Ok(())
     }
 
-    pub async fn watch(
+    pub async fn watch_content(
         &self,
         wasm: impl Future<Output = Result<Artifact>>,
         build_info: &BuildInfo,
     ) -> Result<Watcher> {
-        // TODO deduplicate with build
-        self.install().await?;
-
-        let wasm_artifacts = wasm.await?;
-        let asset_artifacts = TempDir::new()?;
-        download_js_assets(&asset_artifacts).await?;
-
-
-        self.write_build_info(&build_info)?;
-
-        // TODO: this should be set only on a child processes
+        // When watching we expect our artifacts to be served through server, not appear in any
+        // specific location on the disk.
         let output_path = TempDir::new()?;
-        env::GuiDistPath.set_path(&output_path);
-        env::WasmPath.set_path(&wasm_artifacts.wasm());
-        env::JsGluePath.set_path(&wasm_artifacts.js_glue());
-        env::AssetsPath.set_path(&asset_artifacts);
-        let child_process =
-            self.npm()?.workspace(Workspaces::Content).run("watch", EMPTY_ARGS).spawn()?;
-        Ok(Watcher { child_process, asset_artifacts, wasm_artifacts })
+        let watch_environment =
+            ContentEnvironment::new(self, wasm, build_info, output_path).await?;
+        let child_process = self
+            .npm()?
+            .try_applying(&watch_environment)?
+            .workspace(Workspaces::Content)
+            .run("watch", EMPTY_ARGS)
+            .spawn_intercepting()?;
+        Ok(Watcher { child_process, watch_environment })
     }
 
     pub async fn dist(
@@ -204,9 +199,9 @@ impl IdeDesktop {
         output_path: impl AsRef<Path>,
     ) -> Result {
         self.install().await?;
-        env::GuiDistPath.set_path(&gui);
-        env::ProjectManager.set_path(&project_manager);
-        env::IdeDistPath.set_path(&output_path);
+        env::ENSO_BUILD_GUI.set(&gui);
+        env::ENSO_BUILD_PROJECT_MANAGER.set(&project_manager);
+        env::ENSO_BUILD_IDE.set(&output_path);
         let content_build =
             self.npm()?.workspace(Workspaces::Enso).run("build", EMPTY_ARGS).run_ok();
 
@@ -214,7 +209,7 @@ impl IdeDesktop {
         let icons_dist = TempDir::new()?;
         let icons_build = self.build_icons(&icons_dist);
         try_join(icons_build, content_build).await?;
-        env::IconsPath.set_path(&icons_dist);
+        env::ENSO_BUILD_ICONS.set(&icons_dist);
         self.npm()?.workspace(Workspaces::Enso).run("dist", EMPTY_ARGS).run_ok().await?;
         Ok(())
     }
@@ -228,9 +223,8 @@ impl From<&generated::RepoRoot> for IdeDesktop {
 
 #[derive(Debug)]
 pub struct Watcher {
-    pub asset_artifacts: TempDir,
-    pub wasm_artifacts:  crate::project::wasm::Artifact,
-    pub child_process:   Child,
+    pub watch_environment: ContentEnvironment<TempDir, TempDir>,
+    pub child_process:     Child,
 }
 
 impl ProcessWrapper for Watcher {

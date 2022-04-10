@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use anyhow::Context;
 
-use crate::program::argument::Argument;
+use crate::env::new::TypedVariable;
 use std::borrow::BorrowMut;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -65,10 +65,23 @@ pub trait MyCommand<P: Program>: BorrowMut<Command> + From<Command> + Into<Comma
 pub trait IsCommandWrapper {
     fn borrow_mut_command(&mut self) -> &mut tokio::process::Command;
 
-    fn argument<A: Argument>(&mut self, argument: &A) -> &mut Self {
-        argument.apply(self)
+    fn apply<M: Manipulator>(&mut self, manipulator: &M) -> &mut Self {
+        manipulator.apply(self);
+        self
     }
 
+    fn try_applying<M: FallibleManipulator>(&mut self, manipulator: &M) -> Result<&mut Self> {
+        manipulator.try_applying(self).map(|_| self)
+    }
+
+    fn set_env<T: TypedVariable, V: AsRef<T::Borrowed>>(
+        &mut self,
+        variable: T,
+        value: &V,
+    ) -> Result<&mut Self> {
+        self.env(variable.name(), variable.generate(value.as_ref())?);
+        Ok(self)
+    }
 
     ///////////
 
@@ -230,7 +243,7 @@ impl Command {
         Command { inner, status_checker: Arc::new(P::handle_exit_status) }
     }
 
-    pub fn run_ok(&mut self) -> BoxFuture<'static, Result<()>> {
+    pub fn spawn_intercepting(&mut self) -> Result<Child> {
         use command_group::tokio::AsyncCommandGroup;
 
         self.stdout(Stdio::piped());
@@ -239,16 +252,22 @@ impl Command {
         let pretty = self.describe();
         let program = self.inner.as_std().get_program();
         let program = Path::new(program).file_stem().unwrap_or_default().to_os_string();
-        let status_checker = self.status_checker.clone();
         debug!("Will run: {}", pretty);
         let child = self.inner.group_spawn();
+        let program = program.to_string_lossy();
+        let mut child = child?.into_inner();
+        // FIXME unwraps
+        spawn_log_processor(format!("{program}ℹ️"), child.stdout.take().unwrap());
+        spawn_log_processor(format!("{program}⚠️"), child.stderr.take().unwrap());
+        Ok(child)
+    }
+
+    pub fn run_ok(&mut self) -> BoxFuture<'static, Result<()>> {
+        let child = self.spawn_intercepting();
+        let status_checker = self.status_checker.clone();
+        let pretty = self.describe();
         async move {
-            let program = program.to_string_lossy();
-            let mut child = child?.into_inner();
-            // FIXME unwraps
-            spawn_log_processor(format!("{program}ℹ️"), child.stdout.take().unwrap());
-            spawn_log_processor(format!("{program}⚠️"), child.stderr.take().unwrap());
-            let status = child.wait().await?;
+            let status = child?.wait().await?;
             status_checker(status).context(format!("Command failed: {}", pretty))
         }
         .boxed()
@@ -319,6 +338,15 @@ pub fn spawn_log_processor(
         Result::Ok(())
     })
 }
+
+pub trait Manipulator {
+    fn apply<C: IsCommandWrapper + ?Sized>(&self, command: &mut C);
+}
+
+pub trait FallibleManipulator {
+    fn try_applying<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) -> Result;
+}
+
 
 #[cfg(test)]
 mod tests {

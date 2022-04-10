@@ -270,7 +270,9 @@ impl BuildContext {
                 };
                 async move {
                     let artifacts = Ide.build(input, params.output_path).await?;
-                    artifacts.upload().await?;
+                    if is_in_env() {
+                        artifacts.upload().await?;
+                    }
                     Ok(())
                 }
                 .boxed()

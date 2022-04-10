@@ -109,7 +109,7 @@ impl IsWatchable for Wasm {
                 .arg("build")
                 .args(["--crate-path", input.crate_path.as_str()])
                 .args(["--wasm-output-path", output_path.as_str()])
-                .spawn()?;
+                .spawn_intercepting()?;
             let artifact = Artifact(RepoRootDistWasm::new(output_path.as_ref()));
             Ok(Self::Watcher { artifact, watch_process })
         }

@@ -40,7 +40,7 @@ impl IsTarget for Gui {
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         async move {
             let ide = IdeDesktop::new(&input.repo_root.app.ide_desktop);
-            ide.build(input.wasm, &input.build_info.await?, &output_path).await?;
+            ide.build_content(input.wasm, &input.build_info.await?, &output_path).await?;
             Ok(Artifact::new(output_path.as_ref()))
         }
         .boxed()
@@ -57,7 +57,7 @@ impl IsWatchable for Gui {
     ) -> BoxFuture<'static, Result<Self::Watcher>> {
         async move {
             let ide = IdeDesktop::new(&input.repo_root.app.ide_desktop);
-            let watch_process = ide.watch(input.wasm, &input.build_info.await?).await?;
+            let watch_process = ide.watch_content(input.wasm, &input.build_info.await?).await?;
             let artifact = Self::Artifact::from_existing(output_path).await?;
             Ok(Self::Watcher { watch_process, artifact })
         }

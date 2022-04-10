@@ -1,7 +1,7 @@
 use crate::new_command_type;
 use crate::prelude::*;
 
-use crate::program::argument::Argument;
+use crate::program::command::Manipulator;
 
 #[derive(Clone, Debug, Default)]
 pub struct Git {
@@ -36,10 +36,10 @@ new_command_type!(Git, GitCommand);
 impl GitCommand {
     pub fn nice_clean(&mut self) -> &mut Self {
         self.arg(Command::Clean)
-            .argument(&Clean::Ignored)
-            .argument(&Clean::Force)
-            .argument(&Clean::UntrackedDirectories)
-            .argument(&Clean::Exclude(".idea".into()))
+            .apply(&Clean::Ignored)
+            .apply(&Clean::Force)
+            .apply(&Clean::UntrackedDirectories)
+            .apply(&Clean::Exclude(".idea".into()))
     }
 }
 
@@ -89,8 +89,9 @@ pub enum Clean {
     OnlyIgnored,
 }
 
-impl Argument for Clean {
-    fn apply<'a, C: IsCommandWrapper + ?Sized>(&self, c: &'a mut C) -> &'a mut C {
+impl Manipulator for Clean {
+    fn apply<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) {
+        // fn apply<'a, C: IsCommandWrapper + ?Sized>(&self, c: &'a mut C) -> &'a mut C {
         let args: Vec<&str> = match self {
             Clean::UntrackedDirectories => vec!["-d"],
             Clean::Force => vec!["-f"],
@@ -100,6 +101,6 @@ impl Argument for Clean {
             Clean::Ignored => vec!["-x"],
             Clean::OnlyIgnored => vec!["-X"],
         };
-        c.args(args)
+        command.args(args);
     }
 }

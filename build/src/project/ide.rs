@@ -5,6 +5,7 @@ use crate::paths::generated::RepoRoot;
 use futures_util::future::try_join;
 use ide_ci::actions::artifacts::upload_directory;
 use ide_ci::actions::artifacts::upload_single_file;
+use ide_ci::actions::workflow::is_in_env;
 use platforms::TARGET_OS;
 
 pub struct Artifact {
@@ -33,9 +34,13 @@ impl Artifact {
     }
 
     pub async fn upload(&self) -> Result {
-        upload_directory(&self.unpacked, format!("ide-unpacked-{}", TARGET_OS)).await?;
-        upload_single_file(&self.image, format!("ide-{}", TARGET_OS)).await?;
-        upload_single_file(&self.image_checksum, format!("ide-{}", TARGET_OS)).await?;
+        if is_in_env() {
+            upload_directory(&self.unpacked, format!("ide-unpacked-{}", TARGET_OS)).await?;
+            upload_single_file(&self.image, format!("ide-{}", TARGET_OS)).await?;
+            upload_single_file(&self.image_checksum, format!("ide-{}", TARGET_OS)).await?;
+        } else {
+            info!("Not in the CI environment, will not upload the artifacts.")
+        }
         Ok(())
     }
 }
