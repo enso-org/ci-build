@@ -14,8 +14,8 @@ jobs:
       matrix:
         os:
           - [macos-latest]
-          - [self-hosted, Windows, "engine-ci"]
-          - [self-hosted, Linux, "engine-ci"]
+          - [self-hosted, Windows, engine]
+          - [self-hosted, Linux, engine]
       fail-fast: false
 
     # Steps represent a sequence of tasks that will be executed as part of the job
