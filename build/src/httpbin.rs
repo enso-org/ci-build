@@ -10,7 +10,7 @@ pub struct Spawned {
 }
 
 pub async fn get_and_spawn_httpbin(port: u16) -> Result<Spawned> {
-    Go.call_args(["get", "-v", "github.com/ahmetb/go-httpbin/cmd/httpbin"]).await?;
+    Go.call_args(["install", "-v", "github.com/ahmetb/go-httpbin/cmd/httpbin@latest"]).await?;
     let gopath = String::from_utf8(
         Go.cmd()?.args(["env", "GOPATH"]).stdout(Stdio::piped()).output().await?.stdout,
     )?;
