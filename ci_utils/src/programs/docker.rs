@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+use crate::env::new::TypedVariable;
 use platforms::TARGET_OS;
 use shrinkwraprs::Shrinkwrap;
 use std::collections::HashMap;
@@ -361,9 +362,17 @@ impl RunOptions {
         }
     }
 
-    pub fn env(&mut self, name: impl Into<OsString>, value: impl Into<OsString>) -> &mut Self {
+    pub fn env_raw(&mut self, name: impl Into<OsString>, value: impl Into<OsString>) -> &mut Self {
         self.env.insert(name.into(), value.into());
         self
+    }
+
+    pub fn env<T: TypedVariable>(
+        &mut self,
+        variable: &T,
+        value: impl Borrow<T::Borrowed>,
+    ) -> Result<&mut Self> {
+        Ok(self.env_raw(variable.name(), variable.generate(value.borrow())?))
     }
 
     pub fn bind_docker_daemon(&mut self) {

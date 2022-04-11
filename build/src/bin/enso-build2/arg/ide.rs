@@ -27,6 +27,10 @@ pub enum Command {
         #[clap(flatten)]
         params: BuildInput,
     },
+    Start {
+        #[clap(flatten)]
+        params: BuildInput,
+    },
     Watch {
         #[clap(flatten)]
         gui:             crate::arg::gui::WatchInput,
@@ -37,17 +41,6 @@ pub enum Command {
 
 #[derive(Args, Clone, Debug)]
 pub struct Target {
-    // #[clap(flatten)]
-    // pub project_manager: TargetSource<ProjectManager>,
-    // #[clap(flatten)]
-    // pub wasm:            TargetSource<Wasm>,
-    // #[clap(flatten)]
-    // pub gui:             Source<Gui>,
-    // #[clap(flatten)]
-    // pub project_manager: Source<ProjectManager>,
-    // #[clap(flatten)]
-    // pub output_path:     OutputPath<Self>,
-    // Command for IDE package.
     #[clap(subcommand)]
     pub command: Command,
 }

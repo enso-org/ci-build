@@ -73,7 +73,7 @@ impl BuildContext {
         let versions = enso_build::version::deduce_versions(
             &octocrab,
             BuildKind::Dev,
-            Some(&cli.repo_remote),
+            Ok(&cli.repo_remote),
             &cli.repo_path,
         )
         .await?;
@@ -262,17 +262,21 @@ impl BuildContext {
     pub fn handle_ide(&self, ide: arg::ide::Target) -> BoxFuture<'static, Result> {
         match ide.command {
             arg::ide::Command::Build { params } => {
-                let input = ide::BuildInput {
-                    gui:             self.get(Gui, params.gui),
-                    project_manager: self.get(ProjectManager, params.project_manager),
-                    repo_root:       self.repo_root(),
-                    version:         self.triple.versions.version.clone(),
-                };
+                let build_job = self.build_ide(params);
                 async move {
-                    let artifacts = Ide.build(input, params.output_path).await?;
+                    let artifacts = build_job.await?;
                     if is_in_env() {
                         artifacts.upload().await?;
                     }
+                    Ok(())
+                }
+                .boxed()
+            }
+            arg::ide::Command::Start { params } => {
+                let build_job = self.build_ide(params);
+                async move {
+                    let ide = build_job.await?;
+                    Command::new(ide.unpacked.join("Enso")).run_ok().await?;
                     Ok(())
                 }
                 .boxed()
@@ -290,7 +294,19 @@ impl BuildContext {
         }
     }
 
-
+    pub fn build_ide(
+        &self,
+        params: arg::ide::BuildInput,
+    ) -> BoxFuture<'static, Result<ide::Artifact>> {
+        let arg::ide::BuildInput { gui, project_manager, output_path } = params;
+        let input = ide::BuildInput {
+            gui:             self.get(Gui, gui),
+            project_manager: self.get(ProjectManager, project_manager),
+            repo_root:       self.repo_root(),
+            version:         self.triple.versions.version.clone(),
+        };
+        Ide.build(input, output_path)
+    }
     //
     // pub async fn aaa(&self, source: arg::Source<Wasm>) -> Result {
     //     let wasm = self.resolve(source).context("Failed to resolve wasm description.")?;
@@ -369,7 +385,11 @@ impl Resolvable for Wasm {
         ctx: &BuildContext,
         from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
-        Ok(wasm::BuildInput { repo_root: ctx.repo_root(), crate_path: from.crate_path })
+        Ok(wasm::BuildInput {
+            repo_root:           ctx.repo_root(),
+            crate_path:          from.crate_path,
+            extra_cargo_options: from.cargo_options,
+        })
     }
 }
 
@@ -398,30 +418,6 @@ impl Resolvable for ProjectManager {
         })
     }
 }
-
-//
-// pub async fn get_external<Target: IsTarget>(
-//     target: Target,
-//     source: ExternalSource,
-//     output: PathBuf,
-// ) -> Result<Target::Output> {
-//     match source {
-//         Source::CiRun(ci_run) => target.download_artifact(ci_run, output).await,
-//         Source::OngoingCiRun => {
-//             let artifact_name = target.artifact_name().to_string();
-//             ide_ci::actions::artifacts::download_single_file_artifact(
-//                 artifact_name,
-//                 output.as_path(),
-//             )
-//             .await?;
-//             Target::Output::from_existing(output).await
-//         }
-//         Source::LocalFile(source_dir) => {
-//             ide_ci::fs::mirror_directory(source_dir, output.as_path()).await?;
-//             Target::Output::from_existing(output).await
-//         }
-//     }
-// }
 
 pub fn get_target<Target: IsTarget>(
     target: &Target,

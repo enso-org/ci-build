@@ -5,6 +5,25 @@ use tempfile::TempDir;
 
 use crate::programs::Cargo;
 
+#[derive(Clone, Copy, Debug, Display)]
+pub enum Target {
+    Bundler,
+    NodeJs,
+    Web,
+    NoModules,
+}
+
+impl AsRef<OsStr> for Target {
+    fn as_ref(&self) -> &OsStr {
+        &OsStr::new(match self {
+            Target::Bundler => "bundler",
+            Target::NodeJs => "nodejs",
+            Target::Web => "web",
+            Target::NoModules => "no-modules",
+        })
+    }
+}
+
 pub struct WasmPack;
 
 impl Program for WasmPack {
@@ -19,13 +38,26 @@ impl Program for WasmPack {
 new_command_type! {WasmPack, WasmPackCommand}
 
 impl WasmPackCommand {
-    pub fn build(mut self) -> WasmPackBuildCommand {
-        self.arg("build");
-        self.into_inner().into()
+    pub fn build(&mut self) -> &mut Self {
+        self.arg("build")
+    }
+
+    pub fn target(&mut self, target: Target) -> &mut Self {
+        self.arg("--target").arg(target)
+    }
+
+    /// Sets the output directory with a relative path.
+    pub fn output_directory(&mut self, output_path: impl AsRef<Path>) -> &mut Self {
+        self.arg("--out-dir").arg(output_path.as_ref())
+    }
+
+    /// Sets the output file names. Defaults to package name.
+    pub fn output_name(&mut self, output_name: impl AsRef<Path>) -> &mut Self {
+        self.arg("--out-name").arg(output_name.as_ref())
     }
 }
 
-new_command_type! {WasmPack, WasmPackBuildCommand}
+// new_command_type! {WasmPack, WasmPackBuildCommand}
 
 pub async fn install_if_missing() -> Result {
     let temp = TempDir::new()?;

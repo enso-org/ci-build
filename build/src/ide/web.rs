@@ -15,8 +15,6 @@ use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
 use ide_ci::programs::Npm;
 
-use ide_ci::env::new::TypedVariable;
-
 lazy_static! {
     /// Path to the file with build information that is consumed by the JS part of the IDE.
     ///
@@ -31,7 +29,6 @@ pub const ARCHIVED_ASSET_FILE: &str = "ide-assets-main/content/assets/";
 
 
 pub mod env {
-    use super::*;
     use ide_ci::define_env_var;
 
     define_env_var!(ENSO_BUILD_IDE, PathBuf);
@@ -46,6 +43,12 @@ pub mod env {
 #[derive(Clone, Debug)]
 pub struct IconsArtifacts(pub PathBuf);
 
+impl command::FallibleManipulator for IconsArtifacts {
+    fn try_applying<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) -> Result {
+        command.set_env(env::ENSO_BUILD_ICONS, &self.0)?;
+        Ok(())
+    }
+}
 
 /// Fill the directory under `output_path` with the assets.
 pub async fn download_js_assets(output_path: impl AsRef<Path>) -> Result {
@@ -56,13 +59,6 @@ pub async fn download_js_assets(output_path: impl AsRef<Path>) -> Result {
     ide_ci::archive::zip::extract_subtree(&mut archive, &archived_asset_prefix, &output)?;
     Ok(())
 }
-//
-// pub trait Inputs {
-//     fn wasm(&self) -> PathBuf;
-//     fn js_glue(&self) -> PathBuf;
-//     fn output_path(&self) -> PathBuf;
-//     fn build_info(&self) -> BuildInfo;
-// }
 
 pub enum Workspaces {
     Icons,
@@ -116,10 +112,10 @@ impl<Assets: AsRef<Path>, Output: AsRef<Path>> command::FallibleManipulator
 {
     fn try_applying<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) -> Result {
         command
-            .set_env(env::ENSO_BUILD_GUI, &self.output_path)?
+            .set_env(env::ENSO_BUILD_GUI, self.output_path.as_ref())?
             .set_env(env::ENSO_BUILD_GUI_WASM, &self.wasm.wasm())?
             .set_env(env::ENSO_BUILD_GUI_JS_GLUE, &self.wasm.js_glue())?
-            .set_env(env::ENSO_BUILD_GUI_ASSETS, &self.asset_dir)?;
+            .set_env(env::ENSO_BUILD_GUI_ASSETS, self.asset_dir.as_ref())?;
         Ok(())
     }
 }
@@ -136,6 +132,7 @@ impl IdeDesktop {
 
     pub fn npm(&self) -> Result<NpmCommand> {
         let mut command = Npm.cmd()?;
+        command.arg("--color").arg("always");
         command.current_dir(&self.package_dir);
         Ok(command)
     }
@@ -150,9 +147,12 @@ impl IdeDesktop {
     }
 
     pub async fn build_icons(&self, output_path: impl AsRef<Path>) -> Result<IconsArtifacts> {
-        // TypedVariable::
-        env::ENSO_BUILD_ICONS.set(output_path.as_ref());
-        self.npm()?.workspace(Workspaces::Icons).run("build", EMPTY_ARGS).run_ok().await?;
+        self.npm()?
+            .workspace(Workspaces::Icons)
+            .set_env(env::ENSO_BUILD_ICONS, output_path.as_ref())?
+            .run("build", EMPTY_ARGS)
+            .run_ok()
+            .await?;
         Ok(IconsArtifacts(output_path.as_ref().into()))
     }
 
@@ -198,19 +198,28 @@ impl IdeDesktop {
         project_manager: &crate::project::project_manager::Artifact,
         output_path: impl AsRef<Path>,
     ) -> Result {
-        self.install().await?;
-        env::ENSO_BUILD_GUI.set(&gui);
-        env::ENSO_BUILD_PROJECT_MANAGER.set(&project_manager);
-        env::ENSO_BUILD_IDE.set(&output_path);
-        let content_build =
-            self.npm()?.workspace(Workspaces::Enso).run("build", EMPTY_ARGS).run_ok();
+        let content_build = self
+            .npm()?
+            .set_env(env::ENSO_BUILD_GUI, gui.as_ref())?
+            .set_env(env::ENSO_BUILD_PROJECT_MANAGER, project_manager.as_ref())?
+            .set_env(env::ENSO_BUILD_IDE, output_path.as_ref())?
+            .workspace(Workspaces::Enso)
+            .run("build", EMPTY_ARGS)
+            .run_ok();
 
         // &input.repo_root.dist.icons
         let icons_dist = TempDir::new()?;
         let icons_build = self.build_icons(&icons_dist);
-        try_join(icons_build, content_build).await?;
-        env::ENSO_BUILD_ICONS.set(&icons_dist);
-        self.npm()?.workspace(Workspaces::Enso).run("dist", EMPTY_ARGS).run_ok().await?;
+        let (icons, _content) = try_join(icons_build, content_build).await?;
+        self.npm()?
+            .try_applying(&icons)?
+            .set_env(env::ENSO_BUILD_GUI, gui.as_ref())?
+            .set_env(env::ENSO_BUILD_IDE, output_path.as_ref())?
+            .set_env(env::ENSO_BUILD_PROJECT_MANAGER, project_manager.as_ref())?
+            .workspace(Workspaces::Enso)
+            .run("dist", EMPTY_ARGS)
+            .run_ok()
+            .await?;
         Ok(())
     }
 }

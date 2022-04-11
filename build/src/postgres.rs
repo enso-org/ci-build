@@ -1,6 +1,7 @@
 use crate::prelude::*;
-use std::collections::HashMap;
 
+use ide_ci::env::new::RawVariable;
+use ide_ci::env::new::TypedVariable;
 use ide_ci::get_free_port;
 use ide_ci::programs::docker::ContainerId;
 use ide_ci::programs::docker::ImageId;
@@ -15,6 +16,23 @@ use tokio::process::Child;
 
 /// Port used by Postgres in its container.
 const POSTGRES_CONTAINER_DEFAULT_PORT: u16 = 5432;
+
+/// Environment variables used to configure the Postgres container.
+pub mod env {
+    pub mod container {
+        use ide_ci::define_env_var;
+        define_env_var!(POSTGRES_DB, String);
+        define_env_var!(POSTGRES_USER, String);
+        define_env_var!(POSTGRES_PASSWORD, String);
+    }
+    pub mod tests {
+        use ide_ci::define_env_var;
+        define_env_var!(ENSO_DATABASE_TEST_DB_NAME, String);
+        define_env_var!(ENSO_DATABASE_TEST_HOST, String);
+        define_env_var!(ENSO_DATABASE_TEST_DB_USER, String);
+        define_env_var!(ENSO_DATABASE_TEST_DB_PASSWORD, String);
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum EndpointConfiguration {
@@ -61,34 +79,23 @@ impl Configuration {
         ImageId(format!("postgres:{}", &self.version))
     }
 
-    pub fn enso_test_env(&self) -> HashMap<&str, String> {
-        [
-            ("ENSO_DATABASE_TEST_DB_NAME", self.database_name.clone()),
-            match &self.endpoint {
-                EndpointConfiguration::Host { port } =>
-                    ("ENSO_DATABASE_TEST_HOST", format!("localhost:{port}")),
-                EndpointConfiguration::Container { .. } => (
-                    "ENSO_DATABASE_TEST_HOST",
-                    format!("localhost:{POSTGRES_CONTAINER_DEFAULT_PORT}"),
-                ),
-            },
-            ("ENSO_DATABASE_TEST_DB_USER", self.user.clone()),
-            ("ENSO_DATABASE_TEST_DB_PASSWORD", self.password.clone()),
-        ]
-        .into_iter()
-        .collect()
-    }
-
-    pub fn set_enso_test_env(&self) {
-        for (name, val) in self.enso_test_env() {
-            std::env::set_var(name, val);
-        }
+    pub fn set_enso_test_env(&self) -> Result {
+        env::tests::ENSO_DATABASE_TEST_DB_NAME.set(&self.database_name)?;
+        env::tests::ENSO_DATABASE_TEST_HOST.set(match &self.endpoint {
+            EndpointConfiguration::Host { port } => format!("localhost:{port}"),
+            EndpointConfiguration::Container { .. } =>
+                format!("localhost:{POSTGRES_CONTAINER_DEFAULT_PORT}"),
+        })?;
+        env::tests::ENSO_DATABASE_TEST_DB_USER.set(&self.user)?;
+        env::tests::ENSO_DATABASE_TEST_DB_PASSWORD.set(&self.password)?;
+        Ok(())
     }
 
     pub fn clear_enso_test_env(&self) {
-        for (name, _) in self.enso_test_env() {
-            std::env::remove_var(name);
-        }
+        env::tests::ENSO_DATABASE_TEST_DB_NAME.remove();
+        env::tests::ENSO_DATABASE_TEST_HOST.remove();
+        env::tests::ENSO_DATABASE_TEST_DB_USER.remove();
+        env::tests::ENSO_DATABASE_TEST_DB_PASSWORD.remove();
     }
 
     pub async fn cleanup(&self) -> Result {
@@ -155,9 +162,9 @@ impl Postgresql {
         let _ = config.cleanup().await;
 
         let mut opts = RunOptions::new(config.image_id());
-        opts.env("POSTGRES_DB", &config.database_name);
-        opts.env("POSTGRES_USER", &config.user);
-        opts.env("POSTGRES_PASSWORD", &config.password);
+        opts.env(&env::container::POSTGRES_DB, &*config.database_name)?;
+        opts.env(&env::container::POSTGRES_USER, &*config.user)?;
+        opts.env(&env::container::POSTGRES_PASSWORD, &*config.password)?;
         match &config.endpoint {
             EndpointConfiguration::Host { port } => {
                 opts.publish_port(*port, POSTGRES_CONTAINER_DEFAULT_PORT);
@@ -187,7 +194,7 @@ impl Postgresql {
         // Put back stream we've been reading and pack the whole thing back for the caller.
         child.stderr = Some(stderr);
 
-        config.set_enso_test_env();
+        config.set_enso_test_env()?;
         Ok(PostgresContainer { _docker_run: child, config })
     }
 }

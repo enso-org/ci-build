@@ -74,12 +74,12 @@ pub trait IsCommandWrapper {
         manipulator.try_applying(self).map(|_| self)
     }
 
-    fn set_env<T: TypedVariable, V: AsRef<T::Borrowed>>(
+    fn set_env<T: TypedVariable, V: Borrow<T::Borrowed> + ?Sized>(
         &mut self,
         variable: T,
         value: &V,
     ) -> Result<&mut Self> {
-        self.env(variable.name(), variable.generate(value.as_ref())?);
+        self.env(variable.name(), variable.generate(value.borrow())?);
         Ok(self)
     }
 

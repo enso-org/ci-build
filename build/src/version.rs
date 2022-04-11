@@ -1,17 +1,17 @@
-// use crate::preflight_check::NIGHTLY_RELEASE_TITLE_INFIX;
-use crate::args::default_repo;
 use crate::args::BuildKind;
 use crate::prelude::*;
 use chrono::Datelike;
+use ide_ci::define_env_var;
+use ide_ci::env::new::TypedVariable;
 use ide_ci::models::config::RepoContext;
 use octocrab::models::repos::Release;
 use semver::Prerelease;
 use std::collections::BTreeSet;
 
-/// Variable that stores Enso Engine version.
-pub const VERSION_VAR_NAME: &str = "ENSO_VERSION";
-pub const EDITION_VAR_NAME: &str = "ENSO_EDITION";
-pub const RELEASE_MODE_VAR_NAME: &str = "ENSO_RELEASE_MODE";
+// Variable that stores Enso Engine version.
+define_env_var!(ENSO_VERSION, Version);
+define_env_var!(ENSO_EDITION, String);
+define_env_var!(ENSO_RELEASE_MODE, bool);
 
 pub const LOCAL_BUILD_PREFIX: &str = "dev";
 pub const NIGHTLY_BUILD_PREFIX: &str = "nightly";
@@ -111,15 +111,10 @@ impl Versions {
     }
 
     pub fn publish(&self) -> Result {
-        let name = format!("{}", self.version);
         let edition = self.edition_name();
-        ide_ci::actions::workflow::set_output(VERSION_VAR_NAME, &name);
-        ide_ci::actions::workflow::set_output(EDITION_VAR_NAME, &edition);
-        ide_ci::actions::workflow::set_output(RELEASE_MODE_VAR_NAME, &self.release_mode);
-
-        ide_ci::actions::workflow::set_env(VERSION_VAR_NAME, &name)?;
-        ide_ci::actions::workflow::set_env(EDITION_VAR_NAME, &edition)?;
-        ide_ci::actions::workflow::set_env(RELEASE_MODE_VAR_NAME, &self.release_mode)?;
+        ENSO_VERSION.emit_to_workflow(&self.version)?;
+        ENSO_EDITION.emit_to_workflow(edition.as_str())?;
+        ENSO_RELEASE_MODE.emit_to_workflow(&self.release_mode)?;
         Ok(())
     }
 
@@ -129,8 +124,7 @@ impl Versions {
 }
 
 pub fn version_from_env() -> Result<Version> {
-    let version = ide_ci::env::expect_var(VERSION_VAR_NAME)?.parse()?;
-    Ok(version)
+    ENSO_VERSION.get()
 }
 
 #[context("Deducing version using changelog file: {}", changelog_path.as_ref().display())]
@@ -176,7 +170,7 @@ pub fn suggest_next_version(previous: &Version) -> Version {
 pub async fn deduce_versions(
     octocrab: &Octocrab,
     build_kind: BuildKind,
-    target_repo: Option<&RepoContext>,
+    target_repo: Result<&RepoContext>,
     root_path: impl AsRef<Path>,
 ) -> Result<Versions> {
     debug!("Deciding on version to target.");
@@ -184,15 +178,7 @@ pub async fn deduce_versions(
     let version = Version {
         pre: match build_kind {
             BuildKind::Dev => Versions::local_prerelease()?,
-            BuildKind::Nightly => {
-                let repo = target_repo.cloned().or_else(|| default_repo()).ok_or_else(|| {
-                    anyhow!(
-                        "Missing target repository designation in the release mode. \
-                        Please provide `--repo` option or `GITHUB_REPOSITORY` repository."
-                    )
-                })?;
-                Versions::nightly_prerelease(octocrab, &repo).await?
-            }
+            BuildKind::Nightly => Versions::nightly_prerelease(octocrab, target_repo?).await?,
         },
         ..crate::version::base_version(&changelog_path)?
     };

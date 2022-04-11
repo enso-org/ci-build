@@ -13,6 +13,14 @@ macro_rules! define_env_var {
         pub const $name: $crate::env::new::PathBufVariable =
             $crate::env::new::PathBufVariable(stringify!($name));
     };
+    ($name: ident, String) => {
+        pub const $name: $crate::env::new::SimpleVariable<String, str> =
+            $crate::env::new::SimpleVariable::new(stringify!($name));
+    };
+    ($name: ident, $ty_name: ty) => {
+        pub const $name: $crate::env::new::SimpleVariable<$ty_name> =
+            $crate::env::new::SimpleVariable::new(stringify!($name));
+    };
 }
 
 
@@ -35,6 +43,10 @@ pub mod new {
         fn set_raw(&self, value: impl AsRef<OsStr>) {
             std::env::set_var(self.name(), value);
         }
+
+        fn remove(&self) {
+            std::env::remove_var(self.name());
+        }
     }
 
     pub trait TypedVariable: RawVariable {
@@ -51,6 +63,17 @@ pub mod new {
         fn set(&self, value: impl AsRef<Self::Borrowed>) -> Result {
             let value = self.generate(value.as_ref())?;
             Ok(self.set_raw(value))
+        }
+
+        fn set_workflow_output(&self, value: impl Borrow<Self::Borrowed>) -> Result {
+            Ok(crate::actions::workflow::set_output(self.name(), &self.generate(value.borrow())?))
+        }
+        fn set_workflow_env(&self, value: impl Borrow<Self::Borrowed>) -> Result {
+            crate::actions::workflow::set_env(self.name(), &self.generate(value.borrow())?)
+        }
+        fn emit_to_workflow(&self, value: impl Borrow<Self::Borrowed>) -> Result {
+            self.set_workflow_output(value.borrow())?;
+            self.set_workflow_env(value.borrow())
         }
     }
 
@@ -99,6 +122,12 @@ pub mod new {
     impl<Value, Borrowed: ?Sized> From<&'static str> for SimpleVariable<Value, Borrowed> {
         fn from(value: &'static str) -> Self {
             SimpleVariable::new(value)
+        }
+    }
+
+    impl<Value, Borrowed: ?Sized> AsRef<str> for SimpleVariable<Value, Borrowed> {
+        fn as_ref(&self) -> &str {
+            &self.name
         }
     }
 

@@ -13,11 +13,35 @@ use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
 use ide_ci::env::Variable;
+use ide_ci::programs::wasm_pack::Target;
 use ide_ci::programs::Cargo;
 
 pub mod js_patcher;
 pub mod test;
 
+pub mod env {
+    // Enable a Rust unstable feature that the `#[profile]` macro uses to obtain source-file and
+    // line number information to include in generated profile files.
+    //
+    // The IntelliJ Rust plugin does not support the `proc_macro_span` Rust feature; using it causes
+    // JetBrains IDEs to become entirely unaware of the items produced by `#[profile]`.
+    // (See: https://github.com/intellij-rust/intellij-rust/issues/8655)
+    //
+    // In order to have line number information in actual usage, but keep everything understandable
+    // by JetBrains IDEs, we need IntelliJ/CLion to build crates differently from how they are
+    // built for the application to be run. This is accomplished by gating the use of the unstable
+    // functionality by a `cfg` flag. A `cfg` flag is disabled by default, so when a Rust IDE builds
+    // crates internally in order to determine macro expansions, it will do so without line numbers.
+    // When this script is used to build the application, it is not for the purpose of IDE macro
+    // expansion, so we can safely enable line numbers.
+    //
+    // The reason we don't use a Cargo feature for this is because this script can build different
+    // crates, and we'd like to enable this feature when building any crate that depends on the
+    // `profiler` crates. We cannot do something like '--feature=enso_profiler/line-numbers' without
+    // causing build to fail when building a crate that doesn't have `enso_profiler` in its
+    // dependency tree.
+    ide_ci::define_env_var!(ENSO_ENABLE_PROC_MACRO_SPAN, bool);
+}
 
 pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
 pub const OUTPUT_NAME: &str = "ide";
@@ -25,9 +49,10 @@ pub const TARGET_CRATE: &str = "app/gui";
 
 #[derive(Clone, Debug)]
 pub struct BuildInput {
-    pub repo_root:  RepoRoot,
+    pub repo_root:           RepoRoot,
     /// Path to the crate to be compiled to WAM. Relative to the repository root.
-    pub crate_path: PathBuf,
+    pub crate_path:          PathBuf,
+    pub extra_cargo_options: Vec<String>,
 }
 
 
@@ -56,20 +81,18 @@ impl IsTarget for Wasm {
             ide_ci::fs::create_dir_if_missing(&output_path)?;
             ide_ci::programs::WasmPack
                 .cmd()?
+                .current_dir(&input.repo_root)
                 .kill_on_drop(true)
                 .env_remove(ide_ci::programs::rustup::env::Toolchain::NAME)
-                .args([
-                    "-vv",
-                    "build",
-                    "--target",
-                    "web",
-                    "--out-dir",
-                    output_path.as_str(),
-                    "--out-name",
-                    OUTPUT_NAME,
-                    input.crate_path.as_str(),
-                ])
-                .current_dir(&input.repo_root)
+                .set_env(env::ENSO_ENABLE_PROC_MACRO_SPAN, &true)?
+                .build()
+                .target(Target::Web)
+                .output_directory(&output_path)
+                .output_name(&OUTPUT_NAME)
+                .arg(&input.crate_path)
+                .arg("--")
+                .arg("--color=always")
+                .args(&input.extra_cargo_options)
                 .run_ok()
                 .await?;
 

@@ -14,6 +14,9 @@ pub struct BuildInputs {
     /// Which crate should be treated as a WASM entry point. Relative path from source root.
     #[clap(default_value=enso_build::project::wasm::TARGET_CRATE,long)]
     pub crate_path: PathBuf,
+
+    #[clap(last = true)]
+    pub cargo_options: Vec<String>,
 }
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]

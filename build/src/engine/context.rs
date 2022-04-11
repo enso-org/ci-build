@@ -72,9 +72,9 @@ impl RunContext {
         };
 
         let target_repo = if let Operation::Release(release_op) = &operation {
-            Some(&release_op.repo)
+            Ok(&release_op.repo)
         } else {
-            None
+            Err(anyhow!("Missing repository information for release operation."))
         };
         let versions = deduce_versions(&octocrab, args.kind, target_repo, &enso_root).await?;
         versions.publish()?;
