@@ -153,7 +153,7 @@ pub fn same_existing_path(source: impl AsRef<Path>, destination: impl AsRef<Path
 }
 
 pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
-    create_parent_dir_if_missing(destination.as_ref())?;
+    create_dir_if_missing(destination.as_ref())?;
 
     // Robocopy seems to waste much time when running with the same path as source and destination.
     if same_existing_path(&source, &destination)? {
