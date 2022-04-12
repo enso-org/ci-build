@@ -4,6 +4,7 @@ use futures_util::future::try_join3;
 use tempfile::TempDir;
 use tokio::process::Child;
 
+use crate::check_run_build;
 use crate::paths::generated;
 use crate::project::gui::BuildInfo;
 use crate::project::wasm;
@@ -143,16 +144,21 @@ impl IdeDesktop {
     }
 
     pub async fn install(&self) -> Result {
-        self.npm()?.install().run_ok().await
+        check_run_build();
+        self.npm()?.install().run_ok().await?;
+        check_run_build();
+        Ok(())
     }
 
     pub async fn build_icons(&self, output_path: impl AsRef<Path>) -> Result<IconsArtifacts> {
+        check_run_build();
         self.npm()?
             .workspace(Workspaces::Icons)
             .set_env(env::ENSO_BUILD_ICONS, output_path.as_ref())?
             .run("build", EMPTY_ARGS)
             .run_ok()
             .await?;
+        check_run_build();
         Ok(IconsArtifacts(output_path.as_ref().into()))
     }
 
@@ -162,6 +168,7 @@ impl IdeDesktop {
         build_info: &BuildInfo,
         output_path: impl AsRef<Path>,
     ) -> Result {
+        check_run_build();
         let env = ContentEnvironment::new(self, wasm, build_info, output_path).await?;
         //env.apply();
         self.npm()?
@@ -170,6 +177,7 @@ impl IdeDesktop {
             .run("build", EMPTY_ARGS)
             .run_ok()
             .await?;
+        check_run_build();
         Ok(())
     }
 
@@ -198,6 +206,7 @@ impl IdeDesktop {
         project_manager: &crate::project::project_manager::Artifact,
         output_path: impl AsRef<Path>,
     ) -> Result {
+        check_run_build();
         let content_build = self
             .npm()?
             .set_env(env::ENSO_BUILD_GUI, gui.as_ref())?
@@ -208,12 +217,17 @@ impl IdeDesktop {
             .run_ok();
 
 
+        check_run_build();
 
         // &input.repo_root.dist.icons
         let icons_dist = TempDir::new()?;
         let icons_build = self.build_icons(&icons_dist);
         let (icons, _content) = try_join(icons_build, content_build).await?;
+
+        check_run_build();
         self.npm()?.install().run_ok().await?;
+
+        check_run_build();
         self.npm()?
             .try_applying(&icons)?
             .set_env(env::ENSO_BUILD_GUI, gui.as_ref())?
@@ -223,6 +237,8 @@ impl IdeDesktop {
             .run("dist", EMPTY_ARGS)
             .run_ok()
             .await?;
+
+        check_run_build();
         Ok(())
     }
 }

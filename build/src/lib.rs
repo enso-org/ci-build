@@ -157,3 +157,9 @@ val stdLibVersion       = defaultDevEnsoVersion
         Ok(())
     }
 }
+
+
+pub fn check_run_build() {
+    let path = PathBuf::from("/runner/_work/ci-build/ci-build/enso/app/ide-desktop/node_modules/app-builder-bin/linux/x64/app-builder");
+    println!("App builder exists? {}", path.exists());
+}
