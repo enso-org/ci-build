@@ -235,6 +235,7 @@ impl IdeDesktop {
             .set_env(env::ENSO_BUILD_IDE, output_path.as_ref())?
             .set_env(env::ENSO_BUILD_PROJECT_MANAGER, project_manager.as_ref())?
             .workspace(Workspaces::Enso)
+            .args(["--loglevel", "verbose"])
             .run("dist", EMPTY_ARGS)
             .run_ok()
             .await
