@@ -28,7 +28,7 @@ jobs:
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          RUST_LOG: info
+          RUST_LOG: debug
 #
 #      - name: Upload Content Artifacts
 #        uses: actions/upload-artifact@v2
