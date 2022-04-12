@@ -143,8 +143,7 @@ impl IdeDesktop {
     }
 
     pub async fn install(&self) -> Result {
-        self.npm()?.install().run_ok().await?;
-        self.npm()?.args(["list", "-a"]).run_ok().await
+        self.npm()?.install().run_ok().await
     }
 
     pub async fn build_icons(&self, output_path: impl AsRef<Path>) -> Result<IconsArtifacts> {
@@ -214,7 +213,6 @@ impl IdeDesktop {
         let icons_dist = TempDir::new()?;
         let icons_build = self.build_icons(&icons_dist);
         let (icons, _content) = try_join(icons_build, content_build).await?;
-        self.npm()?.args(["list", "-a"]).run_ok().await?;
         self.npm()?.install().run_ok().await?;
         self.npm()?
             .try_applying(&icons)?
