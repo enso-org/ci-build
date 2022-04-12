@@ -215,6 +215,7 @@ impl IdeDesktop {
         let icons_build = self.build_icons(&icons_dist);
         let (icons, _content) = try_join(icons_build, content_build).await?;
         self.npm()?.args(["list", "-a"]).run_ok().await?;
+        self.npm()?.install().run_ok().await?;
         self.npm()?
             .try_applying(&icons)?
             .set_env(env::ENSO_BUILD_GUI, gui.as_ref())?

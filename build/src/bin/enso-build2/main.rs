@@ -433,7 +433,7 @@ async fn main_internal() -> Result {
     let cli = Cli::parse();
     // console_subscriber::init();
     pretty_env_logger::init();
-    trace!("Parsed CLI arguments: {cli:#?}");
+    debug!("Parsed CLI arguments: {cli:#?}");
 
     let ctx = BuildContext::new(&cli).await?;
     match cli.target {
