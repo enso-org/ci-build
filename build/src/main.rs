@@ -1,22 +1,18 @@
+#![feature(default_free_fn)]
+
 use enso_build::prelude::*;
 
 use enso_build::args::Args;
 use enso_build::engine::RunContext;
+use ide_ci::actions::artifacts;
 
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // We want arg parsing to be the very first thing, so when user types wrong arguments, the error
-    // diagnostics will be first and only thing that is output.
-    let args: Args = argh::from_env();
+    let dir = std::env::current_exe()?.parent().unwrap().to_owned();
 
-    debug!("Initial environment:");
-    for (key, value) in std::env::vars() {
-        debug!("\t{key}={value}");
-    }
-    debug!("\n===End of the environment dump===\n");
-
-    let ctx = RunContext::new(&args).await?;
-    ctx.execute().await?;
+    debug!("Will upload {}", dir.display());
+    let provider = artifacts::discover_recursive(dir);
+    artifacts::upload(provider, "MyPrecious", default()).await?;
     Ok(())
 }
