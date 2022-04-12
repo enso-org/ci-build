@@ -36,8 +36,8 @@ impl AsRef<Path> for Artifact {
 impl IsArtifact for Artifact {
     fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
         let path = crate::paths::generated::ProjectManager::new(path.as_ref(), EXE_SUFFIX);
-        ide_ci::fs::allow_owner_execute(path)?;
         async move {
+            ide_ci::fs::allow_owner_execute(path)?;
             let output =
                 Command::new(&path.bin.project_managerexe).arg("--version").output_ok().await?;
             let string = String::from_utf8(output.stdout)?;
