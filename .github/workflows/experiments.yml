@@ -24,7 +24,7 @@ jobs:
         with:
           enso_ref: ${{ github.ref }}
       - name: Run a multi-line script
-        run: enso-build2 ide build --project-manager-source ci-run --project-manager-run-id 2099267018
+        run: enso-build2  --repo-remote enso-org/ci-build ide build --project-manager-source ci-run --project-manager-run-id 2099267018
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
