@@ -230,13 +230,15 @@ impl IdeDesktop {
         check_run_build();
         self.npm()?
             .try_applying(&icons)?
+            .env("DEBUG", "electron-builder")
             .set_env(env::ENSO_BUILD_GUI, gui.as_ref())?
             .set_env(env::ENSO_BUILD_IDE, output_path.as_ref())?
             .set_env(env::ENSO_BUILD_PROJECT_MANAGER, project_manager.as_ref())?
             .workspace(Workspaces::Enso)
             .run("dist", EMPTY_ARGS)
             .run_ok()
-            .await?;
+            .await
+            .inspect_err(|_| check_run_build())?;
 
         check_run_build();
         Ok(())
