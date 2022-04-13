@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/new-ide-build
         with:
-          enso_ref: ${{ github.ref }}
+          enso_ref: develop
       - name: Run a multi-line script
         run: enso-build2 ide build
         working-directory: ${{ github.workspace }}/ci-build
