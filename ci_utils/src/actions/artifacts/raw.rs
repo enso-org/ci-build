@@ -8,7 +8,9 @@ use reqwest::Body;
 use reqwest::Response;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
+use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
+use tokio_util::io::ReaderStream;
 
 use crate::actions::artifacts::models::ArtifactResponse;
 use crate::actions::artifacts::models::CreateArtifactRequest;
@@ -159,29 +161,25 @@ pub fn decode_content_length(headers: &HeaderMap) -> Option<usize> {
     text.parse::<usize>().ok()
 }
 
+// pub trait UploadSource {
+//     fn pretty_name() -> String;
+//     fn
+// }
 
-#[context("Failed to upload the file '{}' to path '{}'.", local_path.as_ref().display(), remote_path.as_ref().display())]
-pub async fn upload_file(
+pub async fn upload_file_inner(
     client: &reqwest::Client,
     chunk_size: usize,
     upload_url: Url,
-    local_path: impl AsRef<Path>,
+    file: impl AsyncRead + Unpin + Send + Sync + 'static,
+    size_hint: Option<usize>,
     remote_path: impl AsRef<Path>,
 ) -> Result<usize> {
-    let file = tokio::fs::File::open(local_path.as_ref()).await?;
-    // TODO [mwu] note that metadata can lie about file size, e.g. named pipes on Linux
-    let len = file.metadata().await?.len() as usize;
-    trace!(
-        "Will upload file {} of size {} to remote path {}",
-        local_path.as_ref().display(),
-        len,
-        remote_path.as_ref().display()
-    );
-    if len < chunk_size && len > 0 {
-        let range = ContentRange::whole(len as usize);
-        endpoints::upload_file_chunk(client, upload_url.clone(), file, range, &remote_path).await
+    if let Some(size) = size_hint && size < chunk_size {
+        let range = ContentRange::whole(size);
+        let body = Body::wrap_stream(ReaderStream::new(file));
+        endpoints::upload_file_chunk(client, upload_url.clone(), body, range, &remote_path).await
     } else {
-        let mut chunks = stream_file_in_chunks(file, chunk_size).boxed();
+        let mut chunks = stream_in_chunks(file, chunk_size).boxed();
         let mut current_position = 0;
         loop {
             let chunk = match chunks.try_next().await? {
@@ -192,7 +190,7 @@ pub async fn upload_file(
             let read_bytes = chunk.len();
             let range = ContentRange {
                 range: current_position..=current_position + read_bytes.saturating_sub(1),
-                total: Some(len),
+                total: size_hint,
             };
             endpoints::upload_file_chunk(client, upload_url.clone(), chunk, range, &remote_path)
                 .await?;
@@ -200,6 +198,33 @@ pub async fn upload_file(
         }
         Ok(current_position)
     }
+}
+
+
+#[context("Failed to upload the file '{}' to path '{}'.", local_path.as_ref().display(), remote_path.as_ref().display())]
+pub async fn upload_file(
+    client: &reqwest::Client,
+    chunk_size: usize,
+    upload_url: Url,
+    local_path: impl AsRef<Path>,
+    remote_path: impl AsRef<Path>,
+) -> Result<usize> {
+    let file = tokio::fs::File::open(local_path.as_ref()).await?;
+    let len = file.metadata().await?.len();
+    trace!(
+        "Will upload file {} of size {} to remote path {}",
+        local_path.as_ref().display(),
+        len,
+        remote_path.as_ref().display()
+    );
+
+    let len_hint = match file.metadata().await?.len() {
+        // TODO [mwu] note that metadata can lie about file size, e.g. named pipes on Linux
+        // We treat 0 length as unknown length for that reason.
+        0 => None,
+        len => Some(len as usize),
+    };
+    upload_file_inner(client, chunk_size, upload_url, file, len_hint, &remote_path).await
 }
 
 pub async fn check_response_json<T: DeserializeOwned>(
@@ -238,15 +263,15 @@ pub async fn check_response(
     }
 }
 
-pub fn stream_file_in_chunks(
-    file: tokio::fs::File,
+pub fn stream_in_chunks(
+    file: impl AsyncRead + Unpin + Send,
     chunk_size: usize,
 ) -> impl futures::Stream<Item = Result<Bytes>> + Send {
     futures::stream::try_unfold(file, async move |mut file| {
         let mut buffer = BytesMut::with_capacity(chunk_size);
         while file.read_buf(&mut buffer).await? > 0 && buffer.len() < chunk_size {}
         if buffer.is_empty() {
-            Ok::<_, anyhow::Error>(None)
+            Ok(None)
         } else {
             Ok(Some((buffer.freeze(), file)))
         }

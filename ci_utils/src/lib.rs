@@ -16,6 +16,7 @@
 #![feature(string_remove_matches)]
 #![feature(once_cell)]
 #![feature(duration_constants)]
+#![feature(is_some_with)]
 
 pub mod actions;
 pub mod anyhow;
