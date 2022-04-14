@@ -3,6 +3,7 @@ use crate::prelude::*;
 use crate::paths::generated::RepoRoot;
 
 use futures_util::future::try_join;
+use ide_ci::actions::artifacts::upload_compressed_directory;
 use ide_ci::actions::artifacts::upload_directory;
 use ide_ci::actions::artifacts::upload_single_file;
 use ide_ci::actions::workflow::is_in_env;
@@ -35,7 +36,8 @@ impl Artifact {
 
     pub async fn upload(&self) -> Result {
         if is_in_env() {
-            upload_directory(&self.unpacked, format!("ide-unpacked-{}", TARGET_OS)).await?;
+            upload_compressed_directory(&self.unpacked, format!("ide-unpacked-{}", TARGET_OS))
+                .await?;
             upload_single_file(&self.image, format!("ide-{}", TARGET_OS)).await?;
             upload_single_file(&self.image_checksum, format!("ide-{}", TARGET_OS)).await?;
         } else {
