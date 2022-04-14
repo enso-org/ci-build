@@ -18,7 +18,7 @@ pub enum Format {
 
 impl Format {
     /// Deduce the archive format from a given filename.
-    #[context("Deducing archive format from a filename {}.", target_directory.as_ref().display())]
+    #[context("Deducing archive format from a filename {}.", filename.as_ref().display())]
     pub fn from_filename(filename: impl AsRef<Path>) -> Result<Self> {
         let filename = filename.as_ref();
         let extension =
