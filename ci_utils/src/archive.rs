@@ -87,13 +87,14 @@ pub async fn create(
     output_archive: impl AsRef<Path>,
     paths_to_pack: impl IntoIterator<Item: AsRef<Path>>,
 ) -> Result {
-    let span =
-        info_span!("Creating an archive", target = output_archive.as_ref().as_str()).entered();
+    let span = info_span!("Creating an archive", target = output_archive.as_ref().as_str());
+    // let span =
+    //     info_span!("Creating an archive", target = output_archive.as_ref().as_str()).entered();
     let format = Format::from_filename(&output_archive)?;
     match format {
         Format::Zip | Format::SevenZip =>
-            SevenZip.pack(output_archive, paths_to_pack).in_current_span().await,
-        Format::Tar(_) => Tar.pack(output_archive, paths_to_pack).in_current_span().await,
+            SevenZip.pack(output_archive, paths_to_pack).instrument(span).await,
+        Format::Tar(_) => Tar.pack(output_archive, paths_to_pack).instrument(span).await,
     }
 }
 
