@@ -88,8 +88,6 @@ pub async fn create(
     paths_to_pack: impl IntoIterator<Item: AsRef<Path>>,
 ) -> Result {
     let span = info_span!("Creating an archive", target = output_archive.as_ref().as_str());
-    // let span =
-    //     info_span!("Creating an archive", target = output_archive.as_ref().as_str()).entered();
     let format = Format::from_filename(&output_archive)?;
     match format {
         Format::Zip | Format::SevenZip =>
