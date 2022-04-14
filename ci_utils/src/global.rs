@@ -69,7 +69,13 @@ pub fn new_spinner(message: impl Into<Cow<'static, str>>) -> ProgressBar {
 }
 
 pub fn println(msg: impl AsRef<str>) {
-    GLOBAL.lock().unwrap().mp.println(msg);
+    if let Ok(state) = GLOBAL.lock() {
+        if !indicatif::ProgressDrawTarget::stderr().is_hidden() {
+            state.mp.println(msg);
+            return;
+        }
+    };
+    println!("{}", msg.as_ref());
 }
 
 pub fn spawn(name: impl AsRef<str>, f: impl Future<Output = Result> + Send + 'static) {

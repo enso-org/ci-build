@@ -105,7 +105,7 @@ pub mod prelude {
     pub use tracing::error_span;
     pub use tracing::info;
     pub use tracing::info_span;
-    pub use tracing::log;
+    // pub use tracing::log;
     pub use tracing::span;
     pub use tracing::trace;
     pub use tracing::trace_span;

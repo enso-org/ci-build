@@ -9,7 +9,7 @@ use crate::programs::SevenZip;
 pub mod zip;
 
 /// Archive formats that we handle.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Format {
     Zip,
     SevenZip,
@@ -18,6 +18,7 @@ pub enum Format {
 
 impl Format {
     /// Deduce the archive format from a given filename.
+    #[context("Deducing archive format from a filename {}.", target_directory.as_ref().display())]
     pub fn from_filename(filename: impl AsRef<Path>) -> Result<Self> {
         let filename = filename.as_ref();
         let extension =
@@ -86,9 +87,26 @@ pub async fn create(
     output_archive: impl AsRef<Path>,
     paths_to_pack: impl IntoIterator<Item: AsRef<Path>>,
 ) -> Result {
+    let span =
+        info_span!("Creating an archive", target = output_archive.as_ref().as_str()).entered();
     let format = Format::from_filename(&output_archive)?;
     match format {
-        Format::Zip | Format::SevenZip => SevenZip.pack(output_archive, paths_to_pack).await,
-        Format::Tar(_) => Tar.pack(output_archive, paths_to_pack).await,
+        Format::Zip | Format::SevenZip =>
+            SevenZip.pack(output_archive, paths_to_pack).in_current_span().await,
+        Format::Tar(_) => Tar.pack(output_archive, paths_to_pack).in_current_span().await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_from_filename() -> Result {
+        assert_eq!(
+            Format::from_filename("/tmp/.tmpnejBKd/gui_wasm.tar.gz")?,
+            Format::Tar(Some(Compression::Gzip))
+        );
+        Ok(())
     }
 }

@@ -51,6 +51,7 @@ use tracing::Id;
 use tracing::Metadata;
 use tracing::Subscriber;
 use tracing_subscriber::filter::Filtered;
+use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::Filter;
 use tracing_subscriber::layer::Layered;
 use tracing_subscriber::layer::SubscriberExt;
@@ -493,7 +494,11 @@ async fn main_internal() -> Result {
     let cli = Cli::parse();
     // console_subscriber::init();
     tracing::subscriber::set_global_default(
-        Registry::default().with(MyLayer).with(tracing_subscriber::fmt::layer().without_time()),
+        Registry::default().with(MyLayer).with(
+            tracing_subscriber::fmt::layer()
+                .without_time()
+                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE),
+        ),
     )
     .expect("default global");
 
