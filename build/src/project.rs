@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use tempfile::tempdir;
 
 use tokio::process::Child;
 
@@ -109,9 +110,18 @@ pub trait IsTarget: Sized + 'static {
     ) -> BoxFuture<'static, Result> {
         let name = self.artifact_name().to_string();
         async move {
-            info!("Starting upload of {name}.");
+            let tempdir = tempdir()?;
+            let temp_path = tempdir.path().join(format!("{name}.tar.gz"));
+
             let output = output.await?;
-            ide_ci::actions::artifacts::upload_directory(output.as_ref(), &name).await?;
+            let output_path: &Path = output.as_ref();
+
+            let temp = tempfile::tempfile()?;
+            info!("Packing {} to {}", output_path.display(), temp_path.display());
+            ide_ci::archive::create(&output, [output_path]).await?;
+
+            info!("Starting upload of {name}.");
+            ide_ci::actions::artifacts::upload_single_file(&temp_path, &name).await?;
             info!("Completed upload of {name}.");
             Ok(())
         }

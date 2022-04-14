@@ -4,18 +4,20 @@ use crate::future::try_join_all;
 use crate::future::AsyncPolicy;
 use indicatif::MultiProgress;
 use indicatif::ProgressBar;
+use indicatif::WeakProgressBar;
 use std::lazy::SyncLazy;
 use std::sync::Mutex;
-use std::sync::Weak;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
 const REFRESHES_PER_SECOND: u32 = 100;
 
-#[derive(Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
 struct GlobalState {
     mp:            MultiProgress,
-    bars:          Vec<Weak<ProgressBar>>,
+    #[derivative(Debug = "ignore")]
+    bars:          Vec<WeakProgressBar>,
     _tick_thread:  std::thread::JoinHandle<()>,
     ongoing_tasks: Vec<JoinHandle<Result>>,
 }
@@ -53,23 +55,22 @@ impl Default for GlobalState {
 
 static GLOBAL: SyncLazy<Mutex<GlobalState>> = SyncLazy::new(default);
 
-pub fn progress_bar(f: impl FnOnce() -> ProgressBar) -> Arc<ProgressBar> {
+pub fn progress_bar(f: impl FnOnce() -> ProgressBar) -> ProgressBar {
     let ret = f();
     let ret = GLOBAL.lock().unwrap().mp.add(ret);
-    let ret = Arc::new(ret);
-    GLOBAL.lock().unwrap().bars.push(Arc::downgrade(&ret));
+    GLOBAL.lock().unwrap().bars.push(ret.downgrade());
     ret
 }
 
-pub fn new_spinner(message: impl Into<Cow<'static, str>>) -> Arc<ProgressBar> {
+pub fn new_spinner(message: impl Into<Cow<'static, str>>) -> ProgressBar {
     let ret = progress_bar(indicatif::ProgressBar::new_spinner);
     ret.set_message(message);
     ret
 }
-//
-// pub fn println(msg: impl AsRef<str>) {
-//     GLOBAL.lock().unwrap().mp.println(msg);
-// }
+
+pub fn println(msg: impl AsRef<str>) {
+    GLOBAL.lock().unwrap().mp.println(msg);
+}
 
 pub fn spawn(name: impl AsRef<str>, f: impl Future<Output = Result> + Send + 'static) {
     info!("Spawning a new global task named '{}'.", name.as_ref());

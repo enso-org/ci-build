@@ -252,10 +252,10 @@ impl RunContext {
 
         let mut system = sysinfo::System::new();
         system.refresh_memory();
-        dbg!(system.total_memory());
-        dbg!(system.available_memory());
-        dbg!(system.used_memory());
-        dbg!(system.free_memory());
+        debug!("Total memory: {}", system.total_memory());
+        debug!("Available memory: {}", system.available_memory());
+        debug!("Used memory: {}", system.used_memory());
+        debug!("Free memory: {}", system.free_memory());
 
         // Build packages.
         debug!("Bootstrapping Enso project.");

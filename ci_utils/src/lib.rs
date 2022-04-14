@@ -65,12 +65,6 @@ pub mod prelude {
     pub use ifmt::iformat;
     pub use itertools::Itertools;
     pub use lazy_static::lazy_static;
-    pub use log::debug;
-    pub use log::error;
-    pub use log::info;
-    pub use log::log;
-    pub use log::trace;
-    pub use log::warn;
     pub use octocrab::Octocrab;
     pub use path_absolutize::*;
     pub use platforms::target::Arch;
@@ -105,6 +99,19 @@ pub mod prelude {
     pub use std::pin::Pin;
     pub use std::sync::Arc;
     pub use tokio::io::AsyncWriteExt;
+    pub use tracing::debug;
+    pub use tracing::debug_span;
+    pub use tracing::error;
+    pub use tracing::error_span;
+    pub use tracing::info;
+    pub use tracing::info_span;
+    pub use tracing::log;
+    pub use tracing::span;
+    pub use tracing::trace;
+    pub use tracing::trace_span;
+    pub use tracing::warn;
+    pub use tracing::warn_span;
+    pub use tracing::Instrument;
     pub use url::Url;
     pub use uuid::Uuid;
 

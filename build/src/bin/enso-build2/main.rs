@@ -2,6 +2,7 @@
 #![feature(once_cell)]
 #![feature(exit_status_error)]
 #![feature(associated_type_defaults)]
+#![feature(is_some_with)]
 
 pub mod arg;
 pub use enso_build::prelude;
@@ -38,8 +39,24 @@ use ide_ci::global;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::Git;
 use std::any::type_name;
+use std::any::TypeId;
 use std::time::Duration;
 use tokio::runtime::Runtime;
+use tracing::level_filters::LevelFilter;
+use tracing::span::Attributes;
+use tracing::span::Record;
+use tracing::subscriber::Interest;
+use tracing::Event;
+use tracing::Id;
+use tracing::Metadata;
+use tracing::Subscriber;
+use tracing_subscriber::filter::Filtered;
+use tracing_subscriber::layer::Filter;
+use tracing_subscriber::layer::Layered;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::Layer;
+use tracing_subscriber::Registry;
 
 /// The basic, common information available in this application.
 #[derive(Clone, Debug)]
@@ -429,13 +446,61 @@ pub fn get_target<Target: IsTarget>(
     }
 }
 
+pub struct MyLayer;
+
+impl<S: Subscriber + Debug + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S> for MyLayer {
+    fn register_callsite(&self, metadata: &'static Metadata<'static>) -> Interest {
+        if metadata.module_path().is_some_with(|path| {
+            path.starts_with("ide_ci::")
+                || path.starts_with("enso_build")
+                || path.starts_with("enso_build2")
+        }) {
+            Interest::always()
+        } else {
+            // dbg!(metadata);
+            Interest::never()
+        }
+    }
+
+    fn on_enter(&self, id: &Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        // ide_ci::global::println(format!("Enter {id:?}"));
+    }
+    fn on_exit(&self, id: &Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        // ide_ci::global::println(format!("Leave {id:?}"));
+    }
+    fn on_event(&self, event: &Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+        // tracing_log::dbg!(event);
+    }
+    fn on_new_span(
+        &self,
+        attrs: &Attributes<'_>,
+        id: &Id,
+        ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let span = ctx.span(id).unwrap();
+        let bar = global::new_spinner(format!("In span {id:?}: {:?}", span.name()));
+        span.extensions_mut().insert(bar);
+        ide_ci::global::println(format!("Create {id:?}"));
+    }
+
+    fn on_close(&self, id: Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        ide_ci::global::println(format!("Close {id:?}"));
+    }
+}
+
+
 async fn main_internal() -> Result {
     let cli = Cli::parse();
     // console_subscriber::init();
+    tracing::subscriber::set_global_default(
+        Registry::default().with(MyLayer).with(tracing_subscriber::fmt::layer().without_time()),
+    )
+    .expect("default global");
+
     pretty_env_logger::init();
     debug!("Parsed CLI arguments: {cli:#?}");
 
-    let ctx = BuildContext::new(&cli).await?;
+    let ctx = BuildContext::new(&cli).instrument(info_span!("Building context.")).await?;
     match cli.target {
         Target::Wasm(wasm) => ctx.handle_wasm(wasm).await?,
         Target::Gui(gui) => ctx.handle_gui(gui).await?,
