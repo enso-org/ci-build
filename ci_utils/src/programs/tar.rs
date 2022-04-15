@@ -190,6 +190,19 @@ impl Tar {
             .run_ok()
             .await
     }
+
+    pub async fn unpack(
+        &self,
+        archive: impl AsRef<Path>,
+        output_directory: impl AsRef<Path>,
+    ) -> Result {
+        self.cmd()?
+            .arg(Command::Extract)
+            .args(&Switch::TargetFile(archive.as_ref()))
+            .args(&Switch::WorkingDir(output_directory.as_ref()))
+            .run_ok()
+            .await
+    }
 }
 
 

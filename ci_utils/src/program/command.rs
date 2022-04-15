@@ -268,8 +268,10 @@ impl Command {
         let pretty = self.describe();
         async move {
             let mut child = child?;
-            let status =
-                child.wait().instrument(info_span!("Waiting for process.", "{}", &pretty)).await?;
+            let status = child
+                .wait()
+                .instrument(info_span!("Waiting for process.", command = %pretty))
+                .await?;
             status_checker(status).context(format!("Command failed: {}", pretty))
         }
         .boxed()

@@ -4,7 +4,6 @@ use crate::paths::generated::RepoRoot;
 
 use futures_util::future::try_join;
 use ide_ci::actions::artifacts::upload_compressed_directory;
-use ide_ci::actions::artifacts::upload_directory;
 use ide_ci::actions::artifacts::upload_single_file;
 use ide_ci::actions::workflow::is_in_env;
 use platforms::TARGET_OS;

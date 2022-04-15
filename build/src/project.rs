@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use tempfile::tempdir;
 
 use ide_ci::actions::artifacts;
 use tokio::process::Child;
@@ -120,6 +119,7 @@ pub trait IsTarget: Sized + 'static {
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let CiRunSource { run_id, artifact_name, repository, octocrab } = ci_run;
         let artifact_name = artifact_name.unwrap_or_else(|| self.artifact_name().to_string());
+        let span = info_span!("Downloading CI Artifact.", %artifact_name, %repository, target = output_path.as_str());
         async move {
             let artifact =
                 repository.find_artifact_by_name(&octocrab, run_id, &artifact_name).await?;
@@ -128,8 +128,14 @@ pub trait IsTarget: Sized + 'static {
             repository
                 .download_and_unpack_artifact(&octocrab, artifact.id, output_path.as_ref())
                 .await?;
+
+            let inner_archive_path =
+                output_path.as_ref().join(&artifact_name).with_appended_extension("tar.gz");
+            ide_ci::archive::extract_to(&inner_archive_path, &output_path).await?;
+            ide_ci::fs::remove_if_exists(&inner_archive_path)?;
             Self::Artifact::from_existing(output_path).await
         }
+        .instrument(span)
         .boxed()
     }
 }

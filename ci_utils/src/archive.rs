@@ -114,6 +114,24 @@ pub async fn pack_directory_contents(
     }
 }
 
+pub async fn extract_to(
+    archive_path: impl AsRef<Path>,
+    output_directory: impl AsRef<Path>,
+) -> Result {
+    // Don't clean the output directory. Perhaps even the archive lives there.
+    let span = info_span!(
+        "Extracting the archive.",
+        source = archive_path.as_ref().as_str(),
+        target = output_directory.as_ref().as_str()
+    );
+    let format = Format::from_filename(&archive_path)?;
+    match format {
+        Format::Zip | Format::SevenZip =>
+            SevenZip.unpack_cmd(archive_path, output_directory)?.run_ok().instrument(span).await,
+        Format::Tar(_) => Tar.unpack(archive_path, output_directory).instrument(span).await,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -127,7 +127,6 @@ pub trait RepoPointer: Display {
         output_dir: &Path,
     ) -> Result {
         let bytes = self.download_artifact(client, artifact_id).await?;
-        let _bar = new_spinner(format!("Extracting artifact id={}", artifact_id));
         let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
         archive.extract(output_dir)?;
         Ok(())
