@@ -60,15 +60,15 @@ impl AsRef<OsStr> for Compression {
     }
 }
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
-pub enum Switch {
-    TargetFile(PathBuf),
+#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
+pub enum Switch<'a> {
+    TargetFile(&'a Path),
     Verbose,
     UseFormat(Compression),
-    WorkingDir(PathBuf),
+    WorkingDir(&'a Path),
 }
 
-impl<'a> IntoIterator for &'a Switch {
+impl<'a> IntoIterator for &'a Switch<'a> {
     type Item = &'a OsStr;
     type IntoIter = IntoIter<&'a OsStr>;
 
@@ -130,7 +130,7 @@ impl Tar {
             cmd.args(&Switch::UseFormat(compression));
         }
 
-        cmd.args(&Switch::TargetFile(output_archive.as_ref().into()));
+        cmd.args(&Switch::TargetFile(output_archive.as_ref()));
 
         let paths: Vec<PathBuf> =
             paths_to_pack.into_iter().map(|path| path.as_ref().to_owned()).collect();
@@ -138,7 +138,7 @@ impl Tar {
         match paths.as_slice() {
             [item] =>
                 if let Some(parent) = item.canonicalize()?.parent() {
-                    cmd.args(&Switch::WorkingDir(parent.to_owned()));
+                    cmd.args(&Switch::WorkingDir(parent));
                     cmd.arg(item.file_name().unwrap()); // None can happen only when path ends with
                                                         // ".." - that's why we canonicalize
                 },
@@ -174,6 +174,21 @@ impl Tar {
         paths_to_pack: impl IntoIterator<Item = P>,
     ) -> Result {
         self.pack_cmd(output_archive, paths_to_pack)?.run_ok().await
+    }
+
+    pub async fn pack_directory_contents(
+        self,
+        output_archive: impl AsRef<Path>,
+        root_directory: impl AsRef<Path>,
+    ) -> Result {
+        // See: https://stackoverflow.com/a/3035446
+        self.cmd()?
+            .arg(Command::Create)
+            .args(&Switch::TargetFile(output_archive.as_ref()))
+            .args(&Switch::WorkingDir(root_directory.as_ref()))
+            .arg(".")
+            .run_ok()
+            .await
     }
 }
 

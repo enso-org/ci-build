@@ -96,6 +96,24 @@ pub async fn create(
     }
 }
 
+pub async fn pack_directory_contents(
+    output_archive: impl AsRef<Path>,
+    root_directory: impl AsRef<Path>,
+) -> Result {
+    let span = info_span!(
+        "Creating an archive",
+        source = root_directory.as_ref().as_str(),
+        target = output_archive.as_ref().as_str()
+    );
+    let format = Format::from_filename(&output_archive)?;
+    match format {
+        Format::Zip | Format::SevenZip =>
+            SevenZip.pack_directory_contents(output_archive, root_directory).instrument(span).await,
+        Format::Tar(_) =>
+            Tar.pack_directory_contents(output_archive, root_directory).instrument(span).await,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

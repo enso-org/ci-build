@@ -90,6 +90,15 @@ impl SevenZip {
         self.add(output_archive, paths_to_pack).await
     }
 
+    pub async fn pack_directory_contents(
+        self,
+        output_archive: impl AsRef<Path>,
+        root_directory: impl AsRef<Path>,
+    ) -> Result {
+        // See: https://superuser.com/a/418708
+        self.pack(output_archive, [root_directory.as_ref().join("*")]).await
+    }
+
     pub async fn add<P: AsRef<Path>>(
         &self,
         output_archive: impl AsRef<Path>,

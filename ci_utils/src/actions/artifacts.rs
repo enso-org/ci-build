@@ -144,13 +144,13 @@ pub fn upload_compressed_directory(
     async move {
         let artifact_name = artifact_name.as_ref();
         let tempdir = tempdir()?;
-        let packed_path = tempdir.path().join(format!("{artifact_name}.tar.gz"));
+        let archive_path = tempdir.path().join(format!("{artifact_name}.tar.gz"));
 
-        info!("Packing {} to {}", path_to_upload.as_ref().display(), packed_path.display());
-        crate::archive::create(&packed_path, [path_to_upload]).await?;
+        info!("Packing {} to {}", path_to_upload.as_ref().display(), archive_path.display());
+        crate::archive::pack_directory_contents(&archive_path, path_to_upload).await?;
 
         info!("Starting upload of {artifact_name}.");
-        upload_single_file(&packed_path, artifact_name).await?;
+        upload_single_file(&archive_path, artifact_name).await?;
         info!("Completed upload of {artifact_name}.");
         Ok(())
     }
