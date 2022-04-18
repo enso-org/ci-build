@@ -1,7 +1,10 @@
 use crate::prelude::*;
 use anyhow::Context;
+use std::env::temp_dir;
+use std::fs::Metadata;
 use tokio::process::Child;
 
+use crate::project::wasm::js_patcher::patch_js_glue;
 use crate::project::wasm::js_patcher::patch_js_glue_in_place;
 // use crate::paths::generated::Parameters;
 // use crate::paths::generated::Paths;
@@ -76,9 +79,15 @@ impl IsTarget for Wasm {
         // TODO:
         //   Old script intentionally built everything into temp directory first.
         //   To be checked if this was actually useful for something.
+        let span = info_span!("Building WASM.",
+            repo = %input.repo_root.display(),
+            crate = %input.crate_path.display(),
+            cargo_opts = ?input.extra_cargo_options
+        );
         async move {
             info!("Building wasm.");
-            ide_ci::fs::create_dir_if_missing(&output_path)?;
+            let temp_dir = temp_dir();
+            let temp_dist = RepoRootDistWasm::new(temp_dir.as_path());
             ide_ci::programs::WasmPack
                 .cmd()?
                 .current_dir(&input.repo_root)
@@ -87,7 +96,7 @@ impl IsTarget for Wasm {
                 .set_env(env::ENSO_ENABLE_PROC_MACRO_SPAN, &true)?
                 .build()
                 .target(Target::Web)
-                .output_directory(&output_path)
+                .output_directory(&temp_dist)
                 .output_name(&OUTPUT_NAME)
                 .arg(&input.crate_path)
                 .arg("--")
@@ -95,15 +104,38 @@ impl IsTarget for Wasm {
                 .args(&input.extra_cargo_options)
                 .run_ok()
                 .await?;
+            patch_js_glue_in_place(&temp_dist.wasm_glue)?;
 
+            ide_ci::fs::create_dir_if_missing(&output_path)?;
             let ret = RepoRootDistWasm::new(output_path.as_ref());
-            patch_js_glue_in_place(&ret.wasm_glue)?;
-            ide_ci::fs::rename(&ret.wasm_main_raw, &ret.wasm_main)?;
-            let ret = Artifact(ret);
-            Ok(ret)
+            copy_if_different(&temp_dist.wasm_glue, &ret.wasm_glue)?;
+            copy_if_different(&temp_dist.wasm_main_raw, &ret.wasm_main)?;
+            Ok(Artifact(ret))
         }
+        .instrument(span)
         .boxed()
     }
+}
+
+pub fn check_if_identical(source: impl AsRef<Path>, target: impl AsRef<Path>) -> bool {
+    (|| -> Result<bool> {
+        if ide_ci::fs::metadata(&source)?.len() == ide_ci::fs::metadata(&target)?.len() {
+            Ok(true)
+        } else if ide_ci::fs::read(&source)? == ide_ci::fs::read(&target)? {
+            // TODO: Not good for large files, should process them chunk by chunk.
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    })()
+    .unwrap_or(false)
+}
+
+pub fn copy_if_different(source: impl AsRef<Path>, target: impl AsRef<Path>) -> Result {
+    if !check_if_identical(&source, &target) {
+        ide_ci::fs::copy(&source, &target)?;
+    }
+    Ok(())
 }
 
 impl IsWatchable for Wasm {
