@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use tempfile::tempdir;
 
 use ide_ci::actions::artifacts;
 use tokio::process::Child;
@@ -6,6 +7,7 @@ use tokio::process::Child;
 use crate::source::CiRunSource;
 use crate::source::ExternalSource;
 use crate::source::GetTargetJob;
+use crate::source::ReleaseSource;
 use crate::source::Source;
 
 pub mod gui;
@@ -74,6 +76,7 @@ pub trait IsTarget: Sized + 'static {
         source: ExternalSource,
         destination: PathBuf,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        let span = info_span!("Getting artifact from an external source");
         match source {
             ExternalSource::OngoingCiRun => {
                 let artifact_name = self.artifact_name().to_string();
@@ -93,7 +96,10 @@ pub trait IsTarget: Sized + 'static {
                 Self::Artifact::from_existing(destination).await
             }
             .boxed(),
+            ExternalSource::Release(release) => self.download_asset(release, destination),
         }
+        .instrument(span)
+        .boxed()
     }
 
     /// Produce an artifact from build inputs.
@@ -134,6 +140,29 @@ pub trait IsTarget: Sized + 'static {
             ide_ci::archive::extract_to(&inner_archive_path, &output_path).await?;
             ide_ci::fs::remove_if_exists(&inner_archive_path)?;
             Self::Artifact::from_existing(output_path).await
+        }
+        .instrument(span)
+        .boxed()
+    }
+
+    fn download_asset(
+        &self,
+        source: ReleaseSource,
+        destination: PathBuf,
+    ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        // source.asset_id
+        let span = info_span!("Downloading artifact from a release asset.",
+            asset_id = source.asset_id.0,
+            repo = %source.repository);
+        async move {
+            let ReleaseSource { asset_id, octocrab, repository } = &source;
+            let asset = repository.asset(&octocrab, *asset_id).await?;
+            let temp_dir = tempdir()?;
+            let temp_file = temp_dir.path().join(&asset.name);
+            repository.download_asset_as(octocrab, *asset_id, temp_file.clone()).await?;
+            // FIXME: hardcoded bundle directory name
+            ide_ci::archive::extract_item(&temp_file, "enso", &destination).await?;
+            Self::Artifact::from_existing(destination).await
         }
         .instrument(span)
         .boxed()
@@ -232,5 +261,29 @@ pub trait IsWatchable: IsTarget {
             Source::External(external) =>
                 self.get_external(external, job.destination).map_ok(PerhapsWatched::Static).boxed(),
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::project::project_manager::ProjectManager;
+    use ide_ci::log::setup_logging;
+    use ide_ci::models::config::RepoContext;
+
+    #[tokio::test]
+    async fn download_release() -> Result {
+        setup_logging()?;
+        let source = ExternalSource::Release(ReleaseSource {
+            repository: RepoContext::from_str("enso-org/enso")?,
+            // release: 64573522.into(),
+            asset_id:   62731588.into(),
+            // asset_id:   62731653.into(),
+            octocrab:   Default::default(),
+        });
+
+        ProjectManager.get_external(source, r"C:\temp\pm".into()).await?;
+        Ok(())
     }
 }

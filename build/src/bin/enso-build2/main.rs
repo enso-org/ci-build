@@ -36,6 +36,7 @@ use enso_build::source::Source;
 use futures_util::future::try_join;
 use ide_ci::actions::workflow::is_in_env;
 use ide_ci::global;
+use ide_ci::log::setup_logging;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::Git;
 use std::any::type_name;
@@ -447,60 +448,9 @@ pub fn get_target<Target: IsTarget>(
     }
 }
 
-pub struct MyLayer;
-
-impl<S: Subscriber + Debug + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S> for MyLayer {
-    fn register_callsite(&self, metadata: &'static Metadata<'static>) -> Interest {
-        if metadata.module_path().is_some_with(|path| {
-            path.starts_with("ide_ci::")
-                || path.starts_with("enso_build")
-                || path.starts_with("enso_build2")
-        }) {
-            Interest::always()
-        } else {
-            // dbg!(metadata);
-            Interest::never()
-        }
-    }
-
-    fn on_enter(&self, id: &Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
-        // ide_ci::global::println(format!("Enter {id:?}"));
-    }
-    fn on_exit(&self, id: &Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
-        // ide_ci::global::println(format!("Leave {id:?}"));
-    }
-    fn on_event(&self, event: &Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
-        // tracing_log::dbg!(event);
-    }
-    fn on_new_span(
-        &self,
-        attrs: &Attributes<'_>,
-        id: &Id,
-        ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        let span = ctx.span(id).unwrap();
-        let bar = global::new_spinner(format!("In span {id:?}: {:?}", span.name()));
-        span.extensions_mut().insert(bar);
-        ide_ci::global::println(format!("Create {id:?}"));
-    }
-
-    fn on_close(&self, id: Id, ctx: tracing_subscriber::layer::Context<'_, S>) {
-        ide_ci::global::println(format!("Close {id:?}"));
-    }
-}
-
-
 async fn main_internal() -> Result {
     let cli = Cli::parse();
-    // console_subscriber::init();
-    tracing::subscriber::set_global_default(
-        Registry::default().with(MyLayer).with(
-            tracing_subscriber::fmt::layer()
-                .without_time()
-                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE),
-        ),
-    )
-    .expect("default global");
+    setup_logging()?;
 
     pretty_env_logger::init();
     debug!("Parsed CLI arguments: {cli:#?}");

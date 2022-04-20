@@ -1,10 +1,8 @@
 use crate::prelude::*;
 use anyhow::Context;
 use std::env::temp_dir;
-use std::fs::Metadata;
 use tokio::process::Child;
 
-use crate::project::wasm::js_patcher::patch_js_glue;
 use crate::project::wasm::js_patcher::patch_js_glue_in_place;
 // use crate::paths::generated::Parameters;
 // use crate::paths::generated::Paths;

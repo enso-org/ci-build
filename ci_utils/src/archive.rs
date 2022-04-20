@@ -6,6 +6,9 @@ use crate::programs::tar::Compression;
 use crate::programs::tar::Tar;
 use crate::programs::SevenZip;
 
+use tracing::Span;
+
+pub mod tar;
 pub mod zip;
 
 /// Archive formats that we handle.
@@ -62,7 +65,7 @@ impl Format {
             }
             Format::Tar(Some(Compression::Gzip)) => {
                 let tar_stream = flate2::read::GzDecoder::new(compressed_data);
-                let mut archive = tar::Archive::new(tar_stream);
+                let mut archive = ::tar::Archive::new(tar_stream);
                 archive.unpack(output_dir)?;
             }
             // Format::SevenZip => {
@@ -114,6 +117,44 @@ pub async fn pack_directory_contents(
     }
 }
 
+#[tracing::instrument(
+    name="Extracting item from archive.",
+    skip(archive_path, item_path, output_path),
+    fields(
+        src=%archive_path.as_ref().display(),
+        item=%item_path.as_ref().display(),
+        dest=%output_path.as_ref().display()),
+    err)]
+pub async fn extract_item(
+    archive_path: impl AsRef<Path>,
+    item_path: impl AsRef<Path>,
+    output_path: impl AsRef<Path>,
+) -> Result {
+    let format = Format::from_filename(&archive_path)?;
+    let archive_path = archive_path.as_ref().to_path_buf();
+    let item_path = item_path.as_ref().to_path_buf();
+    let output_path = output_path.as_ref().to_path_buf();
+
+    let extract_task = match format {
+        Format::Zip => {
+            let mut archive = zip::open(&archive_path)?;
+            tokio::task::spawn_blocking(move || {
+                zip::extract_subtree(&mut archive, item_path, output_path)
+            })
+        }
+        Format::Tar(Some(Compression::Gzip)) => {
+            let mut archive = tar::open_tar_gz(&archive_path)?;
+            tokio::task::spawn_blocking(move || {
+                tar::extract_subtree(&mut archive, item_path, output_path)
+            })
+        }
+        _ => todo!(),
+    };
+    extract_task.instrument(Span::current()).await??;
+    Ok(())
+}
+
+#[tracing::instrument(name="Extracting the archive to a directory.", skip(archive_path,output_directory), fields(src=%archive_path.as_ref().display(), dest=%output_directory.as_ref().display()), err)]
 pub async fn extract_to(
     archive_path: impl AsRef<Path>,
     output_directory: impl AsRef<Path>,

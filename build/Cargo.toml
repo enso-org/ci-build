@@ -36,6 +36,7 @@ itertools = "0.10.1"
 lazy_static = "1.4.0"
 git2 = "0.13.25"
 log = "0.4.14"
+mime = "0.3.16"
 nix = "0.23.0"
 octocrab = { git = "https://github.com/enso-org/octocrab" }
 ouroboros = "0.14.2"

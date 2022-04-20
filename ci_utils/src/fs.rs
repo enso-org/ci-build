@@ -3,6 +3,7 @@ use crate::prelude::*;
 use fs_extra::dir::CopyOptions;
 use platforms::TARGET_OS;
 
+pub mod tokio;
 pub mod wrappers;
 
 pub use wrappers::*;

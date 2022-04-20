@@ -24,7 +24,6 @@ pub mod endpoints {
     use reqwest::header::HeaderValue;
     use std::pin::Pin;
     use tokio::io::AsyncRead;
-    use tokio_util::io::StreamReader;
 
     /// Creates a file container for the new artifact in the remote blob storage/file service.
     ///
@@ -134,14 +133,14 @@ pub mod endpoints {
         // debug!("Downloading {} to {}.", artifact_location, destination.as_ref().display());
         // let file = tokio::fs::File::create(destination);
 
-        let response = bin_client.get(artifact_location).send().await?;
+        let response = crate::io::web::execute(bin_client.get(artifact_location)).await?;
         // let expected_size = decode_content_length(response.headers());
         let is_gzipped = response
             .headers()
             .get(reqwest::header::ACCEPT_ENCODING)
             .contains(&HeaderValue::from_static("gzip"));
 
-        let reader = StreamReader::new(response.bytes_stream().map_err(std::io::Error::other));
+        let reader = crate::io::web::async_reader(response);
         if is_gzipped {
             let decoded_stream = async_compression::tokio::bufread::GzipDecoder::new(reader);
             Ok(Box::pin(decoded_stream) as Pin<Box<dyn AsyncRead + Send>>)

@@ -17,6 +17,7 @@
 #![feature(once_cell)]
 #![feature(duration_constants)]
 #![feature(const_trait_impl)]
+#![feature(is_some_with)]
 
 pub mod actions;
 pub mod anyhow;
@@ -33,6 +34,7 @@ pub mod global;
 pub mod goodie;
 pub mod goodies;
 pub mod io;
+pub mod log;
 pub mod models;
 pub mod paths;
 pub mod platform;

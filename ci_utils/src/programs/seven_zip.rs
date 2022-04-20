@@ -229,7 +229,7 @@ impl IntoIterator for Switch {
     fn into_iter(self) -> Self::IntoIter {
         use OverwriteMode::*;
         match self {
-            Self::OutputDirectory(dir) => vec!["-o".into(), dir.into()],
+            Self::OutputDirectory(dir) => vec![format!("-o{}", dir.display()).into()],
             Self::AssumeYes => vec!["-y".into()],
             Self::OverwriteMode(OverwriteAll) => vec!["-aoa".into()],
             Self::OverwriteMode(SkipExisting) => vec!["-aos".into()],

@@ -87,10 +87,16 @@ macro_rules! source_args_hlp {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Target {
+    /// Rust part of the GUI that is compiled to WASM.
     Wasm(wasm::Target),
+
+    /// GUI that consists of WASM and JS parts. This is what we depy to cloud.
     Gui(gui::Target),
-    /// Build a bundle with Project Manager. Bundle includes Enso Engine with GraalVM Runtime.
+
+    /// Project Manager bundle, that includes Enso Engine with GraalVM Runtime.
     ProjectManager(project_manager::Target),
+
+    /// IDE bundles together GUI and Project Manager bundle.
     Ide(ide::Target),
     Clean,
 }
@@ -145,9 +151,9 @@ pub struct Source<Target: IsTargetSource> {
 
     #[clap(flatten)]
     pub output_path: OutputPath<Target>,
-
-    #[clap(skip)]
-    pub phantom: PhantomData<Target>,
+    //
+    // #[clap(skip)]
+    // pub phantom: PhantomData<Target>,
 }
 
 #[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
@@ -170,5 +176,19 @@ pub struct OutputPath<Target: IsTargetSource> {
 impl<Target: IsTargetSource> AsRef<Path> for OutputPath<Target> {
     fn as_ref(&self) -> &Path {
         self.output_path.as_path()
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use enso_build::project::IsTarget;
+
+    pub fn parse_source<Target: IsTarget + IsTargetSource>(
+        text: &str,
+    ) -> Result<crate::Source<Target>> {
+        todo!()
     }
 }

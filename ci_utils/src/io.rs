@@ -1,3 +1,5 @@
+pub mod web;
+
 use crate::prelude::*;
 use anyhow::Context;
 use std::time::Duration;
@@ -93,6 +95,16 @@ pub async fn download_relative(
     debug!("Download finished: {}", output_path.display());
     Ok(output_path)
 }
+
+// pub async fn stream_to_file<E: Into<Box<dyn std::error::Error + Send + Sync>>>(
+//     stream: impl Stream<Item = std::result::Result<Bytes, E>> + Unpin,
+//     output_path: impl AsRef<Path>,
+// ) -> Result {
+//     let mut reader = tokio_util::io::StreamReader::new(stream.map_err(std::io::Error::other));
+//     let mut output = crate::fs::tokio::create(output_path).await?;
+//     tokio::io::copy(&mut reader, &mut output).await?;
+//     Ok(())
+// }
 
 
 #[cfg(test)]

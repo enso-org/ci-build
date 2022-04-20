@@ -1,8 +1,9 @@
 use crate::prelude::*;
 
+use futures_util::future;
 use futures_util::future::Map;
-use futures_util::future::MapErr;
 use futures_util::future::MapOk;
+use futures_util::stream;
 use futures_util::FutureExt as _;
 use futures_util::TryFutureExt as _;
 
@@ -23,7 +24,7 @@ pub trait TryFutureExt: TryFuture {
         self.map_ok(void)
     }
 
-    fn anyhow_err(self) -> MapErr<Self, fn(Self::Error) -> anyhow::Error>
+    fn anyhow_err(self) -> future::MapErr<Self, fn(Self::Error) -> anyhow::Error>
     where
         Self: Sized,
         // TODO: we should rely on `into` rather than `from`
@@ -41,3 +42,17 @@ pub fn receiver_to_stream<T>(
 ) -> impl Stream<Item = T> {
     futures::stream::poll_fn(move |ctx| receiver.poll_recv(ctx))
 }
+
+
+
+pub trait TryStreamExt: TryStream {
+    fn anyhow_err(self) -> stream::MapErr<Self, fn(Self::Error) -> anyhow::Error>
+    where
+        Self: Sized,
+        // TODO: we should rely on `into` rather than `from`
+        anyhow::Error: From<Self::Error>, {
+        self.map_err(anyhow::Error::from)
+    }
+}
+
+impl<T: ?Sized> TryStreamExt for T where T: TryStream {}

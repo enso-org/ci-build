@@ -71,7 +71,7 @@ pub fn new_spinner(message: impl Into<Cow<'static, str>>) -> ProgressBar {
 pub fn println(msg: impl AsRef<str>) {
     if let Ok(state) = GLOBAL.lock() {
         if !indicatif::ProgressDrawTarget::stderr().is_hidden() {
-            state.mp.println(msg);
+            let _ = state.mp.println(msg);
             return;
         }
     };

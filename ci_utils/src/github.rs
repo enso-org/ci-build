@@ -1,14 +1,17 @@
 use crate::prelude::*;
 use anyhow::Context;
 use octocrab::models::ArtifactId;
+use octocrab::models::AssetId;
 use octocrab::models::ReleaseId;
 use octocrab::models::RunId;
 use std::io::Cursor;
 
 use crate::global::new_spinner;
+use octocrab::models::repos::Asset;
 use octocrab::models::repos::Release;
 use octocrab::models::workflows::WorkflowListArtifact;
 use octocrab::params::actions::ArchiveFormat;
+use reqwest::Response;
 
 const MAX_PER_PAGE: u8 = 100;
 
@@ -130,6 +133,36 @@ pub trait RepoPointer: Display {
         let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
         archive.extract(output_dir)?;
         Ok(())
+    }
+
+    #[tracing::instrument(name="Get the asset information.", skip(client), fields(self=%self), err)]
+    async fn asset(&self, client: &Octocrab, asset_id: AssetId) -> Result<Asset> {
+        self.repos(client).releases().get_asset(asset_id).await.anyhow_err()
+    }
+
+    #[tracing::instrument(name="Download the asset.", skip(client), fields(self=%self), err)]
+    async fn download_asset(&self, client: &Octocrab, asset_id: AssetId) -> Result<Response> {
+        let path = iformat!("/repos/{self.owner()}/{self.name()}/releases/assets/{asset_id}");
+        let url = client.absolute_url(path)?;
+        let response = client
+            .client
+            .get(url)
+            .header(reqwest::header::ACCEPT, mime::APPLICATION_OCTET_STREAM.as_ref())
+            .send()
+            .await?;
+        response.error_for_status_ref()?;
+        Ok(response)
+    }
+
+    #[tracing::instrument(name="Download the asset to a file.", skip(client,output_path), fields(self=%self, dest=%output_path.as_ref().display()), err)]
+    async fn download_asset_as(
+        &self,
+        client: &Octocrab,
+        asset_id: AssetId,
+        output_path: impl AsRef<Path> + Send + Sync + 'static,
+    ) -> Result {
+        let response = self.download_asset(client, asset_id).await?;
+        crate::io::web::stream_response_to_file(response, &output_path).await
     }
 }
 

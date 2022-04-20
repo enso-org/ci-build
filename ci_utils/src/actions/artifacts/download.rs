@@ -34,13 +34,15 @@ impl ArtifactDownloader {
     }
 
     pub async fn download_file_item(&self, file: &FileToDownload) -> Result {
-        let mut stream =
-            self.client.download_container_item(file.remote_source_location.clone()).await?;
-        crate::fs::create_parent_dir_if_missing(&file.target)?;
-        let mut file = tokio::fs::File::create(&file.target).await?;
-        tokio::io::copy(&mut stream, &mut file).await?;
-        Ok(())
-        // raw::endpoints::download_item(self.client)
+        let span = info_span!("Downloading file from artifact", url = %file.remote_source_location, target = %file.target.display());
+        async move {
+            let stream =
+                self.client.download_container_item(file.remote_source_location.clone()).await?;
+            crate::fs::tokio::copy_to_file(stream, &file.target).await?;
+            Ok(())
+        }
+        .instrument(span)
+        .await
     }
 
     pub async fn download_all_to(&self, root_path: &Path) -> Result {

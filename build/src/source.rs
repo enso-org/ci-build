@@ -3,6 +3,7 @@ use crate::prelude::*;
 use crate::project::IsTarget;
 
 use ide_ci::models::config::RepoContext;
+use octocrab::models::AssetId;
 use octocrab::models::RunId;
 use octocrab::Octocrab;
 
@@ -11,6 +12,7 @@ pub enum ExternalSource {
     OngoingCiRun,
     CiRun(CiRunSource),
     LocalFile(PathBuf),
+    Release(ReleaseSource),
 }
 
 #[derive(Debug)]
@@ -25,6 +27,13 @@ pub struct CiRunSource {
     pub repository:    RepoContext,
     pub run_id:        RunId,
     pub artifact_name: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReleaseSource {
+    pub octocrab:   Octocrab,
+    pub repository: RepoContext,
+    pub asset_id:   AssetId,
 }
 
 #[derive(Debug)]

@@ -1,9 +1,12 @@
 //! Wrappers over [`std::fs`] functions that provide sensible error messages, i.e. explaining what
 //! operation was attempted and what was the relevant path.
+
 use crate::prelude::*;
 
 use std::fs::File;
 use std::fs::Metadata;
+
+pub mod tokio;
 
 #[context("Failed to obtain metadata for file: {}", path.as_ref().display())]
 pub fn metadata<P: AsRef<Path>>(path: P) -> Result<Metadata> {
@@ -28,6 +31,11 @@ pub fn read_to_string(path: impl AsRef<Path>) -> Result<String> {
 #[context("Failed to write path: {}", path.as_ref().display())]
 pub fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result {
     std::fs::write(&path, contents).anyhow_err()
+}
+
+#[context("Failed to open path for reading: {}", path.as_ref().display())]
+pub fn open(path: impl AsRef<Path>) -> Result<File> {
+    File::open(&path).anyhow_err()
 }
 
 #[context("Failed to open path for writing: {}", path.as_ref().display())]
