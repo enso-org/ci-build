@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use anyhow::Context;
 use std::env::temp_dir;
+use tempfile::tempdir;
 use tokio::process::Child;
 
 use crate::project::wasm::js_patcher::patch_js_glue_in_place;
@@ -81,7 +82,7 @@ impl IsTarget for Wasm {
         );
         async move {
             info!("Building wasm.");
-            let temp_dir = temp_dir();
+            let temp_dir = tempdir();
             let temp_dist = RepoRootDistWasm::new(temp_dir.as_path());
             ide_ci::programs::WasmPack
                 .cmd()?
@@ -103,8 +104,9 @@ impl IsTarget for Wasm {
 
             ide_ci::fs::create_dir_if_missing(&output_path)?;
             let ret = RepoRootDistWasm::new(output_path.as_ref());
-            copy_if_different(&temp_dist.wasm_glue, &ret.wasm_glue)?;
-            copy_if_different(&temp_dist.wasm_main_raw, &ret.wasm_main)?;
+            ide_ci::fs::copy(&temp_dist, &ret)?;
+            // copy_if_different(&temp_dist.wasm_glue, &ret.wasm_glue)?;
+            // copy_if_different(&temp_dist.wasm_main_raw, &ret.wasm_main)?;
             Ok(Artifact(ret))
         }
         .instrument(span)

@@ -37,6 +37,12 @@ pub async fn download_stream(
 }
 
 /// Get the the response body as a byte stream.
+pub async fn download_reader(url: impl IntoUrl) -> Result<impl AsyncBufRead + Unpin> {
+    let response = reqwest::get(url).await?.error_for_status()?;
+    Ok(async_reader(response))
+}
+
+/// Get the the response body as a byte stream.
 pub async fn download_file(url: impl IntoUrl, output: impl AsRef<Path>) -> Result {
     stream_response_to_file(reqwest::get(url).await?, output).await
 }

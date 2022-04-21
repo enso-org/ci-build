@@ -31,12 +31,20 @@ pub fn extract_file(file: &mut ZipFile, output: impl AsRef<Path>) -> Result {
     Ok(())
 }
 
+
+#[tracing::instrument(
+    name="Extracting subtree from archive.",
+    skip_all,
+    fields(
+        prefix = %prefix.as_ref().display(),
+        dest   = %output.as_ref().display()),
+        err)]
 pub fn extract_subtree(
     archive: &mut ZipArchive<impl Read + Seek>,
     prefix: impl AsRef<Path>,
     output: impl AsRef<Path>,
 ) -> Result {
-    let bar = crate::global::new_spinner("Extracting archive.");
+    // let bar = crate::global::new_spinner("Extracting archive.");
     for index in 0..archive.len() {
         // std::thread::sleep(Duration::SECOND);
         let mut file = archive.by_index(index)?;
@@ -48,10 +56,10 @@ pub fn extract_subtree(
             trace!("Extracting {}", output.display());
             // bar.set_message(msg);
             // std::thread::sleep(Duration::from_secs(1));
-            bar.set_message(format!("Extracting {}", output.display()));
+            // bar.set_message(format!("Extracting {}", output.display()));
             extract_file(&mut file, output)?;
         }
     }
-    bar.finish_with_message(format!("Done extracting archive to {}", output.as_ref().display()));
+    // bar.finish_with_message(format!("Done extracting archive to {}", output.as_ref().display()));
     Ok(())
 }

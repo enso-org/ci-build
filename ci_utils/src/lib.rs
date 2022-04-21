@@ -22,6 +22,7 @@ pub mod actions;
 pub mod anyhow;
 pub mod archive;
 pub mod buffer;
+pub mod cache;
 pub mod ci;
 pub mod deploy;
 pub mod env;
@@ -87,6 +88,7 @@ pub mod prelude {
     pub use std::fmt::Formatter;
     pub use std::future::ready;
     pub use std::future::Future;
+    pub use std::hash::Hash;
     pub use std::io::Read;
     pub use std::io::Seek;
     pub use std::iter::once;

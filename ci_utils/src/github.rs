@@ -6,7 +6,7 @@ use octocrab::models::ReleaseId;
 use octocrab::models::RunId;
 use std::io::Cursor;
 
-use crate::global::new_spinner;
+// use crate::global::new_spinner;
 use octocrab::models::repos::Asset;
 use octocrab::models::repos::Release;
 use octocrab::models::workflows::WorkflowListArtifact;
@@ -116,7 +116,7 @@ pub trait RepoPointer: Display {
     }
 
     async fn download_artifact(&self, client: &Octocrab, artifact_id: ArtifactId) -> Result<Bytes> {
-        let _bar = new_spinner(format!("Downloading artifact id={}", artifact_id));
+        // let _bar = new_spinner(format!("Downloading artifact id={}", artifact_id));
         client
             .actions()
             .download_artifact(self.owner(), self.name(), artifact_id, ArchiveFormat::Zip)

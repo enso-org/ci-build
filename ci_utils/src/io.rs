@@ -1,12 +1,13 @@
 pub mod web;
 
 use crate::prelude::*;
+
 use anyhow::Context;
+use reqwest::IntoUrl;
 use std::time::Duration;
 
 use crate::archive::Format;
 use crate::global::progress_bar;
-use reqwest::IntoUrl;
 
 /// Get the the response body as a byte stream.
 pub async fn download(url: impl IntoUrl) -> Result<impl Stream<Item = reqwest::Result<Bytes>>> {

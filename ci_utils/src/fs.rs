@@ -119,6 +119,10 @@ pub fn require_exist(path: impl AsRef<Path>) -> Result {
     }
 }
 
+#[tracing::instrument(skip_all, fields(
+    src  = %source_file.as_ref().display(),
+    dest = %dest_dir.as_ref().display()),
+    err)]
 pub fn copy_to(source_file: impl AsRef<Path>, dest_dir: impl AsRef<Path>) -> Result {
     require_exist(&source_file)?;
     create_dir_if_missing(dest_dir.as_ref())?;
@@ -129,6 +133,11 @@ pub fn copy_to(source_file: impl AsRef<Path>, dest_dir: impl AsRef<Path>) -> Res
     Ok(())
 }
 
+
+#[tracing::instrument(skip_all, fields(
+    src  = %source_file.as_ref().display(),
+    dest = %destination_file.as_ref().display()),
+    err)]
 pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -> Result {
     let source_file = source_file.as_ref();
     let destination_file = destination_file.as_ref();

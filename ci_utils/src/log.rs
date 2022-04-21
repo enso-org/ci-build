@@ -32,12 +32,12 @@ impl<S: Subscriber + Debug + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S
     fn on_new_span(
         &self,
         _attrs: &Attributes<'_>,
-        id: &Id,
-        ctx: tracing_subscriber::layer::Context<'_, S>,
+        _id: &Id,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        let span = ctx.span(id).unwrap();
-        let bar = crate::global::new_spinner(format!("In span {id:?}: {:?}", span.name()));
-        span.extensions_mut().insert(bar);
+        // let span = ctx.span(id).unwrap();
+        // let bar = crate::global::new_spinner(format!("In span {id:?}: {:?}", span.name()));
+        // span.extensions_mut().insert(bar);
         // crate::global::println(format!("Create {id:?}"));
     }
     fn on_event(&self, _event: &Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {

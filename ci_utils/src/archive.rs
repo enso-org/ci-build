@@ -192,8 +192,8 @@ mod tests {
     }
 
     #[test]
-    async fn archive_checker() -> Result {
-        assert!(is_archive("enso-project-manager-0.2.31-linux-amd64.tar.gz"));
-        assert!(is_archive("enso-project-manager-0.2.31-windows-amd64.zip"));
+    fn archive_checker() {
+        assert!(is_archive_name("enso-project-manager-0.2.31-linux-amd64.tar.gz"));
+        assert!(is_archive_name("enso-project-manager-0.2.31-windows-amd64.zip"));
     }
 }
