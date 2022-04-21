@@ -164,10 +164,9 @@ impl IdeDesktop {
     }
 
     #[tracing::instrument(name="Building IDE Content.", skip_all, fields(
-        dest = %output_path.as_ref().display()),
-        ?build_info,
-        err
-    )]
+        dest = %output_path.as_ref().display(),
+        build_info,
+        err))]
     pub async fn build_content(
         &self,
         wasm: impl Future<Output = Result<Artifact>>,
@@ -182,6 +181,8 @@ impl IdeDesktop {
             .run("build", EMPTY_ARGS)
             .run_ok()
             .await?;
+
+        debug!(assets=?env.asset_dir, "Still kept");
         drop(env); // does this extend the lifetime?
         Ok(())
     }
@@ -206,10 +207,10 @@ impl IdeDesktop {
     }
 
     #[tracing::instrument(name="Preparing distribution of the IDE.", skip_all, fields(
-        dest = %output_path.as_ref().display()),
+        dest = %output_path.as_ref().display(),
         ?gui,
         ?project_manager,
-        err)]
+        err))]
     pub async fn dist(
         &self,
         gui: &crate::project::gui::Artifact,
