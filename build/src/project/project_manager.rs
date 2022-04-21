@@ -1,17 +1,21 @@
 use crate::prelude::*;
-use std::env::consts::EXE_SUFFIX;
-use std::lazy::SyncLazy;
 
 use crate::engine::BuildConfiguration;
 use crate::engine::BuildOperation;
-use anyhow::Context;
-use ide_ci::goodie::GoodieDatabase;
-use ide_ci::program::version::find_in_text;
-use platforms::TARGET_OS;
-
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::version::Versions;
+
+use crate::paths::pretty_print_arch;
+use anyhow::Context;
+use ide_ci::archive::is_archive_name;
+use ide_ci::goodie::GoodieDatabase;
+use ide_ci::program::version::find_in_text;
+use octocrab::models::repos::Asset;
+use platforms::TARGET_ARCH;
+use platforms::TARGET_OS;
+use std::env::consts::EXE_SUFFIX;
+use std::lazy::SyncLazy;
 
 #[derive(Clone, Debug)]
 pub struct BuildInput {
@@ -96,4 +100,20 @@ impl IsTarget for ProjectManager {
         }
         .boxed()
     }
+
+    fn find_asset(&self, assets: Vec<Asset>) -> Result<Asset> {
+        assets
+            .into_iter()
+            .find(|asset| {
+                let name = &asset.name;
+                matches_platform(name) && is_archive_name(name) && name.contains("project-manager")
+            })
+            .context("Failed to find release asset with project manager bundle.")
+    }
+}
+
+pub fn matches_platform(name: &str) -> bool {
+    // Sample name: "project-manager-bundle-2022.1.1-nightly.2022-04-16-linux-amd64.tar.gz"
+    name.contains(TARGET_OS.as_str()) && name.contains(pretty_print_arch(TARGET_ARCH))
+    // TODO workaround for macOS and M1 (they should be allowed to use amd64 artifacts)
 }

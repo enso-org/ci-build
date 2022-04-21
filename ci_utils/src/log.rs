@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use tracing_subscriber::prelude::*;
 
 use tracing::span::Attributes;
 use tracing::subscriber::Interest;
@@ -10,17 +11,17 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Registry;
 
-use tracing_subscriber::prelude::*;
+pub fn is_our_module_path(path: impl AsRef<str>) -> bool {
+    ["ide_ci::", "enso_build", "enso_build2"]
+        .into_iter()
+        .any(|prefix| path.as_ref().starts_with(prefix))
+}
 
 pub struct MyLayer;
 
 impl<S: Subscriber + Debug + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S> for MyLayer {
     fn register_callsite(&self, metadata: &'static Metadata<'static>) -> Interest {
-        if metadata.module_path().is_some_with(|path| {
-            path.starts_with("ide_ci::")
-                || path.starts_with("enso_build")
-                || path.starts_with("enso_build2")
-        }) {
+        if metadata.module_path().is_some_and(|p| is_our_module_path(p)) {
             Interest::always()
         } else {
             // dbg!(metadata);
@@ -28,15 +29,6 @@ impl<S: Subscriber + Debug + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S
         }
     }
 
-    fn on_enter(&self, _id: &Id, _ctx: tracing_subscriber::layer::Context<'_, S>) {
-        // ide_ci::global::println(format!("Enter {id:?}"));
-    }
-    fn on_exit(&self, _id: &Id, _ctx: tracing_subscriber::layer::Context<'_, S>) {
-        // ide_ci::global::println(format!("Leave {id:?}"));
-    }
-    fn on_event(&self, _event: &Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
-        // tracing_log::dbg!(event);
-    }
     fn on_new_span(
         &self,
         _attrs: &Attributes<'_>,
@@ -47,6 +39,15 @@ impl<S: Subscriber + Debug + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S
         let bar = crate::global::new_spinner(format!("In span {id:?}: {:?}", span.name()));
         span.extensions_mut().insert(bar);
         // crate::global::println(format!("Create {id:?}"));
+    }
+    fn on_event(&self, _event: &Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+        // tracing_log::dbg!(event);
+    }
+    fn on_enter(&self, _id: &Id, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+        // ide_ci::global::println(format!("Enter {id:?}"));
+    }
+    fn on_exit(&self, _id: &Id, _ctx: tracing_subscriber::layer::Context<'_, S>) {
+        // ide_ci::global::println(format!("Leave {id:?}"));
     }
 
     fn on_close(&self, _id: Id, _ctx: tracing_subscriber::layer::Context<'_, S>) {

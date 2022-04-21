@@ -32,6 +32,7 @@ use enso_build::setup_octocrab;
 use enso_build::source::CiRunSource;
 use enso_build::source::ExternalSource;
 use enso_build::source::GetTargetJob;
+use enso_build::source::ReleaseSource;
 use enso_build::source::Source;
 use futures_util::future::try_join;
 use ide_ci::actions::workflow::is_in_env;
@@ -40,25 +41,9 @@ use ide_ci::log::setup_logging;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::Git;
 use std::any::type_name;
-use std::any::TypeId;
 use std::time::Duration;
 use tokio::runtime::Runtime;
-use tracing::level_filters::LevelFilter;
-use tracing::span::Attributes;
-use tracing::span::Record;
-use tracing::subscriber::Interest;
-use tracing::Event;
-use tracing::Id;
-use tracing::Metadata;
-use tracing::Subscriber;
-use tracing_subscriber::filter::Filtered;
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::layer::Filter;
-use tracing_subscriber::layer::Layered;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::registry::LookupSpan;
-use tracing_subscriber::Layer;
-use tracing_subscriber::Registry;
+
 
 /// The basic, common information available in this application.
 #[derive(Clone, Debug)]
@@ -108,30 +93,76 @@ impl BuildContext {
 
     pub fn resolve<T: IsTargetSource + IsTarget>(
         &self,
+        target: T,
         source: arg::Source<T>,
-    ) -> Result<GetTargetJob<T>>
+    ) -> BoxFuture<'static, Result<GetTargetJob<T>>>
     where
         T: Resolvable,
     {
         let destination = source.output_path.output_path;
         let source = match source.source {
-            arg::SourceKind::Build => Source::BuildLocally(T::resolve(self, source.build_args)?),
-            arg::SourceKind::Local => Source::External(ExternalSource::LocalFile(
-                source.path.clone().context("Missing path to the local artifacts!")?,
-            )),
-            arg::SourceKind::CiRun => Source::External(ExternalSource::CiRun(CiRunSource {
-                octocrab:      self.octocrab.clone(),
-                run_id:        source.run_id.context(format!(
+            arg::SourceKind::Build => {
+                let resolved = T::resolve(self, source.build_args);
+                ready(resolved.map(Source::BuildLocally)).boxed()
+            }
+            arg::SourceKind::Local => {
+                let resolved = source.path.clone().context("Missing path to the local artifacts!");
+                ready(resolved.map(|p| Source::External(ExternalSource::LocalFile(p)))).boxed()
+            }
+            arg::SourceKind::CiRun => {
+                let run_id = source.run_id.context(format!(
                     "Missing run ID, please provide {} argument.",
                     T::RUN_ID_NAME
-                ))?,
-                repository:    self.remote_repo.clone(),
-                artifact_name: source.artifact_name.clone(),
-            })),
+                ));
+                ready(run_id.map(|run_id| {
+                    Source::External(ExternalSource::CiRun(CiRunSource {
+                        octocrab: self.octocrab.clone(),
+                        run_id,
+                        repository: self.remote_repo.clone(),
+                        artifact_name: source.artifact_name.clone(),
+                    }))
+                }))
+                .boxed()
+            }
+            arg::SourceKind::Release => {
+                let designator = source
+                    .release
+                    .context(format!("Missing {} argument.", T::RELEASE_DESIGNATOR_NAME));
+                let resolved = designator
+                    .map(|designator| self.resolve_release_designator(target, designator));
+                async move { Ok(Source::External(ExternalSource::Release(resolved?.await?))) }
+                    .boxed()
+            }
         };
-        Ok(GetTargetJob { source, destination })
+        async move { Ok(GetTargetJob { source: source.await?, destination }) }.boxed()
     }
 
+    pub fn resolve_release_designator<T: IsTarget>(
+        &self,
+        target: T,
+        designator: String,
+    ) -> BoxFuture<'static, Result<ReleaseSource>> {
+        let repository = self.remote_repo.clone();
+        let octocrab = self.octocrab.clone();
+        async move {
+            let release = match designator.as_str() {
+                "latest" => repository.latest_release(&octocrab).await?,
+                "nightly" => {
+                    let releases = enso_build::version::nightly_releases(&octocrab, &repository)
+                        .await?
+                        .collect_vec();
+                    releases.into_iter().next().context("Failed to find any nightly releases.")?
+                }
+                tag => repository.find_release_by_text(&octocrab, tag).await?,
+            };
+            Ok(ReleaseSource {
+                octocrab,
+                repository,
+                asset_id: target.find_asset(release.assets)?.id,
+            })
+        }
+        .boxed()
+    }
 
     pub fn commit(&self) -> BoxFuture<'static, Result<String>> {
         let root = self.source_root.clone();
@@ -182,11 +213,10 @@ impl BuildContext {
         Target: IsTarget + IsTargetSource + Send + Sync + 'static,
         Target: Resolvable,
     {
-        let get_task = self.resolve(target_source);
-
+        let get_task = self.resolve(target.clone(), target_source);
         async move {
             info!("Getting target {}.", type_name::<Target>());
-            let get_task = get_task?;
+            let get_task = get_task.await?;
 
             // We upload only built artifacts. There would be no point in uploading something that
             // we've just downloaded.
@@ -232,9 +262,10 @@ impl BuildContext {
             arg::wasm::Command::Test { no_wasm, no_native } =>
                 Wasm.test(self.repo_root().path, !no_wasm, !no_native).boxed(),
             arg::wasm::Command::Get { source } => {
-                let source = self.resolve(source);
+                let target = Wasm;
+                let source = self.resolve(target, source);
                 async move {
-                    get_target(&Wasm, source?).await?;
+                    get_target(&target, source.await?).await?;
                     Ok(())
                 }
                 .boxed()
@@ -253,12 +284,14 @@ impl BuildContext {
     }
 
     pub fn watch_gui(&self, input: arg::gui::WatchInput) -> BoxFuture<'static, Result> {
+        let wasm_target = Wasm;
         let arg::gui::WatchInput { wasm, output_path } = input;
-        let wasm_watcher = self.resolve(wasm).map(|job| Wasm.watch(job));
+        let source = self.resolve(wasm_target, wasm);
         let repo_root = self.repo_root();
         let build_info = self.js_build_info();
         async move {
-            let mut wasm_watcher = wasm_watcher?.await?;
+            let source = source.await?;
+            let mut wasm_watcher = wasm_target.watch(source).await?;
             let input = gui::GuiInputs {
                 repo_root,
                 build_info,
@@ -475,4 +508,27 @@ fn main() -> Result {
     rt.block_on(async { main_internal().await })?;
     rt.shutdown_timeout(Duration::from_secs(60 * 30));
     Ok(())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use enso_build::version::Versions;
+
+    #[tokio::test]
+    async fn resolving_release() -> Result {
+        setup_logging()?;
+        let octocrab = Octocrab::default();
+        let context = BuildContext {
+            remote_repo: RepoContext::from_str("enso-org/enso")?,
+            triple: TargetTriple::new(Versions::new(Version::new(2022, 1, 1))),
+            source_root: r"H:/NBO/enso5".into(),
+            octocrab,
+        };
+
+        dbg!(context.resolve_release_designator(ProjectManager, "latest".into()).await)?;
+
+        Ok(())
+    }
 }

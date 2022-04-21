@@ -7,7 +7,6 @@
 #![feature(generic_associated_types)]
 #![feature(exact_size_is_empty)]
 #![feature(async_closure)]
-#![feature(async_stream)]
 #![feature(type_alias_impl_trait)]
 #![feature(default_free_fn)]
 #![feature(trait_alias)]

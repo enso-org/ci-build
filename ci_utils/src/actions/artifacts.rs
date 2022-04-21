@@ -132,29 +132,22 @@ pub fn single_dir_provider(path: &Path) -> Result<impl Stream<Item = FileToUploa
     Ok(futures::stream::iter(files))
 }
 
-pub fn upload_compressed_directory(
+#[tracing::instrument(skip_all , fields(path = %path_to_upload.as_ref().display(), artifact = artifact_name.as_ref()), err)]
+pub async fn upload_compressed_directory(
     path_to_upload: impl AsRef<Path> + Send,
     artifact_name: impl AsRef<str> + Send,
-) -> impl Future<Output = Result> {
-    let span = info_span!(
-        "Uploading a compressed directory as an artifact",
-        artifact = artifact_name.as_ref(),
-        path = path_to_upload.as_ref().as_str()
-    );
-    async move {
-        let artifact_name = artifact_name.as_ref();
-        let tempdir = tempdir()?;
-        let archive_path = tempdir.path().join(format!("{artifact_name}.tar.gz"));
+) -> Result {
+    let artifact_name = artifact_name.as_ref();
+    let tempdir = tempdir()?;
+    let archive_path = tempdir.path().join(format!("{artifact_name}.tar.gz"));
 
-        info!("Packing {} to {}", path_to_upload.as_ref().display(), archive_path.display());
-        crate::archive::pack_directory_contents(&archive_path, path_to_upload).await?;
+    info!("Packing {} to {}", path_to_upload.as_ref().display(), archive_path.display());
+    crate::archive::pack_directory_contents(&archive_path, path_to_upload).await?;
 
-        info!("Starting upload of {artifact_name}.");
-        upload_single_file(&archive_path, artifact_name).await?;
-        info!("Completed upload of {artifact_name}.");
-        Ok(())
-    }
-    .instrument(span)
+    info!("Starting upload of {artifact_name}.");
+    upload_single_file(&archive_path, artifact_name).await?;
+    info!("Completed upload of {artifact_name}.");
+    Ok(())
 }
 
 #[cfg(test)]

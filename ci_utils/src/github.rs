@@ -52,6 +52,7 @@ pub trait RepoPointer: Display {
         let repo = self.repos(client);
         let page = repo.releases().list().per_page(MAX_PER_PAGE).send().await?;
         // TODO: rate limit?
+        //       it should be possible to have stream of releases that fetches pages as needed
         client.all_pages(page).await
     }
 

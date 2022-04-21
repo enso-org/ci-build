@@ -48,15 +48,16 @@ impl Format {
     }
 
     /// Extract an archive of this format into a given output directory.
+    #[tracing::instrument(
+        name="Unpacking archive.",
+        skip_all,
+        fields(self, dest=%output_dir.as_ref().display()),
+        err)]
     pub fn extract(
         self,
         compressed_data: impl Read + Seek,
         output_dir: impl AsRef<Path>,
     ) -> anyhow::Result<()> {
-        let _bar = crate::global::new_spinner(format!(
-            "Unpacking archive to {}",
-            output_dir.as_ref().display()
-        ));
         create_dir_if_missing(&output_dir)?;
         match self {
             Format::Zip => {
@@ -99,21 +100,25 @@ pub async fn create(
     }
 }
 
+
+pub fn is_archive_name(path: impl AsRef<Path>) -> bool {
+    Format::from_filename(path).is_ok()
+}
+
+#[tracing::instrument(
+    name="Packing directory.",
+    skip_all,
+    fields(src=%root_directory.as_ref().display(), dest=%output_archive.as_ref().display()),
+    err)]
 pub async fn pack_directory_contents(
     output_archive: impl AsRef<Path>,
     root_directory: impl AsRef<Path>,
 ) -> Result {
-    let span = info_span!(
-        "Creating an archive",
-        source = root_directory.as_ref().as_str(),
-        target = output_archive.as_ref().as_str()
-    );
     let format = Format::from_filename(&output_archive)?;
     match format {
         Format::Zip | Format::SevenZip =>
-            SevenZip.pack_directory_contents(output_archive, root_directory).instrument(span).await,
-        Format::Tar(_) =>
-            Tar.pack_directory_contents(output_archive, root_directory).instrument(span).await,
+            SevenZip.pack_directory_contents(output_archive, root_directory).await,
+        Format::Tar(_) => Tar.pack_directory_contents(output_archive, root_directory).await,
     }
 }
 
@@ -121,9 +126,9 @@ pub async fn pack_directory_contents(
     name="Extracting item from archive.",
     skip(archive_path, item_path, output_path),
     fields(
-        src=%archive_path.as_ref().display(),
-        item=%item_path.as_ref().display(),
-        dest=%output_path.as_ref().display()),
+        src  = %archive_path.as_ref().display(),
+        item = %item_path.as_ref().display(),
+        dest = %output_path.as_ref().display()),
     err)]
 pub async fn extract_item(
     archive_path: impl AsRef<Path>,
@@ -184,5 +189,11 @@ mod tests {
             Format::Tar(Some(Compression::Gzip))
         );
         Ok(())
+    }
+
+    #[test]
+    async fn archive_checker() -> Result {
+        assert!(is_archive("enso-project-manager-0.2.31-linux-amd64.tar.gz"));
+        assert!(is_archive("enso-project-manager-0.2.31-windows-amd64.zip"));
     }
 }

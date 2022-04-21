@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use octocrab::models::repos::Asset;
 use tempfile::tempdir;
 
 use ide_ci::actions::artifacts;
@@ -58,7 +59,7 @@ impl<T> PlainArtifact<T> {
     }
 }
 
-pub trait IsTarget: Sized + 'static {
+pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
     /// All the data needed to build this target that are not placed in `self`.
     type BuildInput: Debug + Send + 'static;
 
@@ -143,6 +144,10 @@ pub trait IsTarget: Sized + 'static {
         }
         .instrument(span)
         .boxed()
+    }
+
+    fn find_asset(&self, _assets: Vec<Asset>) -> Result<Asset> {
+        todo!("Not implemented for target {self:?}!")
     }
 
     fn download_asset(

@@ -30,6 +30,12 @@ pub fn is_nightly_release(release: &Release) -> bool {
     !release.draft && release.tag_name.contains(NIGHTLY_BUILD_PREFIX)
 }
 
+pub async fn nightly_releases(
+    octocrab: &Octocrab,
+    repo: &RepoContext,
+) -> Result<impl Iterator<Item = Release>> {
+    Ok(repo.all_releases(octocrab).await?.into_iter().filter(is_nightly_release))
+}
 
 
 #[derive(Clone, Debug, Serialize, Deserialize, Shrinkwrap, PartialEq)]
@@ -78,11 +84,8 @@ impl Versions {
             Ok(pre)
         };
 
-        let relevant_nightly_versions = repo
-            .all_releases(octocrab)
+        let relevant_nightly_versions = nightly_releases(octocrab, repo)
             .await?
-            .into_iter()
-            .filter(is_nightly_release)
             .filter_map(|release| {
                 if release.tag_name.contains(&todays_pre_text) {
                     let version = Version::parse(&release.tag_name).ok()?;

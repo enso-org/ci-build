@@ -8,7 +8,6 @@
 #![feature(associated_type_bounds)]
 #![feature(option_result_contains)]
 #![feature(result_flattening)]
-#![feature(async_stream)]
 #![feature(default_free_fn)]
 #![feature(map_first_last)]
 #![feature(result_option_inspect)]

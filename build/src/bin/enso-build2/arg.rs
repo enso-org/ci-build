@@ -63,10 +63,11 @@ pub trait IsTargetSource {
     const PATH_NAME: &'static str;
     const OUTPUT_PATH_NAME: &'static str;
     const RUN_ID_NAME: &'static str;
+    const RELEASE_DESIGNATOR_NAME: &'static str;
     const ARTIFACT_NAME_NAME: &'static str;
     const DEFAULT_OUTPUT_PATH: &'static str;
 
-    type BuildInput: Args = NoArgs;
+    type BuildInput: Args + Send + Sync = NoArgs;
 }
 
 #[macro_export]
@@ -77,6 +78,7 @@ macro_rules! source_args_hlp {
             const PATH_NAME: &'static str = concat!($prefix, "-", "path");
             const OUTPUT_PATH_NAME: &'static str = concat!($prefix, "-", "output-path");
             const RUN_ID_NAME: &'static str = concat!($prefix, "-", "run-id");
+            const RELEASE_DESIGNATOR_NAME: &'static str = concat!($prefix, "-", "release");
             const ARTIFACT_NAME_NAME: &'static str = concat!($prefix, "-", "artifact-name");
             const DEFAULT_OUTPUT_PATH: &'static str = concat!("dist/", $prefix);
 
@@ -146,6 +148,9 @@ pub struct Source<Target: IsTargetSource> {
     #[clap(name = Target::ARTIFACT_NAME_NAME, long)]
     pub artifact_name: Option<String>,
 
+    #[clap(name = Target::RELEASE_DESIGNATOR_NAME, long, required_if_eq(Target::SOURCE_NAME, "release"))]
+    pub release: Option<String>,
+
     #[clap(flatten)]
     pub build_args: Target::BuildInput,
 
@@ -161,6 +166,7 @@ pub enum SourceKind {
     Build,
     Local,
     CiRun,
+    Release,
 }
 
 #[derive(Args, Clone, Debug, PartialEq)]
@@ -180,15 +186,15 @@ impl<Target: IsTargetSource> AsRef<Path> for OutputPath<Target> {
 }
 
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use enso_build::project::IsTarget;
-
-    pub fn parse_source<Target: IsTarget + IsTargetSource>(
-        text: &str,
-    ) -> Result<crate::Source<Target>> {
-        todo!()
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//
+//     use enso_build::project::IsTarget;
+//
+//     pub fn parse_source<Target: IsTarget + IsTargetSource>(
+//         text: &str,
+//     ) -> Result<crate::Source<Target>> {
+//         todo!()
+//     }
+// }

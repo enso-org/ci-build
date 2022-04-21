@@ -68,6 +68,14 @@ impl ComponentPaths {
     }
 }
 
+pub fn pretty_print_arch(arch: Arch) -> &'static str {
+    match arch {
+        Arch::X86_64 => "amd64",
+        Arch::AArch64 => "aarch64",
+        _ => panic!("Unrecognized architecture {}", arch),
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct TargetTriple {
     pub os:       OS,
@@ -83,15 +91,7 @@ impl TargetTriple {
 
     /// Pretty prints architecture for our packages. Conform to GraalVM scheme as well.
     pub fn arch(&self) -> &'static str {
-        match self.arch {
-            Arch::X86_64 => "amd64",
-            Arch::AArch64 if self.os == OS::MacOS => {
-                // No Graal packages for Apple Silicon.
-                "amd64"
-            }
-            Arch::AArch64 => "aarch64",
-            _ => panic!("Unrecognized architecture {}", self.arch),
-        }
+        pretty_print_arch(self.arch)
     }
 }
 

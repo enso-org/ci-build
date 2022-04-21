@@ -57,7 +57,7 @@ pub struct BuildInput {
 }
 
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Wasm;
 
 #[async_trait]
@@ -74,9 +74,6 @@ impl IsTarget for Wasm {
         input: Self::BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        // TODO:
-        //   Old script intentionally built everything into temp directory first.
-        //   To be checked if this was actually useful for something.
         let span = info_span!("Building WASM.",
             repo = %input.repo_root.display(),
             crate = %input.crate_path.display(),
