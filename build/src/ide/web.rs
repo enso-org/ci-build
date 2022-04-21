@@ -171,6 +171,7 @@ impl IdeDesktop {
             .run("build", EMPTY_ARGS)
             .run_ok()
             .await?;
+        drop(env); // does this extend the lifetime?
         Ok(())
     }
 
