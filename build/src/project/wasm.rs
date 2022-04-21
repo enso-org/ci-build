@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use anyhow::Context;
-use std::env::temp_dir;
 use tempfile::tempdir;
 use tokio::process::Child;
 
@@ -82,8 +81,8 @@ impl IsTarget for Wasm {
         );
         async move {
             info!("Building wasm.");
-            let temp_dir = tempdir();
-            let temp_dist = RepoRootDistWasm::new(temp_dir.as_path());
+            let temp_dir = tempdir()?;
+            let temp_dist = RepoRootDistWasm::new(temp_dir.path());
             ide_ci::programs::WasmPack
                 .cmd()?
                 .current_dir(&input.repo_root)
