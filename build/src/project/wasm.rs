@@ -99,7 +99,9 @@ impl IsTarget for Wasm {
                 .args(&input.extra_cargo_options)
                 .run_ok()
                 .await?;
+
             patch_js_glue_in_place(&temp_dist.wasm_glue)?;
+            ide_ci::fs::rename(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
 
             ide_ci::fs::create_dir_if_missing(&output_path)?;
             let ret = RepoRootDistWasm::new(output_path.as_ref());
