@@ -120,6 +120,12 @@ impl<Assets: AsRef<Path>, Output: AsRef<Path>> command::FallibleManipulator
     }
 }
 
+impl<Assets, Output> Drop for ContentEnvironment<Assets, Output> {
+    fn drop(&mut self) {
+        info!("Dropping content environment.")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct IdeDesktop {
     pub package_dir: PathBuf,
@@ -157,6 +163,11 @@ impl IdeDesktop {
         Ok(IconsArtifacts(output_path.as_ref().into()))
     }
 
+    #[tracing::instrument(name="Building IDE Content.", skip_all, fields(
+        dest = %output_path.as_ref().display()),
+        ?build_info,
+        err
+    )]
     pub async fn build_content(
         &self,
         wasm: impl Future<Output = Result<Artifact>>,
@@ -194,6 +205,11 @@ impl IdeDesktop {
         Ok(Watcher { child_process, watch_environment })
     }
 
+    #[tracing::instrument(name="Preparing distribution of the IDE.", skip_all, fields(
+        dest = %output_path.as_ref().display()),
+        ?gui,
+        ?project_manager,
+        err)]
     pub async fn dist(
         &self,
         gui: &crate::project::gui::Artifact,
