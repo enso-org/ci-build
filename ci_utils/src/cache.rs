@@ -2,11 +2,7 @@ pub mod download;
 
 use crate::prelude::*;
 use anyhow::Context;
-use reqwest::Client;
-use reqwest::IntoUrl;
 
-use crate::io::filename_from_url;
-use crate::io::web::stream_response_to_file;
 use serde::de::DeserializeOwned;
 use sha2::Digest;
 

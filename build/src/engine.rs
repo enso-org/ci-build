@@ -277,7 +277,7 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
     {
         let pattern = paths
             .dir
-            .join_many(["bin", "*"])
+            .join_iter(["bin", "*"])
             .with_extension(std::env::consts::EXE_EXTENSION)
             .display()
             .to_string();

@@ -59,3 +59,49 @@ pub async fn stream_response_to_file(response: Response, output: impl AsRef<Path
 pub fn async_reader(response: Response) -> impl AsyncBufRead + Unpin {
     tokio_util::io::StreamReader::new(response.bytes_stream().map_err(std::io::Error::other))
 }
+
+pub fn filename_from_content_disposition(value: &reqwest::header::HeaderValue) -> Result<&Path> {
+    let regex = regex::Regex::new(r#"filename="?([^"]*)"?"#)?;
+    let capture = regex
+        .captures(value.to_str()?)
+        .context("Field 'filename' not present in the header value.")?
+        .get(1)
+        .context("Missing capture group from regex.")?;
+    Ok(&Path::new(capture.as_str()))
+}
+
+pub fn filename_from_response(response: &Response) -> Result<&Path> {
+    use reqwest::header::CONTENT_DISPOSITION;
+    let disposition = response
+        .headers()
+        .get(CONTENT_DISPOSITION)
+        .context(format!("No {CONTENT_DISPOSITION} header present in the response."))?;
+    filename_from_content_disposition(disposition)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use reqwest::header::HeaderValue;
+
+    #[test]
+    fn test_parsing_content_disposition() {
+        let check_parse = |value: &'static str, expected: &str| {
+            let header_value = HeaderValue::from_static(value);
+            assert_eq!(
+                filename_from_content_disposition(&header_value).unwrap(),
+                Path::new(expected)
+            );
+        };
+        let check_no_parse = |value: &'static str| {
+            let header_value = HeaderValue::from_static(value);
+            assert!(filename_from_content_disposition(&header_value).is_err());
+        };
+
+        check_parse(r#"attachment; filename="filename.jpg""#, "filename.jpg");
+        check_parse(r#"form-data; name="fieldName"; filename="filename.jpg""#, "filename.jpg");
+        check_parse(r#"attachment; filename=manifest.yaml"#, "manifest.yaml");
+        check_no_parse(r#"attachment"#);
+        check_no_parse(r#"inline"#);
+    }
+}
