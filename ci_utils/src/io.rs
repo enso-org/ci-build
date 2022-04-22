@@ -129,7 +129,7 @@ mod tests {
     #[ignore]
     async fn copy_dir_with_symlink() -> Result {
         let dir = tempdir()?;
-        let foo = dir.join_many(["src", "foo.txt"]);
+        let foo = dir.join_iter(["src", "foo.txt"]);
         std::env::set_current_dir(&dir)?;
         create_parent_dir_if_missing(&foo)?;
         std::fs::write(&foo, "foo")?;

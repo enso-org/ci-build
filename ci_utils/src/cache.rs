@@ -1,3 +1,5 @@
+pub mod download;
+
 use crate::prelude::*;
 use anyhow::Context;
 use reqwest::Client;
@@ -16,61 +18,13 @@ pub trait Storable: Debug {
 
     fn digest(&self, digest: &mut impl Digest) -> Result;
 
-    fn generate(&self, cache: PathBuf) -> BoxFuture<'static, Result<Self::Metadata>>;
+    fn generate(&self, cache: Cache, store: PathBuf) -> BoxFuture<'static, Result<Self::Metadata>>;
 
     fn adapt(
         &self,
         cache: PathBuf,
         metadata: Self::Metadata,
     ) -> BoxFuture<'static, Result<Self::Output>>;
-}
-
-#[derive(Clone, Debug)]
-pub struct DownloadFile {
-    pub url:    Url,
-    pub client: Client,
-}
-
-impl DownloadFile {
-    pub fn new(url: impl IntoUrl) -> Result<Self> {
-        Ok(Self { url: url.into_url()?, client: default() })
-    }
-}
-
-impl Storable for DownloadFile {
-    type Metadata = PathBuf;
-    type Output = tokio::fs::File;
-
-    fn digest(&self, digest: &mut impl Digest) -> Result {
-        digest.update(self.url.as_str().as_bytes());
-        Ok(())
-    }
-
-    fn generate(&self, cache: PathBuf) -> BoxFuture<'static, Result<Self::Metadata>> {
-        let response = self.client.get(self.url.clone()).send();
-        let filename = filename_from_url(&self.url);
-        async move {
-            let filename = filename?;
-            let response = crate::io::web::handle_error_response(response.await?).await?;
-            let output = cache.join(&filename);
-            stream_response_to_file(response, &output).await?;
-            Ok(filename) // We don't store absolute paths to keep cache relocatable.
-        }
-        .boxed()
-    }
-
-    fn adapt(
-        &self,
-        cache: PathBuf,
-        metadata: Self::Metadata,
-    ) -> BoxFuture<'static, Result<Self::Output>> {
-        let path = cache.join(metadata);
-        async move {
-            let file = crate::fs::tokio::open(&path).await?;
-            Ok(file)
-        }
-        .boxed()
-    }
 }
 
 pub trait IsKey: PartialEq + Serialize + Debug + DeserializeOwned + Hash {}
@@ -106,7 +60,7 @@ impl Cache {
 
         if !is_ready() {
             debug!("Not found in cache, will generate.");
-            let metadata = key.generate(entry_dir.clone()).await?;
+            let metadata = key.generate(self.clone(), entry_dir.clone()).await?;
             complete_marker.write_as_json(&metadata)?;
         } else {
             debug!("Found in cache, skipping generation.");
@@ -121,6 +75,7 @@ impl Cache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::download::DownloadFile;
     use crate::log::setup_logging;
 
     #[tokio::test]

@@ -10,14 +10,17 @@ use unicase::UniCase;
 #[macro_export]
 macro_rules! define_env_var {
     ($name: ident, PathBuf) => {
+        #[allow(non_upper_case_globals)]
         pub const $name: $crate::env::new::PathBufVariable =
             $crate::env::new::PathBufVariable(stringify!($name));
     };
     ($name: ident, String) => {
+        #[allow(non_upper_case_globals)]
         pub const $name: $crate::env::new::SimpleVariable<String, str> =
             $crate::env::new::SimpleVariable::new(stringify!($name));
     };
     ($name: ident, $ty_name: ty) => {
+        #[allow(non_upper_case_globals)]
         pub const $name: $crate::env::new::SimpleVariable<$ty_name> =
             $crate::env::new::SimpleVariable::new(stringify!($name));
     };

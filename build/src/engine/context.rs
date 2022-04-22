@@ -421,7 +421,7 @@ impl RunContext {
                     self.paths
                         .engine
                         .dir
-                        .join_many(["lib", "Standard"])
+                        .join_iter(["lib", "Standard"])
                         .join(libname)
                         .join(self.paths.version().to_string()),
                 )
@@ -434,7 +434,7 @@ impl RunContext {
         // handling in the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
         self.paths.engine.pack().await?;
         let schema_dir =
-            self.paths.repo_root.join_many(["engine", "language-server", "src", "main", "schema"]);
+            self.paths.repo_root.join_iter(["engine", "language-server", "src", "main", "schema"]);
         let schema_files = schema_dir.read_dir()?.map(|e| e.map(|e| e.path())).collect_result()?;
         ide_ci::archive::create(self.paths.target.join("fbs-upload/fbs-schema.zip"), schema_files)
             .await?;

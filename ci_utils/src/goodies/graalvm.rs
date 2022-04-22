@@ -25,7 +25,7 @@ pub struct Instance {
 impl crate::goodie::Instance for Instance {
     fn add_to_environment(&self) -> anyhow::Result<()> {
         let root = match TARGET_OS {
-            OS::MacOS => self.path.join_many(["Contents", "Home"]),
+            OS::MacOS => self.path.join_iter(["Contents", "Home"]),
             _ => self.path.clone(),
         };
 

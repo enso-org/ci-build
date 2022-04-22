@@ -184,7 +184,7 @@ impl Paths {
     // e.g. enso2\distribution\editions\2021.20-SNAPSHOT.yaml
     pub fn edition_file(&self) -> PathBuf {
         self.distribution()
-            .join_many(["editions", &self.edition_name()])
+            .join_iter(["editions", &self.edition_name()])
             .with_appended_extension("yaml")
     }
 
@@ -217,7 +217,7 @@ pub fn root_to_changelog(root: impl AsRef<Path>) -> PathBuf {
     if root_path.exists() {
         root_path
     } else {
-        root.as_ref().join_many(["app", "gui", changelog_filename])
+        root.as_ref().join_iter(["app", "gui", changelog_filename])
     }
 }
 
@@ -341,19 +341,19 @@ pub trait GuiPaths {
     }
 
     fn ide_desktop(&self) -> PathBuf {
-        self.root().join_many(["app", "ide-desktop"])
+        self.root().join_iter(["app", "ide-desktop"])
     }
 
     fn ide_desktop_lib_project_manager(&self) -> PathBuf {
-        self.ide_desktop().join_many(["lib", "project-manager"])
+        self.ide_desktop().join_iter(["lib", "project-manager"])
     }
 
     fn ide_desktop_lib_content(&self) -> PathBuf {
-        self.ide_desktop().join_many(["lib", "content"])
+        self.ide_desktop().join_iter(["lib", "content"])
     }
 
     fn gui(&self) -> PathBuf {
-        self.root().join_many(["app", "gui"])
+        self.root().join_iter(["app", "gui"])
     }
 
     fn script(&self) -> PathBuf {
@@ -364,6 +364,6 @@ pub trait GuiPaths {
 pub fn project_manager(base_path: impl AsRef<Path>) -> PathBuf {
     base_path
         .as_ref()
-        .join_many(["enso", "bin", "project-manager"])
+        .join_iter(["enso", "bin", "project-manager"])
         .with_appended_extension(EXE_EXTENSION)
 }

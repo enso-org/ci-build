@@ -42,8 +42,8 @@ pub mod program;
 pub mod programs;
 pub mod reqwest;
 pub mod serde;
-
 pub mod prelude {
+
     pub type Result<T = ()> = anyhow::Result<T>;
     pub use anyhow::anyhow;
     pub use anyhow::bail;

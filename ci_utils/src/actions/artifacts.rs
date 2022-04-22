@@ -200,8 +200,8 @@ mod tests {
     #[tokio::test]
     async fn discover_files_in_dir() -> Result {
         let dir = TempDir::new()?;
-        crate::fs::create(dir.join_many(["file"]))?;
-        crate::fs::create(dir.join_many(["subdir/nested_file"]))?;
+        crate::fs::create(dir.join_iter(["file"]))?;
+        crate::fs::create(dir.join_iter(["subdir/nested_file"]))?;
         let stream = single_dir_provider(dir.as_ref())?;
         let v = stream.collect::<Vec<_>>().await;
         dbg!(v);

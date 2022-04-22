@@ -33,7 +33,7 @@ pub trait Bundle {
 
         // Add portable distribution marker.
         ide_ci::fs::copy(
-            paths.repo_root.join_many(["distribution", "enso.bundle.template"]),
+            paths.repo_root.join_iter(["distribution", "enso.bundle.template"]),
             bundle.dir.join(".enso.bundle"),
         )?;
         Ok(bundle)

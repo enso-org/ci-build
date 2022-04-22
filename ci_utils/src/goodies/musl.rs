@@ -85,7 +85,7 @@ pub async fn add_zlib(musl_toolchain: &Path) -> Result {
     download_and_extract(zlib_url, &temp).await?;
     let zlib_path = temp.path().join(zlib_dirname);
     expect_dir(&zlib_path)?;
-    let gcc_path = musl_toolchain.join_many(["bin", "gcc"]).with_appended_extension(EXE_EXTENSION);
+    let gcc_path = musl_toolchain.join_iter(["bin", "gcc"]).with_appended_extension(EXE_EXTENSION);
     expect_file(&gcc_path)?;
 
     Bash.run_command()?

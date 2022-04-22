@@ -16,7 +16,7 @@ impl Program for Cl {
 
 pub async fn apply_dev_environment() -> Result {
     let msvc = VsWhere::msvc().await?;
-    let path = msvc.installation_path.join_many(["VC", "Auxiliary", "Build", "vcvarsall.bat"]);
+    let path = msvc.installation_path.join_iter(["VC", "Auxiliary", "Build", "vcvarsall.bat"]);
     let changes = cmd::compare_env(|command| {
         // The telemetry introduces undesired dependency on Power Shell. We should not need it to
         // just set a few environment variables.

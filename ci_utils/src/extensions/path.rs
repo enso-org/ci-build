@@ -2,7 +2,7 @@ use crate::prelude::*;
 use serde::de::DeserializeOwned;
 
 pub trait PathExt: AsRef<Path> {
-    fn join_many<P: AsRef<Path>>(&self, segments: impl IntoIterator<Item = P>) -> PathBuf {
+    fn join_iter<P: AsRef<Path>>(&self, segments: impl IntoIterator<Item = P>) -> PathBuf {
         let mut ret = self.as_ref().to_path_buf();
         ret.extend(segments);
         ret
