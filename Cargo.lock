@@ -1180,6 +1180,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "argh",
+ "async-compression",
  "async-trait",
  "aws-config",
  "aws-sdk-s3",

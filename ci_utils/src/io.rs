@@ -5,9 +5,18 @@ use crate::prelude::*;
 use anyhow::Context;
 use reqwest::IntoUrl;
 use std::time::Duration;
+use tokio::io::AsyncRead;
 
 use crate::archive::Format;
 use crate::global::progress_bar;
+
+/// Read the whole input and return its length.
+///
+/// Inputs content is discarded.
+pub async fn read_length(mut read: impl AsyncRead + Unpin) -> Result<u64> {
+    let mut sink = tokio::io::sink();
+    tokio::io::copy(&mut read, &mut sink).anyhow_err().await
+}
 
 /// Get the the response body as a byte stream.
 pub async fn download(url: impl IntoUrl) -> Result<impl Stream<Item = reqwest::Result<Bytes>>> {

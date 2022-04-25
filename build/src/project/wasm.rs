@@ -283,71 +283,20 @@ impl Wasm {
     }
 }
 
-// #[derive(Clone, Debug)]
-// pub enum WasmSource {
-//     Build { repo_root: PathBuf },
-//     Local(PathBuf),
-//     GuiCiRun { repo: RepoContext, run: RunId },
-// }
-//
-// impl WasmSource {
-//     pub async fn place_at(
-//         &self,
-//         client: &Octocrab,
-//         output_dir: &RepoRootDistWasm,
-//     ) -> Result<Artifacts> {
-//         match self {
-//             WasmSource::Build { repo_root } => {
-//                 build_wasm(repo_root, output_dir).await?;
-//             }
-//             WasmSource::Local(local_path) => {
-//                 ide_ci::fs::copy(local_path, output_dir)?;
-//             }
-//             WasmSource::GuiCiRun { repo, run } => {
-//                 download_wasm_from_run(client, &repo, *run, output_dir).await?;
-//             }
-//         }
-//         Ok(Artifacts::new(output_dir))
-//     }
-// }
-//
-// // "Failed to find artifacts for run {run} in {repo}."
-// pub async fn download_wasm_from_run(
-//     client: &Octocrab,
-//     repo: &RepoContext,
-//     run: RunId,
-//     output_path: impl AsRef<Path>,
-// ) -> Result {
-//     let artifacts = client
-//         .actions()
-//         .list_workflow_run_artifacts(&repo.owner, &repo.name, run)
-//         .per_page(100)
-//         .send()
-//         .await?
-//         .value
-//         .context(format!("Failed to find any artifacts."))?;
-//
-//     let wasm_artifact = artifacts
-//         .into_iter()
-//         .find(|artifact| artifact.name == WASM_ARTIFACT_NAME)
-//         .context(format!("Failed to find artifact by name {WASM_ARTIFACT_NAME}"))?;
-//
-//     let wasm = client
-//         .actions()
-//         .download_artifact(&repo.owner, &repo.name, wasm_artifact.id, ArchiveFormat::Zip)
-//         .await?;
-//     let wasm = std::io::Cursor::new(wasm);
-//     let mut wasm = zip::ZipArchive::new(wasm)?;
-//
-//     ide_ci::fs::create_dir_if_missing(&output_path)?;
-//     wasm.extract(&output_path)?;
-//     Ok(())
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ide_ci::io::read_length;
     use ide_ci::programs::Cargo;
+
+    #[tokio::test]
+    async fn check_wasm_size() -> Result {
+        let path = r"H:\NBO\ci-build\dist\wasm\ide.wasm";
+        let file = tokio::io::BufReader::new(ide_ci::fs::tokio::open(&path).await?);
+        let encoded_stream = async_compression::tokio::bufread::GzipEncoder::new(file);
+        dbg!(read_length(encoded_stream).await?);
+        Ok(())
+    }
 
     // pub struct WasmWatcher {
     //     /// Drop this field to stop the event generation job.
