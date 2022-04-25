@@ -5,6 +5,26 @@ use tempfile::TempDir;
 
 use crate::programs::Cargo;
 
+/// What kind of Cargo build profile should be used.
+///
+/// Typically affects optimization, debug symbol generation and so.
+#[derive(Clone, Copy, Debug, Display)]
+pub enum Profile {
+    Dev,
+    Release,
+    Profile,
+}
+
+impl AsRef<OsStr> for Profile {
+    fn as_ref(&self) -> &OsStr {
+        &OsStr::new(match self {
+            Profile::Dev => "--dev",
+            Profile::Release => "--release",
+            Profile::Profile => "--profile",
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Display)]
 pub enum Target {
     Bundler,

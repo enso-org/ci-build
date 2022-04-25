@@ -14,7 +14,7 @@ use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
 use ide_ci::env::Variable;
-use ide_ci::programs::wasm_pack::Target;
+use ide_ci::programs::wasm_pack;
 use ide_ci::programs::Cargo;
 
 pub mod js_patcher;
@@ -54,6 +54,7 @@ pub struct BuildInput {
     /// Path to the crate to be compiled to WAM. Relative to the repository root.
     pub crate_path:          PathBuf,
     pub extra_cargo_options: Vec<String>,
+    pub profile:             wasm_pack::Profile,
 }
 
 
@@ -90,7 +91,8 @@ impl IsTarget for Wasm {
                 .env_remove(ide_ci::programs::rustup::env::Toolchain::NAME)
                 .set_env(env::ENSO_ENABLE_PROC_MACRO_SPAN, &true)?
                 .build()
-                .target(Target::Web)
+                .arg(&input.profile)
+                .target(wasm_pack::Target::Web)
                 .output_directory(&temp_dist)
                 .output_name(&OUTPUT_NAME)
                 .arg(&input.crate_path)

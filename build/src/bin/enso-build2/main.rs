@@ -4,6 +4,7 @@
 #![feature(associated_type_defaults)]
 #![feature(is_some_with)]
 #![feature(default_free_fn)]
+// #![feature(adt_const_params)]
 
 pub mod arg;
 pub use enso_build::prelude;
@@ -389,6 +390,7 @@ impl Resolvable for Wasm {
             repo_root:           ctx.repo_root(),
             crate_path:          from.crate_path,
             extra_cargo_options: from.cargo_options,
+            profile:             from.wasm_profile.into(),
         })
     }
 }
