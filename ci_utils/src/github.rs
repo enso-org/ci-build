@@ -1,5 +1,7 @@
 use crate::prelude::*;
 use anyhow::Context;
+use headers::HeaderMap;
+use headers::HeaderValue;
 use octocrab::models::ArtifactId;
 use octocrab::models::AssetId;
 use octocrab::models::ReleaseId;
@@ -7,6 +9,7 @@ use octocrab::models::RunId;
 use std::io::Cursor;
 
 // use crate::global::new_spinner;
+use crate::cache::download::DownloadFile;
 use octocrab::models::repos::Asset;
 use octocrab::models::repos::Release;
 use octocrab::models::workflows::WorkflowListArtifact;
@@ -105,7 +108,7 @@ pub trait RepoPointer: Display {
             .per_page(100)
             .send()
             .await
-            .context(format!("Failed to list artifacts of run {run_id} in {}.", self))?
+            .context(format!("Failed to list artifacts of run {run_id} in {self}."))?
             .value
             .context(format!("Failed to find any artifacts."))?;
 
@@ -141,18 +144,25 @@ pub trait RepoPointer: Display {
         self.repos(client).releases().get_asset(asset_id).await.anyhow_err()
     }
 
+    fn download_asset_job(&self, octocrab: &Octocrab, asset_id: AssetId) -> DownloadFile {
+        let path = iformat!("/repos/{self.owner()}/{self.name()}/releases/assets/{asset_id}");
+        // Unwrap will work, because we are appending relative URL constant.
+        let url = octocrab.absolute_url(path).unwrap();
+        crate::cache::download::DownloadFile {
+            client: octocrab.client.clone(),
+            key:    crate::cache::download::Key {
+                url,
+                additional_headers: HeaderMap::from_iter([(
+                    reqwest::header::ACCEPT,
+                    HeaderValue::from_static(mime::APPLICATION_OCTET_STREAM.as_ref()),
+                )]),
+            },
+        }
+    }
+
     #[tracing::instrument(name="Download the asset.", skip(client), fields(self=%self), err)]
     async fn download_asset(&self, client: &Octocrab, asset_id: AssetId) -> Result<Response> {
-        let path = iformat!("/repos/{self.owner()}/{self.name()}/releases/assets/{asset_id}");
-        let url = client.absolute_url(path)?;
-        let response = client
-            .client
-            .get(url)
-            .header(reqwest::header::ACCEPT, mime::APPLICATION_OCTET_STREAM.as_ref())
-            .send()
-            .await?;
-        response.error_for_status_ref()?;
-        Ok(response)
+        self.download_asset_job(client, asset_id).send_request().await
     }
 
     #[tracing::instrument(name="Download the asset to a file.", skip(client,output_path), fields(self=%self, dest=%output_path.as_ref().display()), err)]

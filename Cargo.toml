@@ -7,5 +7,5 @@ members = [
 
 [profile.release]
 opt-level = 1
-lto = true
+lto = false
 debug = true

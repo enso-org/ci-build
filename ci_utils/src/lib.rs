@@ -72,6 +72,7 @@ pub mod prelude {
     pub use platforms::target::Arch;
     pub use platforms::target::OS;
     pub use semver::Version;
+    pub use serde::de::DeserializeOwned;
     pub use serde::Deserialize;
     pub use serde::Serialize;
     pub use shrinkwraprs::Shrinkwrap;

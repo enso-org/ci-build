@@ -11,6 +11,7 @@ use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use enso_build::args::BuildKind;
+use ide_ci::cache;
 use ide_ci::models::config::RepoContext;
 use octocrab::models::RunId;
 
@@ -18,6 +19,8 @@ lazy_static! {
     pub static ref DIST_IDE: PathBuf = PathBuf::from_iter(["dist", "ide"]);
     pub static ref DEFAULT_REPO_PATH: Option<String> =
         enso_build::repo::deduce_repository_path().map(|p| p.display().to_string());
+    pub static ref DEFAULT_CACHE_PATH: Option<String> =
+        cache::default_path().ok().map(|p| p.display().to_string());
 }
 
 pub trait ArgExt<'h>: Sized + 'h {
@@ -67,7 +70,7 @@ pub trait IsTargetSource {
     const ARTIFACT_NAME_NAME: &'static str;
     const DEFAULT_OUTPUT_PATH: &'static str;
 
-    type BuildInput: Args + Send + Sync = NoArgs;
+    type BuildInput: Debug + Args + Send + Sync = NoArgs;
 }
 
 #[macro_export]
@@ -92,7 +95,7 @@ pub enum Target {
     /// Rust part of the GUI that is compiled to WASM.
     Wasm(wasm::Target),
 
-    /// GUI that consists of WASM and JS parts. This is what we depy to cloud.
+    /// GUI that consists of WASM and JS parts. This is what we deploy to cloud.
     Gui(gui::Target),
 
     /// Project Manager bundle, that includes Enso Engine with GraalVM Runtime.
@@ -103,7 +106,7 @@ pub enum Target {
     Clean,
 }
 
-/// Build, test and packave Enso Engine.
+/// Build, test and package Enso Engine.
 #[derive(Clone, Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
 pub struct Cli {
@@ -111,6 +114,9 @@ pub struct Cli {
     /// repository.
     #[clap(long, maybe_default = &DEFAULT_REPO_PATH)]
     pub repo_path: PathBuf,
+
+    #[clap(long, maybe_default = &DEFAULT_CACHE_PATH)]
+    pub cache_path: PathBuf,
 
     /// The GitHub repository with the project. This is mainly used to manage releases (checking
     /// released versions to generate a new one, or uploading release assets).

@@ -33,7 +33,7 @@ impl IsTarget for Gui {
         "gui"
     }
 
-    fn build(
+    fn build_locally(
         &self,
         input: Self::BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,

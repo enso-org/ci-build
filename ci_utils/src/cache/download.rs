@@ -1,46 +1,75 @@
 use crate::prelude::*;
+use headers::HeaderMap;
 
 use crate::cache::Cache;
 use crate::cache::Storable;
 use crate::io::filename_from_url;
 use crate::io::web::filename_from_response;
+use crate::io::web::handle_error_response;
 use crate::io::web::stream_response_to_file;
 
 use reqwest::Client;
 use reqwest::IntoUrl;
-use sha2::Digest;
+use reqwest::Response;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Key {
+    pub url: Url,
+
+    /// We keep this as part of the key, as some GitHub API endpoints change their meaning based on
+    /// the headers set.
+    #[serde(with = "http_serde::header_map")]
+    pub additional_headers: HeaderMap,
+}
 
 #[derive(Clone, Debug)]
 pub struct DownloadFile {
-    pub url:    Url,
+    pub key:    Key,
     pub client: Client,
 }
 
 impl DownloadFile {
     pub fn new(url: impl IntoUrl) -> Result<Self> {
-        Ok(Self { url: url.into_url()?, client: default() })
+        Ok(Self {
+            key:    Key { url: url.into_url()?, additional_headers: default() },
+            client: default(),
+        })
+    }
+
+
+    pub fn send_request(&self) -> BoxFuture<'static, Result<Response>> {
+        let response = self
+            .client
+            .get(self.key.url.clone())
+            .headers(self.key.additional_headers.clone())
+            .send();
+
+        let span = info_span!("Downloading a file.", url = %self.key.url);
+        async move { handle_error_response(response.await?).await }.instrument(span).boxed()
+    }
+}
+
+impl Borrow<Key> for DownloadFile {
+    fn borrow(&self) -> &Key {
+        &self.key
     }
 }
 
 impl Storable for DownloadFile {
     type Metadata = PathBuf;
-    type Output = tokio::fs::File;
-
-    fn digest(&self, digest: &mut impl Digest) -> Result {
-        digest.update(self.url.as_str().as_bytes());
-        Ok(())
-    }
+    type Output = PathBuf;
+    type Key = Key;
 
     fn generate(
         &self,
         _cache: Cache,
         store: PathBuf,
     ) -> BoxFuture<'static, Result<Self::Metadata>> {
-        let response = self.client.get(self.url.clone()).send();
-        let filename = filename_from_url(&self.url);
+        let response = self.send_request();
+        let filename = filename_from_url(&self.key.url);
         async move {
+            let response = response.await?;
             let last_fallback_name = PathBuf::from("data");
-            let response = crate::io::web::handle_error_response(response.await?).await?;
             let filename = filename_from_response(&response)
                 .map(ToOwned::to_owned)
                 .or(filename)
@@ -57,7 +86,6 @@ impl Storable for DownloadFile {
         store: PathBuf,
         metadata: Self::Metadata,
     ) -> BoxFuture<'static, Result<Self::Output>> {
-        let path = store.join(metadata);
-        crate::fs::tokio::open(path).boxed()
+        ready(Ok(store.join(metadata))).boxed()
     }
 }

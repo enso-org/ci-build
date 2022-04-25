@@ -145,7 +145,7 @@ impl IdeDesktop {
 
     pub fn write_build_info(&self, info: &BuildInfo) -> Result {
         let path = self.package_dir.join(&*BUILD_INFO);
-        ide_ci::fs::write(&path, serde_json::to_string(&info)?)
+        path.write_as_json(info)
     }
 
     pub async fn install(&self) -> Result {

@@ -48,7 +48,10 @@ pub async fn download_file(url: impl IntoUrl, output: impl AsRef<Path>) -> Resul
 }
 
 
-#[tracing::instrument(name="Streaming http response to a file.", skip(output), fields(dest=%output.as_ref().display()), err)]
+#[tracing::instrument(name="Streaming http response to a file.", skip(output), fields(
+    dest = %output.as_ref().display(),
+    url  = %response.url()
+), err)]
 pub async fn stream_response_to_file(response: Response, output: impl AsRef<Path>) -> Result {
     let response = handle_error_response(response).await?;
     let reader = async_reader(response);

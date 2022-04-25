@@ -52,12 +52,6 @@ impl IsArtifact for Artifact {
     }
 }
 
-// impl Artifact {
-//     pub fn project_manager_cmd(&self) -> crate::programs::project_manager::Command {
-//         Command::new(&self.path.bin.project_managerexe).into()
-//     }
-// }
-
 #[derive(Clone, Debug)]
 pub struct ProjectManager;
 
@@ -73,7 +67,7 @@ impl IsTarget for ProjectManager {
         &*NAME
     }
 
-    fn build(
+    fn build_locally(
         &self,
         input: Self::BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
