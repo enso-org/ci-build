@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use anyhow::Context;
+use semver::VersionReq;
 use tempfile::tempdir;
 use tokio::process::Child;
 
@@ -10,12 +11,14 @@ use crate::project::wasm::js_patcher::patch_js_glue_in_place;
 
 use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
+use crate::project::wasm::env::ENSO_MAX_PROFILING_LEVEL;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
 use ide_ci::env::Variable;
 use ide_ci::programs::wasm_pack;
 use ide_ci::programs::Cargo;
+use ide_ci::programs::WasmPack;
 
 pub mod js_patcher;
 pub mod test;
@@ -42,11 +45,26 @@ pub mod env {
     // causing build to fail when building a crate that doesn't have `enso_profiler` in its
     // dependency tree.
     ide_ci::define_env_var!(ENSO_ENABLE_PROC_MACRO_SPAN, bool);
+
+    // Use the environment-variable API provided by the `enso_profiler_macros` library to implement
+    // the public interface to profiling-level configuration
+    // (see: https://github.com/enso-org/design/blob/main/epics/profiling/implementation.md)
+    ide_ci::define_env_var!(ENSO_MAX_PROFILING_LEVEL, super::ProfilingLevel);
 }
 
 pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
 pub const OUTPUT_NAME: &str = "ide";
 pub const TARGET_CRATE: &str = "app/gui";
+pub const WASM_PACK_VERSION_REQ: &str = ">=0.10.1";
+
+#[derive(Clone, Copy, Debug, strum::Display, strum::EnumString, PartialEq)]
+#[strum(serialize_all = "kebab-case")]
+pub enum ProfilingLevel {
+    Objective,
+    Task,
+    Details,
+    Debug,
+}
 
 #[derive(Clone, Debug)]
 pub struct BuildInput {
@@ -55,8 +73,8 @@ pub struct BuildInput {
     pub crate_path:          PathBuf,
     pub extra_cargo_options: Vec<String>,
     pub profile:             wasm_pack::Profile,
+    pub profiling_level:     Option<ProfilingLevel>,
 }
-
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Wasm;
@@ -81,26 +99,36 @@ impl IsTarget for Wasm {
             cargo_opts = ?input.extra_cargo_options
         );
         async move {
+            // Old wasm-pack does not pass trailing `build` command arguments to the Cargo.
+            // We want to be able to pass --profile this way.
+            WasmPack.require_present_that(&VersionReq::parse(">=0.10.1")?).await?;
+
+            let BuildInput{ repo_root, crate_path, extra_cargo_options, profile, profiling_level } = input;
+
             info!("Building wasm.");
             let temp_dir = tempdir()?;
             let temp_dist = RepoRootDistWasm::new(temp_dir.path());
-            ide_ci::programs::WasmPack
-                .cmd()?
-                .current_dir(&input.repo_root)
+            let mut command = ide_ci::programs::WasmPack
+                .cmd()?;
+            command
+                .current_dir(&repo_root)
                 .kill_on_drop(true)
                 .env_remove(ide_ci::programs::rustup::env::Toolchain::NAME)
                 .set_env(env::ENSO_ENABLE_PROC_MACRO_SPAN, &true)?
                 .build()
-                .arg(&input.profile)
+                .arg(&profile)
                 .target(wasm_pack::Target::Web)
                 .output_directory(&temp_dist)
                 .output_name(&OUTPUT_NAME)
-                .arg(&input.crate_path)
+                .arg(&crate_path)
                 .arg("--")
                 .arg("--color=always")
-                .args(&input.extra_cargo_options)
-                .run_ok()
-                .await?;
+                .args(&extra_cargo_options);
+
+            if let Some(profiling_level) = profiling_level {
+                command.set_env(ENSO_MAX_PROFILING_LEVEL, &profiling_level)?;
+            }
+            command.run_ok().await?;
 
             patch_js_glue_in_place(&temp_dist.wasm_glue)?;
             ide_ci::fs::rename(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
@@ -288,6 +316,7 @@ mod tests {
     use super::*;
     use ide_ci::io::read_length;
     use ide_ci::programs::Cargo;
+    use semver::VersionReq;
 
     #[tokio::test]
     async fn check_wasm_size() -> Result {
@@ -295,6 +324,12 @@ mod tests {
         let file = tokio::io::BufReader::new(ide_ci::fs::tokio::open(&path).await?);
         let encoded_stream = async_compression::tokio::bufread::GzipEncoder::new(file);
         dbg!(read_length(encoded_stream).await?);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn check_wasm_pack_version() -> Result {
+        WasmPack.require_present_that(&VersionReq::parse(WASM_PACK_VERSION_REQ)?).await?;
         Ok(())
     }
 

@@ -386,11 +386,14 @@ impl Resolvable for Wasm {
         ctx: &BuildContext,
         from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
+        let arg::wasm::BuildInputs { crate_path, wasm_profile, cargo_options, profiling_level } =
+            from;
         Ok(wasm::BuildInput {
-            repo_root:           ctx.repo_root(),
-            crate_path:          from.crate_path,
-            extra_cargo_options: from.cargo_options,
-            profile:             from.wasm_profile.into(),
+            repo_root: ctx.repo_root(),
+            crate_path,
+            extra_cargo_options: cargo_options,
+            profile: wasm_profile.into(),
+            profiling_level: profiling_level.map(into),
         })
     }
 }

@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use semver::VersionReq;
 
 pub mod command;
 pub mod location;
@@ -70,8 +71,7 @@ pub trait Program: Sized + 'static {
     }
 
     async fn require_present_at(&self, required_version: &Version) -> Result {
-        let found_version = self.require_present().await?;
-        let found_version = self.parse_version(&found_version)?;
+        let found_version = self.version().await?;
         if &found_version != required_version {
             bail!(
                 "Failed to find {} in version == {}. Found version: {}",
@@ -80,6 +80,18 @@ pub trait Program: Sized + 'static {
                 found_version
             )
         }
+        Ok(())
+    }
+
+    async fn require_present_that(&self, required_version: &VersionReq) -> Result {
+        let found_version = self.version().await?;
+        ensure!(
+            required_version.matches(&found_version),
+            "Failed to find {} in version that satisfied requirement {}. Found version: {}",
+            Self::executable_name(),
+            required_version,
+            found_version
+        );
         Ok(())
     }
 

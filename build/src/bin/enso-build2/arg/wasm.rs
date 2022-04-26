@@ -11,7 +11,7 @@ use ide_ci::programs::wasm_pack;
 
 source_args_hlp!(Wasm, "wasm", BuildInputs);
 
-#[derive(ArgEnum, Clone, Debug, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
 pub enum Profile {
     Dev,
     Profile,
@@ -28,6 +28,25 @@ impl From<Profile> for wasm_pack::Profile {
     }
 }
 
+#[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
+pub enum ProfilingLevel {
+    Objective,
+    Task,
+    Details,
+    Debug,
+}
+
+impl From<ProfilingLevel> for enso_build::project::wasm::ProfilingLevel {
+    fn from(profile: ProfilingLevel) -> Self {
+        match profile {
+            ProfilingLevel::Objective => Self::Objective,
+            ProfilingLevel::Task => Self::Task,
+            ProfilingLevel::Details => Self::Details,
+            ProfilingLevel::Debug => Self::Debug,
+        }
+    }
+}
+
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInputs {
     /// Which crate should be treated as a WASM entry point. Relative path from source root.
@@ -39,6 +58,9 @@ pub struct BuildInputs {
 
     #[clap(last = true)]
     pub cargo_options: Vec<String>,
+
+    #[clap(long, arg_enum)]
+    pub profiling_level: Option<ProfilingLevel>,
 }
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]
