@@ -84,13 +84,8 @@ pub trait RepoPointer: Display {
         client: &Octocrab,
         text: &str,
     ) -> anyhow::Result<octocrab::models::repos::Release> {
-        let mut page = self.repos(client).releases().list().per_page(MAX_PER_PAGE).send().await?;
-        // FIXME: iterate pages
-        if let Some(total_count) = page.total_count {
-            assert!(total_count < MAX_PER_PAGE.into());
-        }
-
-        page.take_items()
+        self.all_releases(client)
+            .await?
             .into_iter()
             .find(|release| release.tag_name.contains(text))
             .ok_or_else(|| anyhow!("No release with tag matching {}", text))

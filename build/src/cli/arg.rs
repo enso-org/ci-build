@@ -5,12 +5,12 @@ pub mod ide;
 pub mod project_manager;
 pub mod wasm;
 
+use crate::args::BuildKind;
 use clap::Arg;
 use clap::ArgEnum;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
-use enso_build::args::BuildKind;
 use ide_ci::cache;
 use ide_ci::models::config::RepoContext;
 use octocrab::models::RunId;
@@ -18,7 +18,7 @@ use octocrab::models::RunId;
 lazy_static! {
     pub static ref DIST_IDE: PathBuf = PathBuf::from_iter(["dist", "ide"]);
     pub static ref DEFAULT_REPO_PATH: Option<String> =
-        enso_build::repo::deduce_repository_path().map(|p| p.display().to_string());
+        crate::repo::deduce_repository_path().map(|p| p.display().to_string());
     pub static ref DEFAULT_CACHE_PATH: Option<String> =
         cache::default_path().ok().map(|p| p.display().to_string());
 }
@@ -76,7 +76,7 @@ pub trait IsTargetSource {
 #[macro_export]
 macro_rules! source_args_hlp {
     ($target:ty, $prefix:literal, $inputs:ty) => {
-        impl $crate::arg::IsTargetSource for $target {
+        impl $crate::cli::arg::IsTargetSource for $target {
             const SOURCE_NAME: &'static str = concat!($prefix, "-", "source");
             const PATH_NAME: &'static str = concat!($prefix, "-", "path");
             const OUTPUT_PATH_NAME: &'static str = concat!($prefix, "-", "output-path");
@@ -196,7 +196,7 @@ impl<Target: IsTargetSource> AsRef<Path> for OutputPath<Target> {
 // mod tests {
 //     use super::*;
 //
-//     use enso_build::project::IsTarget;
+//     use crate::project::IsTarget;
 //
 //     pub fn parse_source<Target: IsTarget + IsTargetSource>(
 //         text: &str,

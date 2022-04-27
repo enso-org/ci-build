@@ -28,6 +28,7 @@ pub mod args;
 pub mod aws;
 pub mod bump_version;
 pub mod changelog;
+pub mod cli;
 pub mod engine;
 pub mod enso;
 pub mod env;

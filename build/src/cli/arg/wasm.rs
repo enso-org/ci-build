@@ -1,12 +1,12 @@
 use crate::prelude::*;
 
-use crate::arg::OutputPath;
-use crate::arg::Source;
+use crate::cli::arg::OutputPath;
+use crate::cli::arg::Source;
+use crate::project::wasm::Wasm;
 use crate::source_args_hlp;
 use clap::ArgEnum;
 use clap::Args;
 use clap::Subcommand;
-use enso_build::project::wasm::Wasm;
 use ide_ci::programs::wasm_pack;
 
 source_args_hlp!(Wasm, "wasm", BuildInputs);
@@ -36,7 +36,7 @@ pub enum ProfilingLevel {
     Debug,
 }
 
-impl From<ProfilingLevel> for enso_build::project::wasm::ProfilingLevel {
+impl From<ProfilingLevel> for crate::project::wasm::ProfilingLevel {
     fn from(profile: ProfilingLevel) -> Self {
         match profile {
             ProfilingLevel::Objective => Self::Objective,
@@ -50,7 +50,7 @@ impl From<ProfilingLevel> for enso_build::project::wasm::ProfilingLevel {
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInputs {
     /// Which crate should be treated as a WASM entry point. Relative path from source root.
-    #[clap(default_value = enso_build::project::wasm::TARGET_CRATE, long)]
+    #[clap(default_value = crate::project::wasm::TARGET_CRATE, long)]
     pub crate_path: PathBuf,
 
     #[clap(long, arg_enum, default_value_t = Profile::Release)]

@@ -1,8 +1,8 @@
-use crate::arg::Source;
+use crate::cli::arg::Source;
 use crate::prelude::*;
+use crate::project::project_manager::ProjectManager;
 use crate::source_args_hlp;
 use clap::Args;
-use enso_build::project::project_manager::ProjectManager;
 
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInput;

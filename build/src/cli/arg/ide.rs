@@ -1,13 +1,13 @@
 use crate::prelude::*;
 
-use crate::arg::OutputPath;
-use crate::arg::Source;
+use crate::cli::arg::OutputPath;
+use crate::cli::arg::Source;
 use crate::source_args_hlp;
 
+use crate::project::gui::Gui;
+use crate::project::project_manager::ProjectManager;
 use clap::Args;
 use clap::Subcommand;
-use enso_build::project::gui::Gui;
-use enso_build::project::project_manager::ProjectManager;
 
 source_args_hlp!(Target, "ide", BuildInput);
 
@@ -33,9 +33,16 @@ pub enum Command {
     },
     Watch {
         #[clap(flatten)]
-        gui:             crate::arg::gui::WatchInput,
+        gui:             crate::cli::arg::gui::WatchInput,
         #[clap(flatten)]
         project_manager: Source<ProjectManager>,
+    },
+    IntegrationTest {
+        /// If set, the project manager won't be spawned.
+        #[clap(long)]
+        external_backend: bool,
+        #[clap(flatten)]
+        project_manager:  Source<ProjectManager>,
     },
 }
 

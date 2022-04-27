@@ -50,6 +50,9 @@ pub mod env {
     // the public interface to profiling-level configuration
     // (see: https://github.com/enso-org/design/blob/main/epics/profiling/implementation.md)
     ide_ci::define_env_var!(ENSO_MAX_PROFILING_LEVEL, super::ProfilingLevel);
+
+
+    ide_ci::define_env_var!(WASM_BINDGEN_TEST_TIMEOUT, usize);
 }
 
 pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
@@ -268,46 +271,27 @@ impl Wasm {
         .await?;
 
         maybe_run("wasm", wasm, || test::test_all(repo_root.clone())).await?;
-        // let native_job = async move  {
-        //     if native {
-        //         info!("Will run native tests.");
-        //         Cargo.cmd()?.arg("test").arg("--workspace").run_ok().await
-        //     } else {
-        //         info!("Skipping native tests.");
-        //         Ok(())
-        //     }
-        // };
-        // let wasm_job = async move  {
-        //     if wasm {
-        //         info!("Will run WASM tests.");
-        //         Cargo.cmd()?.arg("test").arg("--workspace").run_ok().await
-        //     } else {
-        //         info!("Skipping WASM tests.");
-        //         Ok(())
-        //     }
-        // };
-        // let wasm_job = Cargo
-        //     .cmd()?
-        //     .arg("run")
-        //     .args(["--manifest-path", "build/rust-scripts/Cargo.toml"])
-        //     .args(["--bin", "test_all"])
-        //     .arg("--")
-        //     .arg("--headless")
-        //     .arg("--chrome")
-        //     .env("WASM_BINDGEN_TEST_TIMEOUT", "60")
-        //     .run_ok();
-
-        // if (argv.native) {
-        //     console.log(`Running Rust test suite.`)
-        //     await run_cargo('cargo', ['test', '--workspace'])
-        // }
-        //
-        // if (argv.wasm) {
-        //     console.log(`Running Rust WASM test suite.`)
-        //     process.env.WASM_BINDGEN_TEST_TIMEOUT = 60
-        //     await run_cargo('cargo', args)
-        // }
         Ok(())
+    }
+
+    pub async fn integration_test(
+        &self,
+        source_root: PathBuf,
+        _project_manager: Option<Child>,
+    ) -> Result {
+        info!("Running Rust WASM test suite.");
+        WasmPack
+            .cmd()?
+            .current_dir(source_root)
+            .arg("test")
+            .arg("--headless")
+            .arg("--chrome")
+            .arg("integration-test")
+            .arg("--profile=integration-test")
+            .run_ok()
+            .await
+        // FIXME additional args
+        // PM will be automatically killed by dropping the handle.
     }
 }
 

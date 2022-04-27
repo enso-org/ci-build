@@ -1,5 +1,6 @@
 use crate::args::BuildKind;
 use crate::prelude::*;
+use anyhow::Context;
 use chrono::Datelike;
 use ide_ci::define_env_var;
 use ide_ci::env::new::TypedVariable;
@@ -35,6 +36,12 @@ pub async fn nightly_releases(
     repo: &RepoContext,
 ) -> Result<impl Iterator<Item = Release>> {
     Ok(repo.all_releases(octocrab).await?.into_iter().filter(is_nightly_release))
+}
+
+pub async fn latest_nightly_release(octocrab: &Octocrab, repo: &RepoContext) -> Result<Release> {
+    // TODO: this assumes that releases are returned in date order, to be confirmed
+    //       (but having to download all the pages to see which is latest wouldn't be nice)
+    nightly_releases(octocrab, repo).await?.next().context("Failed to find any nightly releases.")
 }
 
 

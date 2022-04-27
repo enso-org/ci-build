@@ -293,7 +293,6 @@ pub trait IsWatchable: IsTarget {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
