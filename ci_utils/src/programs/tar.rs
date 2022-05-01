@@ -178,12 +178,14 @@ impl Tar {
 
     pub async fn pack_directory_contents(
         self,
+        compression: Option<Compression>,
         output_archive: impl AsRef<Path>,
         root_directory: impl AsRef<Path>,
     ) -> Result {
         // See: https://stackoverflow.com/a/3035446
         self.cmd()?
             .arg(Command::Create)
+            .args(compression)
             .args(&Switch::TargetFile(output_archive.as_ref()))
             .args(&Switch::WorkingDir(root_directory.as_ref()))
             .arg(".")
