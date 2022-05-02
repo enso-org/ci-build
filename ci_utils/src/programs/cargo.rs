@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use crate::program::command::CommandOption;
+use crate::program::command::Manipulator;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Cargo;
@@ -28,5 +29,27 @@ pub enum Color {
 impl CommandOption for Color {
     fn args(&self) -> Vec<&str> {
         vec!["--color", self.as_ref()]
+    }
+}
+
+#[derive(Clone, PartialEq, Debug, strum::AsRefStr)]
+#[strum(serialize_all = "kebab-case")]
+pub enum Options {
+    Workspace,
+    Package(String),
+    AllTargets,
+}
+
+impl Manipulator for Options {
+    fn apply<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) {
+        let base_arg = format!("--{}", self.as_ref());
+        command.arg(base_arg);
+        use Options::*;
+        match self {
+            Workspace | AllTargets => {}
+            Package(package_name) => {
+                command.arg(package_name.as_str());
+            }
+        }
     }
 }

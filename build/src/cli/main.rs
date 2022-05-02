@@ -42,6 +42,8 @@ use ide_ci::cache::Cache;
 use ide_ci::global;
 use ide_ci::log::setup_logging;
 use ide_ci::models::config::RepoContext;
+use ide_ci::programs::cargo;
+use ide_ci::programs::Cargo;
 use ide_ci::programs::Git;
 use std::any::type_name;
 use std::time::Duration;
@@ -459,6 +461,26 @@ pub async fn main_internal() -> Result {
         Target::Ide(ide) => ctx.handle_ide(ide).await?,
         // TODO: consider if out-of-source ./dist should be removed
         Target::Clean => Git::new(ctx.repo_root()).cmd()?.nice_clean().run_ok().await?,
+        Target::Lint => {
+            Cargo
+                .cmd()?
+                .current_dir(ctx.repo_root())
+                .arg("clippy")
+                .apply(&cargo::Options::Workspace)
+                .apply(&cargo::Options::Package("enso-integration-test".into()))
+                .apply(&cargo::Options::AllTargets)
+                .args(["--", "-D", "warnings"])
+                .run_ok()
+                .await?;
+
+            Cargo
+                .cmd()?
+                .current_dir(ctx.repo_root())
+                .arg("fmt")
+                .args(["--", "--check"])
+                .run_ok()
+                .await?;
+        }
     };
     info!("Completed main job.");
     global::complete_tasks().await?;

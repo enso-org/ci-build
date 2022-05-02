@@ -104,6 +104,7 @@ pub enum Target {
     /// IDE bundles together GUI and Project Manager bundle.
     Ide(ide::Target),
     Clean,
+    Lint,
 }
 
 /// Build, test and package Enso Engine.
