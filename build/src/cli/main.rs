@@ -17,6 +17,7 @@ use crate::cli::arg::IsTargetSource;
 use crate::cli::arg::Target;
 use crate::paths::generated::RepoRoot;
 use crate::paths::TargetTriple;
+use crate::prettier;
 use crate::project::gui;
 use crate::project::gui::Gui;
 use crate::project::ide;
@@ -81,12 +82,13 @@ pub struct BuildContext {
 
 impl BuildContext {
     pub async fn new(cli: &Cli) -> Result<Self> {
+        let absolute_repo_path = cli.repo_path.absolutize()?;
         let octocrab = setup_octocrab()?;
         let versions = crate::version::deduce_versions(
             &octocrab,
             BuildKind::Dev,
             Ok(&cli.repo_remote),
-            &cli.repo_path,
+            &absolute_repo_path,
         )
         .await?;
         let triple = TargetTriple::new(versions);
@@ -94,7 +96,7 @@ impl BuildContext {
         Ok(Self {
             octocrab,
             triple,
-            source_root: cli.repo_path.clone(),
+            source_root: absolute_repo_path.into(),
             remote_repo: cli.repo_remote.clone(),
             cache: Cache::new(&cli.cache_path).await?,
         })
@@ -480,6 +482,11 @@ pub async fn main_internal() -> Result {
                 .args(["--", "--check"])
                 .run_ok()
                 .await?;
+
+            prettier::check(&ctx.repo_root()).await?;
+        }
+        Target::Fmt => {
+            prettier::write(&ctx.repo_root()).await?;
         }
     };
     info!("Completed main job.");
@@ -491,6 +498,7 @@ pub fn main() -> Result {
     let rt = Runtime::new()?;
     rt.block_on(async { main_internal().await })?;
     rt.shutdown_timeout(Duration::from_secs(60 * 30));
+    info!("Successfully ending.");
     Ok(())
 }
 

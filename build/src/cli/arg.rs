@@ -105,6 +105,7 @@ pub enum Target {
     Ide(ide::Target),
     Clean,
     Lint,
+    Fmt,
 }
 
 /// Build, test and package Enso Engine.

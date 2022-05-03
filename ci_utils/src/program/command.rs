@@ -270,10 +270,17 @@ impl Command {
             let mut child = child?;
             let status = child
                 .wait()
-                .instrument(info_span!("Waiting for process.", command = %pretty))
+                .inspect_ok(|exit_status| {
+                    tracing::Span::current().record("status", &exit_status.code());
+                })
                 .await?;
             status_checker(status).context(format!("Command failed: {}", pretty))
         }
+        .instrument(info_span!(
+            "Waiting for process.",
+            status = tracing::field::Empty,
+            command = %self.describe()
+        ))
         .boxed()
     }
 

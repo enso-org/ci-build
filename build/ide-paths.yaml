@@ -10,6 +10,7 @@
         icons/:
         project-manager/:
   build/:
+    prettier/:
   built-distribution:
     "project-manager-bundle-<triple>":
       enso:
