@@ -67,7 +67,7 @@ fn parse_toml(path: impl AsRef<Path>) -> toml::Value {
 
 /// Checks if the given member is blacklisted from running the tests.
 fn blacklisted(memeber: &Path) -> bool {
-    PACKAGE_BLACKLIST.contains(&memeber.to_string_lossy().as_ref())
+    PACKAGE_BLACKLIST.iter().any(|blacklisted| memeber.ends_with(blacklisted))
 }
 
 /// Checks if given workspace member is a proc-macro crate.
