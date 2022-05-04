@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::program::command::CommandOption;
+
 use crate::program::command::Manipulator;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -26,9 +26,9 @@ pub enum Color {
     Auto,
 }
 
-impl CommandOption for Color {
-    fn args(&self) -> Vec<&str> {
-        vec!["--color", self.as_ref()]
+impl Manipulator for Color {
+    fn apply<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) {
+        command.args(["--color", self.as_ref()]);
     }
 }
 

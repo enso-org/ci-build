@@ -1,5 +1,7 @@
 use crate::project::*;
+
 use anyhow::Context;
+use ide_ci::programs::cargo;
 use ide_ci::programs::WasmPack;
 
 /// List of crates that should not be tested by wasm-pack test.
@@ -102,6 +104,7 @@ pub async fn test_all(repo_root: PathBuf) -> Result {
                 .env("WASM_BINDGEN_TEST_TIMEOUT", "300")
                 // .args(&wasm_pack_args)
                 .arg(&member.strip_prefix(&repo_root).unwrap())
+                .apply(&cargo::Color::Always)
                 .run_ok()
                 .await?;
         } else {
