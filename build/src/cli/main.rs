@@ -487,6 +487,7 @@ pub async fn main_internal() -> Result {
         }
         Target::Fmt => {
             prettier::write(&ctx.repo_root()).await?;
+            Cargo.cmd()?.current_dir(ctx.repo_root()).arg("fmt").run_ok().await?;
         }
     };
     info!("Completed main job.");
