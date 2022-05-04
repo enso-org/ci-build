@@ -11,7 +11,6 @@ use crate::project::wasm::js_patcher::patch_js_glue_in_place;
 
 use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
-use crate::project::wasm::env::ENSO_MAX_PROFILING_LEVEL;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
@@ -130,7 +129,7 @@ impl IsTarget for Wasm {
                 .args(&extra_cargo_options);
 
             if let Some(profiling_level) = profiling_level {
-                command.set_env(ENSO_MAX_PROFILING_LEVEL, &profiling_level)?;
+                command.set_env(env::ENSO_MAX_PROFILING_LEVEL, &profiling_level)?;
             }
             command.run_ok().await?;
 
@@ -291,6 +290,7 @@ impl Wasm {
         WasmPack
             .cmd()?
             .current_dir(source_root)
+            .set_env(env::WASM_BINDGEN_TEST_TIMEOUT, &300)?
             .arg("test")
             .arg("--headless")
             .arg("--chrome")
