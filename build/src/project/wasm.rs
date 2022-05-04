@@ -16,6 +16,7 @@ use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
 use ide_ci::env::Variable;
+use ide_ci::programs::cargo;
 use ide_ci::programs::wasm_pack;
 use ide_ci::programs::Cargo;
 use ide_ci::programs::WasmPack;
@@ -239,7 +240,10 @@ impl Wasm {
     pub async fn check(&self) -> Result {
         Cargo
             .cmd()?
-            .args(["check", "--workspace", "-p", "enso-integration-test", "--all-targets"])
+            .apply(&cargo::Command::Check)
+            .apply(&cargo::Options::Workspace)
+            .apply(&cargo::Options::Package("enso-integration-test".into()))
+            .apply(&cargo::Options::AllTargets)
             .run_ok()
             .await
     }
@@ -263,8 +267,8 @@ impl Wasm {
             Cargo
                 .cmd()?
                 .current_dir(repo_root.clone())
-                .arg("test")
-                .arg("--workspace")
+                .apply(&cargo::Command::Test)
+                .apply(&cargo::Options::Workspace)
                 .run_ok()
                 .await
         })
