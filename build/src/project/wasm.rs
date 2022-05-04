@@ -269,6 +269,10 @@ impl Wasm {
                 .current_dir(repo_root.clone())
                 .apply(&cargo::Command::Test)
                 .apply(&cargo::Options::Workspace)
+                // Color needs to be passed to tests themselves separately.
+                // See: https://github.com/rust-lang/cargo/issues/1983
+                .arg("--")
+                .apply(&cargo::Color::Always)
                 .run_ok()
                 .await
         })

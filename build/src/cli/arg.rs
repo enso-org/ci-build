@@ -51,10 +51,11 @@ pub fn normalize_path(path: &str) -> Result<PathBuf> {
 pub enum TargetSourceKind {
     /// Target will be built from the target repository's sources.
     Build,
-    /// Target will be copied from the local path.
+    /// Already built target will be copied from the local path.
     Local,
+    /// Target will be downloaded from a CI run artifact.
     CiRun,
-    /// bar
+    /// TODO
     Whatever,
 }
 
@@ -94,17 +95,17 @@ macro_rules! source_args_hlp {
 pub enum Target {
     /// Rust part of the GUI that is compiled to WASM.
     Wasm(wasm::Target),
-
     /// GUI that consists of WASM and JS parts. This is what we deploy to cloud.
     Gui(gui::Target),
-
-    /// Project Manager bundle, that includes Enso Engine with GraalVM Runtime.
+    /// Project Manager bundle (includes Enso Engine with GraalVM Runtime).
     ProjectManager(project_manager::Target),
-
     /// IDE bundles together GUI and Project Manager bundle.
     Ide(ide::Target),
+    /// Clean the repository. Keeps the IntelliJ's .idea directory intact.
     Clean,
+    /// Lint the codebase.
     Lint,
+    /// Apply automatic formatterss on the repository.
     Fmt,
 }
 
@@ -117,6 +118,7 @@ pub struct Cli {
     #[clap(long, maybe_default = &DEFAULT_REPO_PATH)]
     pub repo_path: PathBuf,
 
+    /// Where build script will cache some of the third-party artifacts (like network downloads).
     #[clap(long, maybe_default = &DEFAULT_CACHE_PATH)]
     pub cache_path: PathBuf,
 
