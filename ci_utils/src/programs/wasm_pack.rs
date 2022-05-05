@@ -1,6 +1,7 @@
 use crate::prelude::*;
 
 use crate::new_command_type;
+use crate::program::command::Manipulator;
 use tempfile::TempDir;
 
 use crate::programs::Cargo;
@@ -44,6 +45,23 @@ impl AsRef<OsStr> for Target {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug, strum::AsRefStr)]
+#[strum(serialize_all = "kebab-case")]
+pub enum TestFlags {
+    Chrome,
+    Firefox,
+    Headless,
+    Node,
+    Release,
+    Safari,
+}
+
+impl Manipulator for TestFlags {
+    fn apply<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) {
+        command.arg(format!("--{}", self.as_ref()));
+    }
+}
+
 pub struct WasmPack;
 
 impl Program for WasmPack {
@@ -52,7 +70,6 @@ impl Program for WasmPack {
         "wasm-pack"
     }
 }
-
 
 
 new_command_type! {WasmPack, WasmPackCommand}

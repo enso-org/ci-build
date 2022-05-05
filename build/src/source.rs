@@ -9,7 +9,7 @@ use octocrab::Octocrab;
 
 #[derive(Clone, Debug)]
 pub enum ExternalSource {
-    OngoingCiRun,
+    OngoingCiRun(OngoingCiRunSource),
     CiRun(CiRunSource),
     LocalFile(PathBuf),
     Release(ReleaseSource),
@@ -19,6 +19,11 @@ pub enum ExternalSource {
 pub enum Source<Target: IsTarget> {
     BuildLocally(Target::BuildInput),
     External(ExternalSource),
+}
+
+#[derive(Clone, Debug)]
+pub struct OngoingCiRunSource {
+    pub artifact_name: Option<String>,
 }
 
 #[derive(Clone, Debug)]

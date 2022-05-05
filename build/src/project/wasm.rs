@@ -285,17 +285,20 @@ impl Wasm {
         &self,
         source_root: PathBuf,
         _project_manager: Option<Child>,
+        additional_options: Vec<String>,
     ) -> Result {
         info!("Running Rust WASM test suite.");
+        use wasm_pack::TestFlags::*;
         WasmPack
             .cmd()?
             .current_dir(source_root)
             .set_env(env::WASM_BINDGEN_TEST_TIMEOUT, &300)?
             .arg("test")
-            .arg("--headless")
-            .arg("--chrome")
+            .apply(&Headless)
+            .apply(&Chrome)
             .arg("integration-test")
             .arg("--profile=integration-test")
+            .args(additional_options)
             .run_ok()
             .await
         // FIXME additional args

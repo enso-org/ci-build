@@ -40,9 +40,12 @@ pub enum Command {
     IntegrationTest {
         /// If set, the project manager won't be spawned.
         #[clap(long)]
-        external_backend: bool,
+        external_backend:  bool,
         #[clap(flatten)]
-        project_manager:  Source<ProjectManager>,
+        project_manager:   Source<ProjectManager>,
+        /// Additional options to be appended to the wasm-pack invocation.
+        #[clap(last = true)]
+        wasm_pack_options: Vec<String>,
     },
 }
 

@@ -9,6 +9,7 @@ use tokio::process::Child;
 use crate::source::CiRunSource;
 use crate::source::ExternalSource;
 use crate::source::GetTargetJob;
+use crate::source::OngoingCiRunSource;
 use crate::source::ReleaseSource;
 use crate::source::Source;
 
@@ -96,10 +97,11 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let span = info_span!("Getting artifact from an external source");
         match source {
-            ExternalSource::OngoingCiRun => {
-                let artifact_name = self.artifact_name().to_string();
+            ExternalSource::OngoingCiRun(OngoingCiRunSource { artifact_name }) => {
+                let artifact_name =
+                    artifact_name.unwrap_or_else(|| self.artifact_name().to_string());
                 async move {
-                    ide_ci::actions::artifacts::download_single_file_artifact(
+                    ide_ci::actions::artifacts::retrieve_compressed_directory(
                         artifact_name,
                         &destination,
                     )
@@ -107,6 +109,16 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
                     Self::Artifact::from_existing(destination).await
                 }
                 .boxed()
+                // let artifact_name = self.artifact_name().to_string();
+                // async move {
+                //     ide_ci::actions::artifacts::download_single_file_artifact(
+                //         artifact_name,
+                //         &destination,
+                //     )
+                //     .await?;
+                //     Self::Artifact::from_existing(destination).await
+                // }
+                // .boxed()
             }
             ExternalSource::CiRun(ci_run) => self.download_artifact(ci_run, destination),
             ExternalSource::LocalFile(source_path) => async move {

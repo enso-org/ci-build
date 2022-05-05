@@ -176,6 +176,7 @@ pub enum SourceKind {
     Build,
     Local,
     CiRun,
+    CurrentCiRun,
     Release,
 }
 

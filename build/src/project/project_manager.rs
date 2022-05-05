@@ -111,3 +111,18 @@ pub fn matches_platform(name: &str) -> bool {
     name.contains(TARGET_OS.as_str()) && name.contains(pretty_print_arch(TARGET_ARCH))
     // TODO workaround for macOS and M1 (they should be allowed to use amd64 artifacts)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use ide_ci::log::setup_logging;
+
+    #[tokio::test]
+    async fn run_project_manager() -> Result {
+        setup_logging()?;
+        let pm = PathBuf::from(r"H:\NBO\ci-build\dist\project-manager\bin\project-manager.exe");
+        Command::new(pm).run_ok().await?;
+        Ok(())
+    }
+}

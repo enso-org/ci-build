@@ -33,6 +33,7 @@ use crate::setup_octocrab;
 use crate::source::CiRunSource;
 use crate::source::ExternalSource;
 use crate::source::GetTargetJob;
+use crate::source::OngoingCiRunSource;
 use crate::source::ReleaseSource;
 use crate::source::Source;
 use anyhow::Context;
@@ -137,6 +138,11 @@ impl BuildContext {
                 }))
                 .boxed()
             }
+            arg::SourceKind::CurrentCiRun =>
+                ready(Ok(Source::External(ExternalSource::OngoingCiRun(OngoingCiRunSource {
+                    artifact_name: source.artifact_name.clone(),
+                }))))
+                .boxed(),
             arg::SourceKind::Release => {
                 let designator = source
                     .release
@@ -356,13 +362,17 @@ impl BuildContext {
                 // TODO record result
                 try_join(gui_watcher, wait_for_pm_to_finish).void_ok().boxed()
             }
-            arg::ide::Command::IntegrationTest { external_backend, project_manager } => {
+            arg::ide::Command::IntegrationTest {
+                external_backend,
+                project_manager,
+                wasm_pack_options,
+            } => {
                 let project_manager = self.spawn_project_manager(project_manager);
                 let source_root = self.source_root.clone();
                 async move {
                     let project_manager =
                         if !external_backend { Some(project_manager.await?) } else { None };
-                    Wasm.integration_test(source_root, project_manager).await
+                    Wasm.integration_test(source_root, project_manager, wasm_pack_options).await
                 }
                 .boxed()
             }

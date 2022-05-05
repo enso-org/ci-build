@@ -91,9 +91,10 @@ pub fn upload_directory(
     (async move || -> Result { upload(files?, artifact_name, default()).await })()
 }
 
+#[tracing::instrument(skip_all , fields(artifact_name = %artifact_name.as_ref(), target = %target.as_ref().display()), err)]
 pub async fn download_single_file_artifact(
     artifact_name: impl AsRef<str>,
-    target: impl Into<PathBuf>,
+    target: impl AsRef<Path>,
 ) -> Result {
     let downloader =
         download::ArtifactDownloader::new(SessionClient::new_from_env()?, artifact_name.as_ref())
@@ -101,7 +102,7 @@ pub async fn download_single_file_artifact(
     match downloader.file_items().collect_vec().as_slice() {
         [item] => {
             let file = FileToDownload {
-                target:                 target.into(),
+                target:                 target.as_ref().into(),
                 remote_source_location: item.content_location.clone(),
             };
             downloader.download_file_item(&file).await?;
@@ -149,6 +150,21 @@ pub async fn upload_compressed_directory(
     info!("Completed upload of {artifact_name}.");
     Ok(())
 }
+
+#[tracing::instrument(skip_all , fields(path = %path_to_extract.as_ref().display(), artifact = artifact_name.as_ref()), err)]
+pub async fn retrieve_compressed_directory(
+    artifact_name: impl AsRef<str> + Send,
+    path_to_extract: impl AsRef<Path> + Send,
+) -> Result {
+    let artifact_name = artifact_name.as_ref();
+    let tempdir = tempdir()?;
+    let archive_path = tempdir.path().join(format!("{artifact_name}.tar.gz"));
+
+    download_single_file_artifact(&artifact_name, &archive_path).await?;
+    crate::archive::extract_to(&archive_path, &path_to_extract).await?;
+    Ok(())
+}
+
 
 #[cfg(test)]
 mod tests {
