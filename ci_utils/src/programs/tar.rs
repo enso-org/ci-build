@@ -198,6 +198,7 @@ impl Tar {
         archive: impl AsRef<Path>,
         output_directory: impl AsRef<Path>,
     ) -> Result {
+        crate::fs::tokio::create_dir_if_missing(&archive).await?;
         self.cmd()?
             .arg(Command::Extract)
             .args(&Switch::TargetFile(archive.as_ref()))
