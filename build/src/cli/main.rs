@@ -232,30 +232,7 @@ impl BuildContext {
     {
         let get_task = self.resolve(target.clone(), target_source);
         let cache = self.cache.clone();
-        async move {
-            info!("Getting target {}.", type_name::<Target>());
-            let get_task = get_task.await?;
-
-            // We upload only built artifacts. There would be no point in uploading something that
-            // we've just downloaded.
-            let should_upload_artifact =
-                matches!(get_task.source, Source::BuildLocally(_)) && is_in_env();
-            let artifact = target.get(get_task, cache).await?;
-            info!(
-                "Got target {}, should it be uploaded? {}",
-                type_name::<Target>(),
-                should_upload_artifact
-            );
-            if should_upload_artifact {
-                let upload_job = target.upload_artifact(ready(Ok(artifact.clone())));
-                // global::spawn(upload_job);
-                // info!("Spawned upload job for {}.", type_name::<Target>());
-                warn!("Forcing the job.");
-                upload_job.await?;
-            }
-            Ok(artifact)
-        }
-        .boxed()
+        async move { get_resolved(target, cache, get_task.await?).await }.boxed()
     }
 
     pub fn repo_root(&self) -> RepoRoot {
@@ -274,8 +251,14 @@ impl BuildContext {
             }
             arg::wasm::Command::Build { params, output_path } => {
                 let inputs = self.resolve_inputs::<Wasm>(params);
-                async move { Wasm.build_locally(inputs?, output_path.output_path).void_ok().await }
-                    .boxed()
+                let cache = self.cache.clone();
+                async move {
+                    let source = crate::source::Source::BuildLocally(inputs?);
+                    let job = GetTargetJob { source, destination: output_path.output_path };
+                    get_resolved(Wasm, cache, job).await?;
+                    Ok(())
+                }
+                .boxed()
             }
             arg::wasm::Command::Check => Wasm.check().boxed(),
             arg::wasm::Command::Test { no_wasm, no_native } =>
@@ -456,6 +439,34 @@ impl Resolvable for ProjectManager {
             versions:  ctx.triple.versions.clone(),
         })
     }
+}
+
+#[tracing::instrument(skip_all, fields(?target, ?get_task))]
+pub async fn get_resolved<Target>(
+    target: Target,
+    cache: Cache,
+    get_task: GetTargetJob<Target>,
+) -> Result<Target::Artifact>
+where
+    Target: IsTarget + Send + Sync + 'static,
+{
+    // We upload only built artifacts. There would be no point in uploading something that
+    // we've just downloaded.
+    let should_upload_artifact = matches!(get_task.source, Source::BuildLocally(_)) && is_in_env();
+    let artifact = target.get(get_task, cache).await?;
+    info!(
+        "Got target {}, should it be uploaded? {}",
+        type_name::<Target>(),
+        should_upload_artifact
+    );
+    if should_upload_artifact {
+        let upload_job = target.upload_artifact(ready(Ok(artifact.clone())));
+        // global::spawn(upload_job);
+        // info!("Spawned upload job for {}.", type_name::<Target>());
+        warn!("Forcing the job.");
+        upload_job.await?;
+    }
+    Ok(artifact)
 }
 
 pub async fn main_internal() -> Result {
