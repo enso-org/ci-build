@@ -47,6 +47,7 @@ use ide_ci::programs::cargo;
 use ide_ci::programs::Cargo;
 use ide_ci::programs::Git;
 use std::any::type_name;
+use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::Child;
 use tokio::runtime::Runtime;
@@ -377,7 +378,7 @@ impl BuildContext {
         async move {
             let project_manager = get_task.await?;
             let p: &Path = project_manager.path.bin.project_managerexe.as_ref();
-            Command::new(p).spawn_intercepting()
+            Command::new(p).stdin(Stdio::piped()).spawn_intercepting()
         }
         .boxed()
     }
