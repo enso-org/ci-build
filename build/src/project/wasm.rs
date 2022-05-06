@@ -181,6 +181,7 @@ impl IsWatchable for Wasm {
         // This is not nice, as this module should not be aware of the CLI parsing/generation.
         // Rather than using `cargo watch` this should be implemented directly in Rust.
         async move {
+            let current_exe = std::env::current_exe()?;
             let watch_process = Cargo
                 .cmd()?
                 .kill_on_drop(true)
@@ -188,7 +189,7 @@ impl IsWatchable for Wasm {
                 .arg("watch")
                 .args(["--ignore", "README.md"])
                 .arg("--")
-                .args(["enso-build2"])
+                .arg(current_exe)
                 .args(["--repo-path", input.repo_root.as_str()])
                 // FIXME crate name
                 .arg("wasm")

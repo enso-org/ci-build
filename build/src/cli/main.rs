@@ -341,9 +341,15 @@ impl BuildContext {
                 use crate::project::ProcessWrapper;
                 let gui_watcher = self.watch_gui(gui);
                 let project_manager = self.spawn_project_manager(project_manager);
-                let wait_for_pm_to_finish = async move { project_manager.await?.wait_ok().await };
-                // TODO record result
-                try_join(gui_watcher, wait_for_pm_to_finish).void_ok().boxed()
+
+                async move {
+                    let mut project_manager = project_manager.await?;
+                    gui_watcher.await?;
+                    project_manager.stdin.take(); // dropping stdin handle should make PM finish
+                    project_manager.wait_ok().await?;
+                    Ok(())
+                }
+                .boxed()
             }
             arg::ide::Command::IntegrationTest {
                 external_backend,
