@@ -2000,6 +2000,7 @@ dependencies = [
  "glob",
  "graphql_client",
  "headers",
+ "heck 0.4.0",
  "http-serde",
  "ifmt",
  "indexmap",

@@ -17,6 +17,7 @@
 #![feature(duration_constants)]
 #![feature(const_trait_impl)]
 #![feature(is_some_with)]
+#![feature(explicit_generic_args_with_impl_trait)]
 
 pub mod actions;
 pub mod anyhow;

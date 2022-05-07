@@ -3,6 +3,8 @@ use crate::prelude::*;
 use crate::actions::env;
 use std::io::Write;
 
+pub mod definition;
+
 /// Check if we are running in an environment that looks like being spawned by GitHub Actions
 /// workflow.
 pub fn is_in_env() -> bool {

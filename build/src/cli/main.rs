@@ -475,6 +475,7 @@ where
     Ok(artifact)
 }
 
+#[tracing::instrument(err)]
 pub async fn main_internal() -> Result {
     let cli = Cli::parse();
     setup_logging()?;
