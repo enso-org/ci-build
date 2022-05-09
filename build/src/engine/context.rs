@@ -305,7 +305,7 @@ impl RunContext {
             }
 
             let build_stuff = Sbt::concurrent_tasks(tasks);
-            sbt.call_arg(format!("runtime/clean; {}", build_stuff)).await?;
+            sbt.call_arg(format!("interpreter-dsl/clean; runtime/clean; {}", build_stuff)).await?;
         } else {
             // Compile
             sbt.call_arg("compile").await?;
