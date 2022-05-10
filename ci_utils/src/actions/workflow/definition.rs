@@ -21,6 +21,19 @@ pub fn setup_conda() -> Step {
     }
 }
 
+pub fn setup_wasm_pack_step() -> Step {
+    Step {
+        name: Some("Installing wasm-pack".into()),
+        uses: Some("jetli/wasm-pack-action@v0.3.0".into()),
+        with: Some(step::Argument::Other(HashMap::from_iter([(
+            "version".into(),
+            "latest".into(),
+        )]))),
+        r#if: Some(is_github_hosted()),
+        ..default()
+    }
+}
+
 pub fn setup_artifact_api() -> Step {
     let script = [
         r#"core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])"#,
@@ -111,6 +124,7 @@ pub struct Event {
 #[serde(rename_all = "kebab-case")]
 pub struct Job {
     pub name:    String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub needs:   Vec<String>,
     pub runs_on: Vec<RunnerLabel>,
     pub steps:   Vec<Step>,
@@ -150,33 +164,23 @@ pub mod step {
     #[serde(rename_all = "kebab-case")]
     #[serde(untagged)]
     pub enum Argument {
+        #[serde(rename_all = "kebab-case")]
         Checkout {
             clean: Option<bool>,
         },
+        #[serde(rename_all = "kebab-case")]
         SetupConda {
             #[serde(skip_serializing_if = "Option::is_none")]
             update_conda:   Option<bool>,
             #[serde(skip_serializing_if = "Option::is_none")]
             conda_channels: Option<String>, // conda_channels: Vec<CondaChannel>
         },
+        #[serde(rename_all = "kebab-case")]
         GitHubScript {
             script: String,
         },
+        Other(HashMap<String, String>),
     }
-
-    // #[derive(Clone, Debug, Serialize, Deserialize)]
-    // #[serde(rename_all = "kebab-case")]
-    // pub enum CondaChannel {
-    //     Anaconda,
-    //     CondaForge,
-    // }
-    // pub trait Argument: Clone + Debug + Serialize + DeserializeOwned + Sized {}
-    //
-    // #[derive(Clone, Debug, Serialize, Deserialize)]
-    // pub struct CheckoutArgument {
-    //     pub clean: Option<bool>,
-    // }
-    // impl Argument for CheckoutArgument {}
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -221,7 +225,15 @@ pub fn plain_job(os: OS, name: impl AsRef<str>, command_line: impl AsRef<str>) -
     let checkout_repo_step = checkout_repo_step();
     let run_step = run(os, command_line);
     let name = format!("{} ({})", name.as_ref(), os);
-    let steps = vec![setup_conda(), setup_artifact_api(), checkout_repo_step, run_step];
+    let steps = vec![
+        setup_conda(),
+        setup_wasm_pack_step(),
+        setup_artifact_api(),
+        checkout_repo_step,
+        // We don't care about help but this compiles the script as a single step.
+        run(os, "--help"),
+        run_step,
+    ];
     let runs_on = runs_on(os);
     Job { name, runs_on, steps, ..default() }
 }
@@ -269,7 +281,11 @@ pub mod job {
     pub struct IntegrationTest;
     impl JobArchetype for IntegrationTest {
         fn job(os: OS) -> Job {
-            plain_job(os, "IDE integration tests", "ide integration-test")
+            plain_job(
+                os,
+                "IDE integration tests",
+                "ide integration-test --project-manager-source current-ci-run",
+            )
         }
     }
 
@@ -314,7 +330,7 @@ mod tests {
         workflow.add::<job::WasmTest>(primary_os);
         workflow.add::<job::NativeTest>(primary_os);
         workflow.add_customized::<job::IntegrationTest>(primary_os, |job| {
-            job.needs.push(job::IntegrationTest::key(primary_os));
+            job.needs.push(job::BuildProjectManager::key(primary_os));
         });
 
         for os in [OS::Windows, OS::Linux, OS::MacOS] {

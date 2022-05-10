@@ -15,6 +15,8 @@ use ide_ci::cache;
 use ide_ci::models::config::RepoContext;
 use octocrab::models::RunId;
 
+pub const ENVIRONMENT_VARIABLE_NAME_PREFIX: &str = "ENSO_BUILD";
+
 lazy_static! {
     pub static ref DIST_IDE: PathBuf = PathBuf::from_iter(["dist", "ide"]);
     pub static ref DEFAULT_REPO_PATH: Option<String> =
@@ -25,6 +27,7 @@ lazy_static! {
 
 pub trait ArgExt<'h>: Sized + 'h {
     fn maybe_default<S: AsRef<str> + 'h>(self, f: &'h impl Deref<Target = Option<S>>) -> Self;
+    fn prefixed_env(self) -> Self;
 }
 
 impl<'h> ArgExt<'h> for Arg<'h> {
@@ -36,7 +39,44 @@ impl<'h> ArgExt<'h> for Arg<'h> {
             self
         }
     }
+
+    fn prefixed_env(self) -> Self {
+        use heck::ToShoutySnakeCase;
+        let var_name = format!(
+            "{}_{}",
+            ENVIRONMENT_VARIABLE_NAME_PREFIX,
+            self.get_id().to_shouty_snake_case()
+        );
+        // println!("Argument {arg_name} will be covered by {var_name} variable");
+        // FIXME don't leak, provide some unified solution for "static generated String" case
+        self.env(Box::leak(var_name.into_boxed_str()))
+    }
 }
+//
+//
+// pub trait AppExt<'h>: Sized + 'h {
+//     fn env_args(self, prefix: &str) -> Self;
+// }
+//
+// impl<'h> AppExt<'h> for clap::Command<'h> {
+//     fn env_args(mut self, prefix: &str) -> Self {
+//         println!("Processing {}", self.get_name());
+//         let arg_names = self
+//             .get_arguments()
+//             .map(|a| a.get_id())
+//             .filter(|a| *a != "version" && *a != "help")
+//             .collect::<Vec<_>>();
+//
+//         for arg_name in arg_names {
+//             use heck::ToShoutySnakeCase;
+//             let var_name = format!("ENSO_BUILD_{}", arg_name.to_shouty_snake_case());
+//             println!("Argument {arg_name} will be covered by {var_name} variable");
+//             self = self.mut_arg(arg_name, |arg| arg.env(Box::leak(var_name.into_boxed_str())));
+//         }
+//         self
+//     }
+// }
+
 
 
 /// We pass CLI paths through this to make sure that they are absolutized against the initial
@@ -105,7 +145,7 @@ pub enum Target {
     Clean,
     /// Lint the codebase.
     Lint,
-    /// Apply automatic formatterss on the repository.
+    /// Apply automatic formatters on the repository.
     Fmt,
 }
 
@@ -142,22 +182,27 @@ pub struct Cli {
 /// This is the CLI representation of a [`Source`] for a given target.
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct Source<Target: IsTargetSource> {
+    /// How the given target should be acquired.
     #[clap(name = Target::SOURCE_NAME, arg_enum, long, default_value_t= SourceKind::Build)]
     pub source: SourceKind,
 
-    /// If source is `local`, this argument is required to give the path.
-    #[clap(name = Target::PATH_NAME, long, required_if_eq(Target::SOURCE_NAME, "local"))]
-    pub path: Option<PathBuf>,
+    /// If source is `local`, this argument is used to give the path with the component.
+    /// If missing, the default would-be output directory for this component shall be used.
+    #[clap(name = Target::PATH_NAME, long, default_value=Target::DEFAULT_OUTPUT_PATH)]
+    pub path: PathBuf,
 
-    /// Identifier of the CI run from which the artifacts should be downloaded.
+    /// If source is `run`, this argument is required to provide CI run ID.
     #[clap(name = Target::RUN_ID_NAME, long, required_if_eq(Target::SOURCE_NAME, "ci-run"))]
     pub run_id: Option<RunId>,
 
-    /// Artifact name to be used when downloading a run artifact. If not set, the default name can
-    /// be used.
+    /// Artifact name to be used when downloading a run artifact. If not set, the default name for
+    /// given target will be used.
     #[clap(name = Target::ARTIFACT_NAME_NAME, long)]
     pub artifact_name: Option<String>,
 
+    /// If source is `run`, this argument is required to identify a release with asset to download.
+    /// This can be either the release tag or a predefined placeholder (currently supported one is
+    /// only 'latest').
     #[clap(name = Target::RELEASE_DESIGNATOR_NAME, long, required_if_eq(Target::SOURCE_NAME, "release"))]
     pub release: Option<String>,
 

@@ -120,8 +120,10 @@ impl BuildContext {
                 ready(resolved.map(Source::BuildLocally)).boxed()
             }
             arg::SourceKind::Local => {
-                let resolved = source.path.clone().context("Missing path to the local artifacts!");
-                ready(resolved.map(|p| Source::External(ExternalSource::LocalFile(p)))).boxed()
+                // let resolved = source.path.clone().context("Missing path to the local
+                // artifacts!"); ready(resolved.map(|p|
+                // Source::External(ExternalSource::LocalFile(p)))).boxed()
+                ready(Ok(Source::External(ExternalSource::LocalFile(source.path.clone())))).boxed()
             }
             arg::SourceKind::CiRun => {
                 let run_id = source.run_id.context(format!(
@@ -409,14 +411,20 @@ impl Resolvable for Wasm {
         ctx: &BuildContext,
         from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
-        let arg::wasm::BuildInputs { crate_path, wasm_profile, cargo_options, profiling_level } =
-            from;
+        let arg::wasm::BuildInputs {
+            crate_path,
+            wasm_profile,
+            cargo_options,
+            profiling_level,
+            wasm_size_limit,
+        } = from;
         Ok(wasm::BuildInput {
             repo_root: ctx.repo_root(),
             crate_path,
             extra_cargo_options: cargo_options,
             profile: wasm_profile.into(),
             profiling_level: profiling_level.map(into),
+            wasm_size_limit,
         })
     }
 }

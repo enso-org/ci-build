@@ -5,9 +5,6 @@ use tempfile::tempdir;
 use tokio::process::Child;
 
 use crate::project::wasm::js_patcher::patch_js_glue_in_place;
-// use crate::paths::generated::Parameters;
-// use crate::paths::generated::Paths;
-// use crate::paths::generated::PathsRepoRootDistWasm;
 
 use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
@@ -24,35 +21,42 @@ pub mod js_patcher;
 pub mod test;
 
 pub mod env {
-    // Enable a Rust unstable feature that the `#[profile]` macro uses to obtain source-file and
-    // line number information to include in generated profile files.
-    //
-    // The IntelliJ Rust plugin does not support the `proc_macro_span` Rust feature; using it causes
-    // JetBrains IDEs to become entirely unaware of the items produced by `#[profile]`.
-    // (See: https://github.com/intellij-rust/intellij-rust/issues/8655)
-    //
-    // In order to have line number information in actual usage, but keep everything understandable
-    // by JetBrains IDEs, we need IntelliJ/CLion to build crates differently from how they are
-    // built for the application to be run. This is accomplished by gating the use of the unstable
-    // functionality by a `cfg` flag. A `cfg` flag is disabled by default, so when a Rust IDE builds
-    // crates internally in order to determine macro expansions, it will do so without line numbers.
-    // When this script is used to build the application, it is not for the purpose of IDE macro
-    // expansion, so we can safely enable line numbers.
-    //
-    // The reason we don't use a Cargo feature for this is because this script can build different
-    // crates, and we'd like to enable this feature when building any crate that depends on the
-    // `profiler` crates. We cannot do something like '--feature=enso_profiler/line-numbers' without
-    // causing build to fail when building a crate that doesn't have `enso_profiler` in its
-    // dependency tree.
-    ide_ci::define_env_var!(ENSO_ENABLE_PROC_MACRO_SPAN, bool);
+    ide_ci::define_env_var! {
+        /// Enable a Rust unstable feature that the `#[profile]` macro uses to obtain source-file
+        /// and line number information to include in generated profile files.
+        ///
+        /// The IntelliJ Rust plugin does not support the `proc_macro_span` Rust feature; using it
+        /// causes JetBrains IDEs to become entirely unaware of the items produced by `#[profile]`.
+        /// (See: https://github.com/intellij-rust/intellij-rust/issues/8655)
+        ///
+        /// In order to have line number information in actual usage, but keep everything
+        /// understandable by JetBrains IDEs, we need IntelliJ/CLion to build crates differently
+        /// from how they are built for the application to be run. This is accomplished by gating
+        /// the use of the unstable functionality by a `cfg` flag. A `cfg` flag is disabled by
+        /// default, so when a Rust IDE builds crates internally in order to determine macro
+        /// expansions, it will do so without line numbers. When this script is used to build the
+        /// application, it is not for the purpose of IDE macro expansion, so we can safely enable
+        /// line numbers.
+        ///
+        /// The reason we don't use a Cargo feature for this is because this script can build
+        /// different crates, and we'd like to enable this feature when building any crate that
+        /// depends on the `profiler` crates. We cannot do something like
+        /// '--feature=enso_profiler/line-numbers' without causing build to fail when building a
+        /// crate that doesn't have `enso_profiler` in its dependency tree.
+        ENSO_ENABLE_PROC_MACRO_SPAN, bool
+    }
 
-    // Use the environment-variable API provided by the `enso_profiler_macros` library to implement
-    // the public interface to profiling-level configuration
-    // (see: https://github.com/enso-org/design/blob/main/epics/profiling/implementation.md)
-    ide_ci::define_env_var!(ENSO_MAX_PROFILING_LEVEL, super::ProfilingLevel);
+    ide_ci::define_env_var! {
+        /// Use the environment-variable API provided by the `enso_profiler_macros` library to
+        /// implement the public interface to profiling-level configuration (see:
+        /// https://github.com/enso-org/design/blob/main/epics/profiling/implementation.md)
+        ENSO_MAX_PROFILING_LEVEL, super::ProfilingLevel
+    }
 
 
-    ide_ci::define_env_var!(WASM_BINDGEN_TEST_TIMEOUT, usize);
+    ide_ci::define_env_var! {
+        WASM_BINDGEN_TEST_TIMEOUT, usize
+    }
 }
 
 pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
@@ -77,6 +81,7 @@ pub struct BuildInput {
     pub extra_cargo_options: Vec<String>,
     pub profile:             wasm_pack::Profile,
     pub profiling_level:     Option<ProfilingLevel>,
+    pub wasm_size_limit:     Option<byte_unit::Byte>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -106,13 +111,19 @@ impl IsTarget for Wasm {
             // We want to be able to pass --profile this way.
             WasmPack.require_present_that(&VersionReq::parse(">=0.10.1")?).await?;
 
-            let BuildInput{ repo_root, crate_path, extra_cargo_options, profile, profiling_level } = input;
+            let BuildInput {
+                repo_root,
+                crate_path,
+                extra_cargo_options,
+                profile,
+                profiling_level,
+                wasm_size_limit,
+            } = input;
 
             info!("Building wasm.");
             let temp_dir = tempdir()?;
             let temp_dist = RepoRootDistWasm::new(temp_dir.path());
-            let mut command = ide_ci::programs::WasmPack
-                .cmd()?;
+            let mut command = ide_ci::programs::WasmPack.cmd()?;
             command
                 .current_dir(&repo_root)
                 .kill_on_drop(true)
@@ -125,7 +136,7 @@ impl IsTarget for Wasm {
                 .output_name(&OUTPUT_NAME)
                 .arg(&crate_path)
                 .arg("--")
-                .arg("--color=always")
+                .apply(&cargo::Color::Always)
                 .args(&extra_cargo_options);
 
             if let Some(profiling_level) = profiling_level {
@@ -181,22 +192,50 @@ impl IsWatchable for Wasm {
         // This is not nice, as this module should not be aware of the CLI parsing/generation.
         // Rather than using `cargo watch` this should be implemented directly in Rust.
         async move {
+            let BuildInput {
+                repo_root,
+                crate_path,
+                extra_cargo_options,
+                profile,
+                profiling_level,
+                wasm_size_limit,
+            } = input;
+
             let current_exe = std::env::current_exe()?;
-            let watch_process = Cargo
-                .cmd()?
+            // Cargo watch apparently cannot handle extended-length path prefix.
+            // We remove it and hope for the best.
+            let current_exe = current_exe
+                .as_str()
+                .strip_prefix(r"\\?\")
+                .map_or(current_exe.as_path(), |s| Path::new(s));
+
+
+            let mut watch_cmd = Cargo.cmd()?;
+
+            watch_cmd
                 .kill_on_drop(true)
-                .current_dir(&input.repo_root)
+                .current_dir(&repo_root)
                 .arg("watch")
                 .args(["--ignore", "README.md"])
                 .arg("--")
                 .arg(current_exe)
-                .args(["--repo-path", input.repo_root.as_str()])
+                .args(["--repo-path", repo_root.as_str()])
                 // FIXME crate name
                 .arg("wasm")
                 .arg("build")
-                .args(["--crate-path", input.crate_path.as_str()])
+                .args(["--crate-path", crate_path.as_str()])
                 .args(["--wasm-output-path", output_path.as_str()])
-                .spawn_intercepting()?;
+                .args(["--wasm-profile", profile.as_ref()]);
+            if let Some(profiling_level) = profiling_level {
+                watch_cmd.args(["--profiling-level", profiling_level.to_string().as_str()]);
+            }
+            if let Some(wasm_size_limit) = wasm_size_limit {
+                watch_cmd.args(["--wasm-size-limit", wasm_size_limit.to_string().as_str()]);
+            }
+
+            watch_cmd.arg("--").args(extra_cargo_options);
+
+            let watch_process = watch_cmd.spawn_intercepting()?;
             let artifact = Artifact(RepoRootDistWasm::new(output_path.as_ref()));
             Ok(Self::Watcher { artifact, watch_process })
         }
@@ -305,6 +344,13 @@ impl Wasm {
         // FIXME additional args
         // PM will be automatically killed by dropping the handle.
     }
+}
+
+/// Get the size of a file after gzip compression.
+pub async fn compressed_size(path: impl AsRef<Path>) -> Result<u64> {
+    let file = tokio::io::BufReader::new(ide_ci::fs::tokio::open(&path).await?);
+    let encoded_stream = async_compression::tokio::bufread::GzipEncoder::new(file);
+    ide_ci::io::read_length(encoded_stream).await
 }
 
 #[cfg(test)]

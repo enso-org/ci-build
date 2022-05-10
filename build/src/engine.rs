@@ -19,8 +19,6 @@ pub mod sbt;
 pub use context::RunContext;
 
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
-// const GRAAL_VERSION: Version = Version::new(21, 1, 0);
-// const GRAAL_JAVA_VERSION: graalvm::JavaVersion = graalvm::JavaVersion::Java11;
 const PARALLEL_ENSO_TESTS: AsyncPolicy = AsyncPolicy::Sequential;
 
 pub async fn download_project_templates(client: reqwest::Client, enso_root: PathBuf) -> Result {

@@ -1,9 +1,12 @@
 use crate::prelude::*;
 
+// use crate::cli::arg::AppExt;
+use crate::cli::arg::ArgExt;
 use crate::cli::arg::OutputPath;
 use crate::cli::arg::Source;
 use crate::project::wasm::Wasm;
 use crate::source_args_hlp;
+
 use clap::ArgEnum;
 use clap::Args;
 use clap::Subcommand;
@@ -61,6 +64,9 @@ pub struct BuildInputs {
 
     #[clap(long, arg_enum)]
     pub profiling_level: Option<ProfilingLevel>,
+
+    #[clap(long, prefixed_env())]
+    pub wasm_size_limit: Option<byte_unit::Byte>,
 }
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]
