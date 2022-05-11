@@ -43,7 +43,7 @@ log = "0.4.14"
 mime = "0.3.16"
 new_mime_guess = "4.0.0"
 nix = "0.23.0"
-octocrab = { git = "https://github.com/enso-org/octocrab" }
+octocrab = { git = "https://github.com/enso-org/octocrab", default-features = false, features = ["rustls"] }
 path-absolutize = "3.0.11"
 pathdiff = "0.2.1"
 path-slash = "0.1.4"
@@ -55,7 +55,7 @@ proc-macro2 = "1.0.36"
 quote = "1.0.15"
 rand = "0.8.4"
 regex = "1.5.4"
-reqwest = { version = "0.11.5", features = ["stream"] }
+reqwest = { version = "0.11.5", default-features = false, features = ["stream"] }
 snafu = "0.7.0"
 semver = { version = "1.0.4", features=["serde"] }
 serde = { version = "1.0.130", features= ["derive"]}
