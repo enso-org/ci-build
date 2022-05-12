@@ -31,6 +31,7 @@ impl From<Profile> for wasm_pack::Profile {
     }
 }
 
+// Follows hierarchy defined in  lib/rust/profiler/src/lib.rs
 #[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
 pub enum ProfilingLevel {
     Objective,
@@ -53,18 +54,23 @@ impl From<ProfilingLevel> for crate::project::wasm::ProfilingLevel {
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInputs {
     /// Which crate should be treated as a WASM entry point. Relative path from source root.
-    #[clap(default_value = crate::project::wasm::TARGET_CRATE, long)]
+    #[clap(default_value = crate::project::wasm::TARGET_CRATE, long, prefixed_env())]
     pub crate_path: PathBuf,
 
-    #[clap(long, arg_enum, default_value_t = Profile::Release)]
+    /// Profile that is passed to wasm-pack.
+    #[clap(long, arg_enum, default_value_t = Profile::Release, prefixed_env())]
     pub wasm_profile: Profile,
 
-    #[clap(last = true)]
+    /// Additional options to be passed to Cargo.
+    #[clap(last = true, prefixed_env())]
     pub cargo_options: Vec<String>,
 
-    #[clap(long, arg_enum)]
+    /// Compiles Enso with given profiling level. If not set, defaults to minimum.
+    #[clap(long, arg_enum, prefixed_env())]
     pub profiling_level: Option<ProfilingLevel>,
 
+    /// Fail the build if compressed WASM exceeds the specified size. Supports format like
+    /// "4.06MiB".
     #[clap(long, prefixed_env())]
     pub wasm_size_limit: Option<byte_unit::Byte>,
 }
@@ -89,8 +95,10 @@ pub enum Command {
         output_path: OutputPath<Wasm>,
     },
     Test {
+        /// Skip the native (non-WASM) Rust tests.
         #[clap(long)]
         no_native: bool,
+        /// Skip the WASM Rust tests.
         #[clap(long)]
         no_wasm:   bool,
     },

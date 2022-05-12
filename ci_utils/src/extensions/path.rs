@@ -8,6 +8,11 @@ pub trait PathExt: AsRef<Path> {
         ret
     }
 
+    /// Strips the leading `\\?\` prefix from Windows paths if present.
+    fn without_verbatim_prefix(&self) -> &Path {
+        self.as_str().strip_prefix(r"\\?\").map_or(self.as_ref(), Path::new)
+    }
+
     /// Appends a new extension to the file.
     ///
     /// Does not try to replace previous extension, unlike `set_extension`.
@@ -36,12 +41,12 @@ pub trait PathExt: AsRef<Path> {
 
     #[context("Failed to deserialize file `{}` as type `{}`.", self.as_ref().display(), std::any::type_name::<T>())]
     fn read_to_json<T: DeserializeOwned>(&self) -> Result<T> {
-        let content = std::fs::read_to_string(self)?;
+        let content = crate::fs::read_to_string(self)?;
         serde_json::from_str(&content).anyhow_err()
     }
 
     fn write_as_json<T: Serialize>(&self, value: &T) -> Result {
-        let file = std::fs::File::create(self)?;
+        let file = crate::fs::create(self)?;
         serde_json::to_writer(file, value).anyhow_err()
     }
 
@@ -56,4 +61,12 @@ impl<T: AsRef<Path>> PathExt for T {}
 mod tests {
     #[allow(unused_imports)]
     use super::*;
+
+    #[test]
+    fn stripping_unc_prefix() {
+        let path_with_unc = Path::new(r"\\?\H:\NBO\ci-build\target\debug\enso-build2.exe");
+        let path_without_unc = Path::new(r"H:\NBO\ci-build\target\debug\enso-build2.exe");
+        assert_eq!(path_with_unc.without_verbatim_prefix(), path_without_unc);
+        assert_eq!(path_without_unc.without_verbatim_prefix(), path_without_unc);
+    }
 }

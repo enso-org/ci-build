@@ -48,8 +48,8 @@ use ide_ci::programs::cargo;
 use ide_ci::programs::Cargo;
 use ide_ci::programs::Git;
 use std::any::type_name;
-use std::process::Stdio;
 use std::time::Duration;
+use tempfile::tempdir;
 use tokio::process::Child;
 use tokio::runtime::Runtime;
 
@@ -342,7 +342,7 @@ impl BuildContext {
             arg::ide::Command::Watch { project_manager, gui } => {
                 use crate::project::ProcessWrapper;
                 let gui_watcher = self.watch_gui(gui);
-                let project_manager = self.spawn_project_manager(project_manager);
+                let project_manager = self.spawn_project_manager(project_manager, None);
 
                 async move {
                     let mut project_manager = project_manager.await?;
@@ -357,13 +357,33 @@ impl BuildContext {
                 external_backend,
                 project_manager,
                 wasm_pack_options,
+                headless,
             } => {
-                let project_manager = self.spawn_project_manager(project_manager);
+                let custom_root = tempdir();
+                let (custom_root, project_manager) = match custom_root {
+                    Ok(tempdir) => {
+                        let custom_root = Some(tempdir.path().into());
+                        (
+                            Some(tempdir),
+                            Ok(self.spawn_project_manager(project_manager, custom_root)),
+                        )
+                    }
+                    Err(e) => (None, Err(e)),
+                };
                 let source_root = self.source_root.clone();
                 async move {
                     let project_manager =
-                        if !external_backend { Some(project_manager.await?) } else { None };
-                    Wasm.integration_test(source_root, project_manager, wasm_pack_options).await
+                        if !external_backend { Some(project_manager?.await?) } else { None };
+                    Wasm.integration_test(
+                        source_root,
+                        project_manager,
+                        headless,
+                        wasm_pack_options,
+                    )
+                    .await?;
+                    // Custom root must live while the tests are being run.
+                    drop(custom_root);
+                    Ok(())
                 }
                 .boxed()
             }
@@ -374,12 +394,16 @@ impl BuildContext {
     pub fn spawn_project_manager(
         &self,
         source: arg::Source<ProjectManager>,
+        custom_root: Option<PathBuf>,
     ) -> BoxFuture<'static, Result<Child>> {
         let get_task = self.get(ProjectManager, source);
         async move {
             let project_manager = get_task.await?;
-            let p: &Path = project_manager.path.bin.project_managerexe.as_ref();
-            Command::new(p).stdin(Stdio::piped()).spawn_intercepting()
+            let mut command = crate::programs::project_manager::spawn_from(&project_manager.path);
+            if let Some(custom_root) = custom_root {
+                command.set_env(crate::programs::project_manager::PROJECTS_ROOT, &custom_root)?;
+            }
+            command.spawn_intercepting()
         }
         .boxed()
     }

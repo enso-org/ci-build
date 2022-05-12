@@ -15,6 +15,7 @@ use ide_ci::cache;
 use ide_ci::models::config::RepoContext;
 use octocrab::models::RunId;
 
+/// The prefix that will be used when reading the build script arguments from environment.
 pub const ENVIRONMENT_VARIABLE_NAME_PREFIX: &str = "ENSO_BUILD";
 
 lazy_static! {
@@ -25,8 +26,16 @@ lazy_static! {
         cache::default_path().ok().map(|p| p.display().to_string());
 }
 
+/// Extensions to the `clap::Arg`, intended to be used as argument attributes.
 pub trait ArgExt<'h>: Sized + 'h {
+    /// If the given value is `Some`, set it as a default.
+    ///
+    /// Useful primarily when presence of default value on a CLI argument depends on runtime
+    /// conditions.
     fn maybe_default<S: AsRef<str> + 'h>(self, f: &'h impl Deref<Target = Option<S>>) -> Self;
+
+    /// Like `env` but prefixes the generated environment variable name with
+    /// `ENVIRONMENT_VARIABLE_NAME_PREFIX`.
     fn prefixed_env(self) -> Self;
 }
 
@@ -133,13 +142,13 @@ macro_rules! source_args_hlp {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Target {
-    /// Rust part of the GUI that is compiled to WASM.
+    /// Build/Test the Rust part of the GUI.
     Wasm(wasm::Target),
-    /// GUI that consists of WASM and JS parts. This is what we deploy to cloud.
+    /// Build/Run GUI that consists of WASM and JS parts. This is what we deploy to cloud.
     Gui(gui::Target),
-    /// Project Manager bundle (includes Enso Engine with GraalVM Runtime).
+    /// Build/Get Project Manager bundle (includes Enso Engine with GraalVM Runtime).
     ProjectManager(project_manager::Target),
-    /// IDE bundles together GUI and Project Manager bundle.
+    /// Build/Run/Test IDE bundle (includes GUI and Project Manager).
     Ide(ide::Target),
     /// Clean the repository. Keeps the IntelliJ's .idea directory intact.
     Clean,
@@ -155,21 +164,21 @@ pub enum Target {
 pub struct Cli {
     /// Path to the directory with sources to be built, typically the root of the 'enso'
     /// repository.
-    #[clap(long, maybe_default = &DEFAULT_REPO_PATH)]
+    #[clap(long, maybe_default = &DEFAULT_REPO_PATH, prefixed_env())]
     pub repo_path: PathBuf,
 
     /// Where build script will cache some of the third-party artifacts (like network downloads).
-    #[clap(long, maybe_default = &DEFAULT_CACHE_PATH)]
+    #[clap(long, maybe_default = &DEFAULT_CACHE_PATH, prefixed_env())]
     pub cache_path: PathBuf,
 
     /// The GitHub repository with the project. This is mainly used to manage releases (checking
     /// released versions to generate a new one, or uploading release assets).
     /// The argument should follow the format `owner/repo_name`.
-    #[clap(long, default_value = "enso/enso-staging")] // FIXME
+    #[clap(long, default_value = "enso/enso-staging", prefixed_env())] // FIXME
     pub repo_remote: RepoContext,
 
     /// The build kind. Affects the default version generation.
-    #[clap(long, arg_enum, default_value_t = BuildKind::Dev)]
+    #[clap(long, arg_enum, default_value_t = BuildKind::Dev, prefixed_env())]
     pub build_kind: BuildKind,
 
     #[clap(subcommand)]
@@ -225,11 +234,12 @@ pub enum SourceKind {
     Release,
 }
 
+/// Strongly typed argument for an output directory of a given build target.
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct OutputPath<Target: IsTargetSource> {
     /// Directory where artifacts should be placed.
     #[clap(name = Target::OUTPUT_PATH_NAME, long)]
-    #[clap(parse(try_from_str=normalize_path), default_value=Target::DEFAULT_OUTPUT_PATH)]
+    #[clap(parse(try_from_str=normalize_path), default_value=Target::DEFAULT_OUTPUT_PATH, prefixed_env())]
     pub output_path: PathBuf,
     #[clap(skip)]
     pub phantom:     PhantomData<Target>,

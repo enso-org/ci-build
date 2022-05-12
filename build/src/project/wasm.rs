@@ -1,21 +1,22 @@
 use crate::prelude::*;
-use anyhow::Context;
-use semver::VersionReq;
-use tempfile::tempdir;
-use tokio::process::Child;
-
-use crate::project::wasm::js_patcher::patch_js_glue_in_place;
+use std::time::Duration;
 
 use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
+use crate::project::wasm::js_patcher::patch_js_glue_in_place;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
+
+use anyhow::Context;
 use ide_ci::env::Variable;
 use ide_ci::programs::cargo;
 use ide_ci::programs::wasm_pack;
 use ide_ci::programs::Cargo;
 use ide_ci::programs::WasmPack;
+use semver::VersionReq;
+use tempfile::tempdir;
+use tokio::process::Child;
 
 pub mod js_patcher;
 pub mod test;
@@ -55,10 +56,12 @@ pub mod env {
 
 
     ide_ci::define_env_var! {
-        WASM_BINDGEN_TEST_TIMEOUT, usize
+        /// The timeout in `wasm-bindgen-test-runner` in seconds.
+        WASM_BINDGEN_TEST_TIMEOUT, u64
     }
 }
 
+pub const INTEGRATION_TESTS_WASM_TIMEOUT: Duration = Duration::from_secs(300);
 pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
 pub const OUTPUT_NAME: &str = "ide";
 pub const TARGET_CRATE: &str = "app/gui";
@@ -202,12 +205,9 @@ impl IsWatchable for Wasm {
             } = input;
 
             let current_exe = std::env::current_exe()?;
-            // Cargo watch apparently cannot handle extended-length path prefix.
+            // Cargo watch apparently cannot handle extended-length UNC path prefix.
             // We remove it and hope for the best.
-            let current_exe = current_exe
-                .as_str()
-                .strip_prefix(r"\\?\")
-                .map_or(current_exe.as_path(), |s| Path::new(s));
+            let current_exe = current_exe.without_verbatim_prefix();
 
 
             let mut watch_cmd = Cargo.cmd()?;
@@ -218,9 +218,9 @@ impl IsWatchable for Wasm {
                 .arg("watch")
                 .args(["--ignore", "README.md"])
                 .arg("--")
+                // FIXME: does not play nice for use as a library
                 .arg(current_exe)
                 .args(["--repo-path", repo_root.as_str()])
-                // FIXME crate name
                 .arg("wasm")
                 .arg("build")
                 .args(["--crate-path", crate_path.as_str()])
@@ -232,7 +232,6 @@ impl IsWatchable for Wasm {
             if let Some(wasm_size_limit) = wasm_size_limit {
                 watch_cmd.args(["--wasm-size-limit", wasm_size_limit.to_string().as_str()]);
             }
-
             watch_cmd.arg("--").args(extra_cargo_options);
 
             let watch_process = watch_cmd.spawn_intercepting()?;
@@ -325,6 +324,7 @@ impl Wasm {
         &self,
         source_root: PathBuf,
         _project_manager: Option<Child>,
+        headless: bool,
         additional_options: Vec<String>,
     ) -> Result {
         info!("Running Rust WASM test suite.");
@@ -332,9 +332,9 @@ impl Wasm {
         WasmPack
             .cmd()?
             .current_dir(source_root)
-            .set_env(env::WASM_BINDGEN_TEST_TIMEOUT, &300)?
+            .set_env(env::WASM_BINDGEN_TEST_TIMEOUT, &INTEGRATION_TESTS_WASM_TIMEOUT.as_secs())?
             .arg("test")
-            .apply(&Headless)
+            .apply_opt(headless.then_some(&Headless))
             .apply(&Chrome)
             .arg("integration-test")
             .arg("--profile=integration-test")

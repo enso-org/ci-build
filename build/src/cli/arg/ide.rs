@@ -43,6 +43,9 @@ pub enum Command {
         external_backend:  bool,
         #[clap(flatten)]
         project_manager:   Source<ProjectManager>,
+        /// Run WASM tests in the headless mode
+        #[clap(long, parse(try_from_str), default_value_t = true)]
+        headless:          bool,
         /// Additional options to be appended to the wasm-pack invocation.
         #[clap(last = true)]
         wasm_pack_options: Vec<String>,

@@ -70,6 +70,13 @@ pub trait IsCommandWrapper {
         self
     }
 
+    fn apply_opt<M: Manipulator>(&mut self, manipulator: Option<&M>) -> &mut Self {
+        if let Some(m) = manipulator {
+            self.apply(m);
+        }
+        self
+    }
+
     fn try_applying<M: FallibleManipulator>(&mut self, manipulator: &M) -> Result<&mut Self> {
         manipulator.try_applying(self).map(|_| self)
     }
