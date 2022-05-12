@@ -27,12 +27,6 @@ pub struct WatchInput {
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
-    // Build {
-    //     #[clap(flatten)]
-    //     params:      BuildInput,
-    //     #[clap(flatten)]
-    //     output_path: OutputPath<Gui>,
-    // },
     Get {
         #[clap(flatten)]
         source: Source<Gui>,

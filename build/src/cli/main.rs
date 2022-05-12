@@ -119,12 +119,8 @@ impl BuildContext {
                 let resolved = T::resolve(self, source.build_args);
                 ready(resolved.map(Source::BuildLocally)).boxed()
             }
-            arg::SourceKind::Local => {
-                // let resolved = source.path.clone().context("Missing path to the local
-                // artifacts!"); ready(resolved.map(|p|
-                // Source::External(ExternalSource::LocalFile(p)))).boxed()
-                ready(Ok(Source::External(ExternalSource::LocalFile(source.path.clone())))).boxed()
-            }
+            arg::SourceKind::Local =>
+                ready(Ok(Source::External(ExternalSource::LocalFile(source.path.clone())))).boxed(),
             arg::SourceKind::CiRun => {
                 let run_id = source.run_id.context(format!(
                     "Missing run ID, please provide {} argument.",

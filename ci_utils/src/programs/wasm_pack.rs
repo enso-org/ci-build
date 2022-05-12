@@ -9,7 +9,7 @@ use crate::programs::Cargo;
 /// What kind of Cargo build profile should be used.
 ///
 /// Typically affects optimization, debug symbol generation and so.
-#[derive(Clone, Copy, Debug, Display, strum::AsRefStr)]
+#[derive(Clone, Copy, Debug, PartialEq, Display, strum::AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Profile {
     Dev,

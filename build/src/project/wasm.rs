@@ -87,6 +87,37 @@ pub struct BuildInput {
     pub wasm_size_limit:     Option<byte_unit::Byte>,
 }
 
+impl BuildInput {
+    pub async fn perhaps_check_size(&self, wasm_path: impl AsRef<Path>) -> Result {
+        if let Some(wasm_size_limit) = self.wasm_size_limit {
+            if self.profile != wasm_pack::Profile::Release {
+                warn!(
+                    "Skipping size check because profile={} rather than {}.",
+                    self.profile,
+                    wasm_pack::Profile::Release
+                );
+            } else if self.profiling_level.map_or(false, |level| level != ProfilingLevel::Objective)
+            {
+                warn!(
+                    "Skipping size check because profiling level={:?} rather than {}.",
+                    self.profiling_level,
+                    ProfilingLevel::Objective
+                );
+            } else {
+                let actual_size = compressed_size(&wasm_path).await?;
+                info!(
+                    "Checking that {} size: {} <= {} (limit).",
+                    wasm_path.as_ref().display(),
+                    actual_size.get_appropriate_unit(true),
+                    wasm_size_limit.get_appropriate_unit(true)
+                );
+                ensure!(actual_size < wasm_size_limit)
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Wasm;
 
@@ -120,8 +151,8 @@ impl IsTarget for Wasm {
                 extra_cargo_options,
                 profile,
                 profiling_level,
-                wasm_size_limit,
-            } = input;
+                wasm_size_limit: _wasm_size_limit,
+            } = &input;
 
             info!("Building wasm.");
             let temp_dir = tempdir()?;
@@ -140,7 +171,7 @@ impl IsTarget for Wasm {
                 .arg(&crate_path)
                 .arg("--")
                 .apply(&cargo::Color::Always)
-                .args(&extra_cargo_options);
+                .args(extra_cargo_options);
 
             if let Some(profiling_level) = profiling_level {
                 command.set_env(env::ENSO_MAX_PROFILING_LEVEL, &profiling_level)?;
@@ -155,6 +186,7 @@ impl IsTarget for Wasm {
             ide_ci::fs::copy(&temp_dist, &ret)?;
             // copy_if_different(&temp_dist.wasm_glue, &ret.wasm_glue)?;
             // copy_if_different(&temp_dist.wasm_main_raw, &ret.wasm_main)?;
+            input.perhaps_check_size(&ret.wasm_main).await?;
             Ok(Artifact(ret))
         }
         .instrument(span)
@@ -347,10 +379,10 @@ impl Wasm {
 }
 
 /// Get the size of a file after gzip compression.
-pub async fn compressed_size(path: impl AsRef<Path>) -> Result<u64> {
+pub async fn compressed_size(path: impl AsRef<Path>) -> Result<byte_unit::Byte> {
     let file = tokio::io::BufReader::new(ide_ci::fs::tokio::open(&path).await?);
     let encoded_stream = async_compression::tokio::bufread::GzipEncoder::new(file);
-    ide_ci::io::read_length(encoded_stream).await
+    ide_ci::io::read_length(encoded_stream).await.map(into)
 }
 
 #[cfg(test)]
