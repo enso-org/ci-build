@@ -170,6 +170,7 @@ impl BuildContext {
     ) -> BoxFuture<'static, Result<ReleaseSource>> {
         let repository = self.remote_repo.clone();
         let octocrab = self.octocrab.clone();
+        let designator_cp = designator.clone();
         async move {
             let release = match designator.as_str() {
                 "latest" => repository.latest_release(&octocrab).await?,
@@ -181,10 +182,16 @@ impl BuildContext {
                 repository,
                 asset_id: target
                     .find_asset(release.assets)
-                    .context(format!("Looking for asset in the release '{}'.", release.tag_name))?
+                    .context(format!(
+                        "Failed to find a relevant asset in the release '{}'.",
+                        release.tag_name
+                    ))?
                     .id,
             })
         }
+        .map_err(move |e: anyhow::Error| {
+            e.context(format!("Failed to resolve release designator `{designator_cp}`."))
+        })
         .boxed()
     }
 

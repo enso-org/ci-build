@@ -21,6 +21,19 @@ const MAX_PER_PAGE: u8 = 100;
 pub mod model;
 pub mod release;
 
+/// Goes over all the pages and returns result.
+///
+/// We prefer taking a future page result rather than page itself to be able to easily wrap both
+/// actions with a single Result context.
+// TODO [mwu]: Yielding a Stream that fetches pages as-needed would be better.
+pub async fn get_all<T: DeserializeOwned>(
+    client: &Octocrab,
+    f: impl Future<Output = octocrab::Result<octocrab::Page<T>>>,
+) -> octocrab::Result<Vec<T>> {
+    let first_page = f.await?;
+    client.all_pages(first_page).await
+}
+
 /// Entity that uniquely identifies a GitHub-hosted repository.
 #[async_trait]
 pub trait RepoPointer: Display {
@@ -31,17 +44,20 @@ pub trait RepoPointer: Display {
     async fn generate_runner_registration_token(
         &self,
         octocrab: &Octocrab,
-    ) -> anyhow::Result<model::RegistrationToken> {
+    ) -> Result<model::RegistrationToken> {
         let path =
             iformat!("/repos/{self.owner()}/{self.name()}/actions/runners/registration-token");
         let url = octocrab.absolute_url(path)?;
-        octocrab.post(url, EMPTY_REQUEST_BODY).await.map_err(Into::into)
+        octocrab.post(url, EMPTY_REQUEST_BODY).await.context(format!(
+            "Failed to generate a runner registration token for the {self} repository."
+        ))
     }
 
     /// The repository's URL.
-    fn url(&self) -> anyhow::Result<Url> {
+    fn url(&self) -> Result<Url> {
         let url_text = iformat!("https://github.com/{self.owner()}/{self.name()}");
-        Url::parse(&url_text).map_err(Into::into)
+        Url::parse(&url_text)
+            .context(format!("Failed to generate an URL for the {self} repository."))
     }
 
     fn repos<'a>(&'a self, client: &'a Octocrab) -> octocrab::repos::RepoHandler<'a> {
@@ -51,19 +67,18 @@ pub trait RepoPointer: Display {
     async fn all_releases(
         &self,
         client: &Octocrab,
-    ) -> octocrab::Result<Vec<octocrab::models::repos::Release>> {
-        let repo = self.repos(client);
-        let page = repo.releases().list().per_page(MAX_PER_PAGE).send().await?;
-        // TODO: rate limit?
-        //       it should be possible to have stream of releases that fetches pages as needed
-        client.all_pages(page).await
+    ) -> Result<Vec<octocrab::models::repos::Release>> {
+        get_all(client, self.repos(client).releases().list().per_page(MAX_PER_PAGE).send())
+            .await
+            .context(format!("Failed to list all releases in the {self} repository."))
     }
 
-    async fn latest_release(
-        &self,
-        client: &Octocrab,
-    ) -> octocrab::Result<octocrab::models::repos::Release> {
-        self.repos(client).releases().get_latest().await
+    async fn latest_release(&self, client: &Octocrab) -> Result<octocrab::models::repos::Release> {
+        self.repos(client)
+            .releases()
+            .get_latest()
+            .await
+            .context(format!("Failed to get the latest release in the {self} repository."))
     }
 
     async fn find_release_by_id(
@@ -88,7 +103,7 @@ pub trait RepoPointer: Display {
             .await?
             .into_iter()
             .find(|release| release.tag_name.contains(text))
-            .ok_or_else(|| anyhow!("No release with tag matching {}", text))
+            .context(format!("No release with tag matching `{text}` in {self}."))
     }
 
     async fn find_artifact_by_name(
