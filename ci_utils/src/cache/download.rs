@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use derivative::Derivative;
 use headers::HeaderMap;
 
 use crate::cache::Cache;
@@ -12,8 +13,10 @@ use reqwest::Client;
 use reqwest::IntoUrl;
 use reqwest::Response;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Derivative, Serialize, Deserialize)]
+#[derivative(Debug)]
 pub struct Key {
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub url: Url,
 
     /// We keep this as part of the key, as some GitHub API endpoints change their meaning based on

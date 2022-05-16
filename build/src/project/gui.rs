@@ -13,6 +13,7 @@ pub type Artifact = PlainArtifact<Gui>;
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 pub struct GuiInputs {
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub repo_root:  RepoRoot,
     #[derivative(Debug = "ignore")]
     pub wasm:       BoxFuture<'static, Result<wasm::Artifact>>,

@@ -8,12 +8,14 @@ use crate::version::Versions;
 
 use crate::paths::pretty_print_arch;
 use anyhow::Context;
+use derivative::Derivative;
 use ide_ci::archive::is_archive_name;
 use ide_ci::extensions::os::OsExt;
 use ide_ci::goodie::GoodieDatabase;
 use octocrab::models::repos::Asset;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct BuildInput {
     pub repo_root: PathBuf,
     pub versions:  Versions,

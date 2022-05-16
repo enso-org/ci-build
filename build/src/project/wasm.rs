@@ -9,6 +9,7 @@ use crate::project::IsTarget;
 use crate::project::IsWatchable;
 
 use anyhow::Context;
+use derivative::Derivative;
 use ide_ci::env::Variable;
 use ide_ci::programs::cargo;
 use ide_ci::programs::wasm_pack;
@@ -76,8 +77,10 @@ pub enum ProfilingLevel {
     Debug,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct BuildInput {
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub repo_root:           RepoRoot,
     /// Path to the crate to be compiled to WAM. Relative to the repository root.
     pub crate_path:          PathBuf,

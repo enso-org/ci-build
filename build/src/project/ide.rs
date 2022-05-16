@@ -51,6 +51,7 @@ impl Artifact {
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 pub struct BuildInput {
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub repo_root:       RepoRoot,
     pub version:         Version,
     #[derivative(Debug = "ignore")]
