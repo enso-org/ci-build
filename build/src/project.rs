@@ -111,16 +111,6 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
                     this.adapt_artifact(destination).await
                 }
                 .boxed()
-                // let artifact_name = self.artifact_name().to_string();
-                // async move {
-                //     ide_ci::actions::artifacts::download_single_file_artifact(
-                //         artifact_name,
-                //         &destination,
-                //     )
-                //     .await?;
-                //     Self::Artifact::from_existing(destination).await
-                // }
-                // .boxed()
             }
             ExternalSource::CiRun(ci_run) => self.download_artifact(ci_run, destination),
             ExternalSource::LocalFile(source_path) => async move {
@@ -199,7 +189,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
             let extract_job = cache::archive::ExtractedArchive { archive_source };
             let directory = cache.get(extract_job).await?;
             ide_ci::fs::remove_if_exists(&destination)?;
-            symlink::symlink_auto(&directory, &destination)?;
+            ide_ci::fs::symlink_auto(&directory, &destination)?;
             this.adapt_artifact(destination).await
         }
         .instrument(span)

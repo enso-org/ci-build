@@ -510,7 +510,7 @@ impl Resolvable for ProjectManager {
     }
 }
 
-#[tracing::instrument(skip_all, fields(?target, ?get_task))]
+#[tracing::instrument(skip_all, fields(?target, ?get_task), err)]
 pub async fn get_resolved<Target>(
     target: Target,
     cache: Cache,

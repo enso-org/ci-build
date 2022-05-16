@@ -100,6 +100,12 @@ pub fn remove_if_exists(path: impl AsRef<Path>) -> Result {
     }
 }
 
+#[context("Failed to create symlink {} => {}", src.as_ref().display(), dst.as_ref().display())]
+pub fn symlink_auto(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result {
+    create_parent_dir_if_missing(&dst)?;
+    symlink::symlink_auto(&src, &dst).anyhow_err()
+}
+
 /// Recreate directory, so it exists and is empty.
 pub fn reset_dir(path: impl AsRef<Path>) -> Result {
     let path = path.as_ref();
