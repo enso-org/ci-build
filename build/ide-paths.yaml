@@ -40,3 +40,9 @@
 project-manager/:
   bin/:
     project-manager<exe>:
+  dist/:
+  runtime/:
+
+# https://enso.org/docs/developer/enso/distribution/distribution.html#layout-of-an-enso-version-package
+<enso_version_dist>/:
+  manifest.yaml:

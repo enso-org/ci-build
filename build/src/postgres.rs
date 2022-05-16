@@ -19,6 +19,7 @@ const POSTGRES_CONTAINER_DEFAULT_PORT: u16 = 5432;
 
 /// Environment variables used to configure the Postgres container.
 pub mod env {
+
     pub mod container {
         use ide_ci::define_env_var;
         define_env_var!(POSTGRES_DB, String);

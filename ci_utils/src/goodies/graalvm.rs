@@ -5,7 +5,6 @@ use crate::goodie::GoodieDatabase;
 use crate::models::config::RepoContext;
 
 use crate::programs::java;
-use platforms::TARGET_OS;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Gu;

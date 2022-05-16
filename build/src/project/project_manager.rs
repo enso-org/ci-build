@@ -9,26 +9,34 @@ use crate::version::Versions;
 use crate::paths::pretty_print_arch;
 use anyhow::Context;
 use ide_ci::archive::is_archive_name;
+use ide_ci::extensions::os::OsExt;
 use ide_ci::goodie::GoodieDatabase;
-use ide_ci::program::version::find_in_text;
 use octocrab::models::repos::Asset;
-use platforms::TARGET_ARCH;
-use platforms::TARGET_OS;
-use std::env::consts::EXE_SUFFIX;
-use std::lazy::SyncLazy;
 
 #[derive(Clone, Debug)]
 pub struct BuildInput {
     pub repo_root: PathBuf,
     pub versions:  Versions,
-    /// Necessary for GraalVM lookup.
+    /// Used for GraalVM release lookup.
+    ///
+    /// Default instance will suffice, but then we are prone to hit API limits. Authorized one will
+    /// likely do better.
     pub octocrab:  Octocrab,
 }
 
 #[derive(Clone, Debug)]
 pub struct Artifact {
-    pub path:     crate::paths::generated::ProjectManager,
-    pub versions: Versions,
+    /// Location of the Project Manager distribution.
+    pub path:            crate::paths::generated::ProjectManager,
+    /// Versions of Engine that are bundled in this Project Manager distribution.
+    ///
+    /// Technically a Project Manager bundle can be shipped with arbitrary number of Enso Engine
+    /// packages. However in packages we create it is almost always zero (for plain PM package) or
+    /// one (for full PM bundle).
+    ///
+    /// Artifacts built with [`ProjectManager::build_locally`] will have exactly one engine
+    /// bundled.
+    pub engine_versions: Vec<Version>,
 }
 
 impl AsRef<Path> for Artifact {
@@ -37,34 +45,65 @@ impl AsRef<Path> for Artifact {
     }
 }
 
-impl IsArtifact for Artifact {
-    fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
-        let path = crate::paths::generated::ProjectManager::new(path.as_ref(), EXE_SUFFIX);
-        async move {
-            let program_path = path.bin.project_managerexe.as_path();
-            ide_ci::fs::allow_owner_execute(program_path)?;
-            let output = Command::new(program_path).arg("--version").output_ok().await?;
-            let string = String::from_utf8(output.stdout)?;
-            let version = find_in_text(&string)?;
-            Ok(Self { path, versions: Versions::new(version) })
+impl IsArtifact for Artifact {}
+
+/// Retrieves a list of all Enso Engine versions that are bundled within a given Project Manager
+/// distribution.
+#[context("Failed to list bundled engine versions: {}", project_manager_bundle)]
+pub async fn bundled_engine_versions(
+    project_manager_bundle: &crate::paths::generated::ProjectManager,
+) -> Result<Vec<Version>> {
+    let mut ret = vec![];
+
+    let mut dir_reader = ide_ci::fs::tokio::read_dir(&project_manager_bundle.dist).await?;
+    while let Some(entry) = dir_reader.next_entry().await? {
+        if entry.metadata().await?.is_dir() {
+            ret.push(Version::from_str(entry.file_name().as_str())?);
         }
-        .boxed()
     }
+    Ok(ret)
 }
 
 #[derive(Clone, Debug)]
-pub struct ProjectManager;
+pub struct ProjectManager {
+    pub target_os: OS,
+}
+
+impl ProjectManager {
+    pub fn matches_platform(&self, name: &str) -> bool {
+        // Sample name: "project-manager-bundle-2022.1.1-nightly.2022-04-16-linux-amd64.tar.gz"
+        name.contains(self.target_os.as_str()) && name.contains(pretty_print_arch(TARGET_ARCH))
+        // TODO workaround for macOS and M1 (they should be allowed to use amd64 artifacts)
+    }
+}
 
 #[async_trait]
 impl IsTarget for ProjectManager {
     type BuildInput = BuildInput;
     type Artifact = Artifact;
 
-    fn artifact_name(&self) -> &str {
+    fn artifact_name(&self) -> String {
         // Version is not part of the name intentionally. We want to refer to PM bundles as
         // artifacts without knowing their version.
-        static NAME: SyncLazy<String> = SyncLazy::new(|| format!("project-manager-{}", TARGET_OS));
-        &*NAME
+        format!("project-manager-{}", self.target_os)
+    }
+
+    fn adapt_artifact(self, path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self::Artifact>> {
+        let path = crate::paths::generated::ProjectManager::new(
+            path.as_ref(),
+            self.target_os.exe_suffix(),
+        );
+        async move {
+            let engine_versions = bundled_engine_versions(&path).await?;
+
+            // let program_path = path.bin.project_managerexe.as_path();
+            // ide_ci::fs::allow_owner_execute(program_path)?;
+            // let output = Command::new(program_path).arg("--version").output_ok().await?;
+            // let string = String::from_utf8(output.stdout)?;
+            // let version = find_in_text(&string)?;
+            Ok(Artifact { path, engine_versions })
+        }
+        .boxed()
     }
 
     fn build_locally(
@@ -72,7 +111,13 @@ impl IsTarget for ProjectManager {
         input: Self::BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        let target_os = self.target_os;
+        let this = self.clone();
         async move {
+            ensure!(
+                target_os == TARGET_OS,
+                "Enso Project Manager cannot be built on '{target_os}' for target '{TARGET_OS}'.",
+            );
             let paths =
                 crate::paths::Paths::new_versions(&input.repo_root, input.versions.clone())?;
             let context = crate::engine::context::RunContext {
@@ -90,7 +135,8 @@ impl IsTarget for ProjectManager {
             let project_manager =
                 artifacts.bundles.project_manager.context("Missing project manager bundle!")?;
             ide_ci::fs::mirror_directory(&project_manager.dir, &output_path).await?;
-            Artifact::from_existing(output_path.as_ref()).await
+            this.adapt_artifact(output_path).await
+            // Artifact::from_existing(output_path.as_ref()).await
         }
         .boxed()
     }
@@ -100,16 +146,12 @@ impl IsTarget for ProjectManager {
             .into_iter()
             .find(|asset| {
                 let name = &asset.name;
-                matches_platform(name) && is_archive_name(name) && name.contains("project-manager")
+                self.matches_platform(name)
+                    && is_archive_name(name)
+                    && name.contains("project-manager")
             })
-            .context("Failed to find release asset with project manager bundle.")
+            .context("Failed to find release asset with Enso Project Manager bundle.")
     }
-}
-
-pub fn matches_platform(name: &str) -> bool {
-    // Sample name: "project-manager-bundle-2022.1.1-nightly.2022-04-16-linux-amd64.tar.gz"
-    name.contains(TARGET_OS.as_str()) && name.contains(pretty_print_arch(TARGET_ARCH))
-    // TODO workaround for macOS and M1 (they should be allowed to use amd64 artifacts)
 }
 
 #[cfg(test)]

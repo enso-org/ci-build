@@ -6,10 +6,8 @@ use crate::args::WhatToDo;
 use crate::paths::ComponentPaths;
 use crate::paths::Paths;
 
-use ide_ci::env::Variable;
 use ide_ci::future::AsyncPolicy;
 use ide_ci::models::config::RepoContext;
-use platforms::TARGET_OS;
 
 pub mod bundle;
 pub mod context;
@@ -183,7 +181,7 @@ impl ReleaseOperation {
         let command = args.command.clone().try_into()?;
         let repo = match args.repo.clone() {
             Some(repo) => repo,
-            None => ide_ci::actions::env::Repository.fetch()?,
+            None => ide_ci::actions::env::GITHUB_REPOSITORY.get()?,
         };
 
         Ok(Self { command, repo })

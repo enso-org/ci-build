@@ -126,8 +126,12 @@ impl IsTarget for Wasm {
     type BuildInput = BuildInput;
     type Artifact = Artifact;
 
-    fn artifact_name(&self) -> &str {
-        WASM_ARTIFACT_NAME
+    fn artifact_name(&self) -> String {
+        WASM_ARTIFACT_NAME.into()
+    }
+
+    fn adapt_artifact(self, path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self::Artifact>> {
+        ready(Ok(Artifact::new(path.as_ref()))).boxed()
     }
 
     fn build_locally(
@@ -300,11 +304,7 @@ impl AsRef<Path> for Artifact {
     }
 }
 
-impl IsArtifact for Artifact {
-    fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
-        ready(Ok(Artifact::new(path.as_ref()))).boxed()
-    }
-}
+impl IsArtifact for Artifact {}
 
 impl Wasm {
     pub async fn check(&self) -> Result {

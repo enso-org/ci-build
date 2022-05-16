@@ -1,8 +1,6 @@
 use crate::prelude::*;
 
 use ide_ci::env::Variable;
-use platforms::TARGET_ARCH;
-use platforms::TARGET_OS;
 use sysinfo::SystemExt;
 
 use crate::args;
@@ -182,7 +180,7 @@ impl RunContext {
         repo: &RepoContext,
     ) -> Result<octocrab::models::repos::Release> {
         let versions = &self.paths.triple.versions;
-        let commit = ide_ci::actions::env::Sha.fetch()?;
+        let commit = ide_ci::actions::env::GITHUB_SHA.get()?;
 
         let changelog_contents = ide_ci::fs::read_to_string(self.paths.changelog())?;
         let latest_changelog_body =

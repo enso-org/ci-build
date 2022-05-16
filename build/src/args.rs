@@ -71,7 +71,7 @@ pub fn default_kind() -> BuildKind {
 }
 
 pub fn default_repo() -> Option<RepoContext> {
-    ide_ci::actions::env::Repository.fetch().ok()
+    ide_ci::actions::env::GITHUB_REPOSITORY.get().ok()
 }
 
 pub fn parse_repo_context(value: &str) -> std::result::Result<Option<RepoContext>, String> {

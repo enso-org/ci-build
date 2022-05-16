@@ -18,24 +18,22 @@ pub mod ide;
 pub mod project_manager;
 pub mod wasm;
 
-pub trait IsArtifact: Clone + AsRef<Path> + Sized + Send + Sync + 'static {
-    fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>>;
-}
-
-impl IsArtifact for PathBuf {
-    fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
-        ready(Ok(path.as_ref().to_path_buf())).boxed()
-    }
-}
-
-/// The content, i.e. WASM, HTML, JS, assets.
-pub struct Artifact(pub PathBuf);
-
-impl From<&Path> for Artifact {
-    fn from(path: &Path) -> Self {
-        Artifact(path.into())
-    }
-}
+pub trait IsArtifact: Clone + AsRef<Path> + Sized + Send + Sync + 'static {}
+//
+// /// The content, i.e. WASM, HTML, JS, assets.
+// pub struct Artifact(pub PathBuf);
+//
+// impl Artifact {
+//     fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
+//         ready(Ok(path.as_ref().into())).boxed()
+//     }
+// }
+//
+// impl From<&Path> for Artifact {
+//     fn from(path: &Path) -> Self {
+//         Artifact(path.into())
+//     }
+// }
 
 #[derive(Clone, Debug)]
 pub struct PlainArtifact<T> {
@@ -49,15 +47,16 @@ impl<T> AsRef<Path> for PlainArtifact<T> {
     }
 }
 
-impl<T: Clone + Send + Sync + 'static> IsArtifact for PlainArtifact<T> {
-    fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
-        ready(Ok(PlainArtifact::new(path.as_ref()))).boxed()
-    }
-}
+impl<T: Clone + Send + Sync + 'static> IsArtifact for PlainArtifact<T> {}
 
 impl<T> PlainArtifact<T> {
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into(), phantom: default() }
+    }
+
+    fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>>
+    where T: Send + Sync + 'static {
+        ready(Ok(Self::new(path.as_ref()))).boxed()
     }
 }
 
@@ -74,8 +73,10 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
     /// Identifier used when uploading build artifacts to run.
     ///
     /// Note that this is not related to the assets name in the release.
-    fn artifact_name(&self) -> &str;
+    fn artifact_name(&self) -> String;
 
+    /// Create a full artifact description from an on-disk representation.
+    fn adapt_artifact(self, path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self::Artifact>>;
 
     fn get(
         &self,
@@ -95,6 +96,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         destination: PathBuf,
         cache: Cache,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        let this = self.clone();
         let span = info_span!("Getting artifact from an external source");
         match source {
             ExternalSource::OngoingCiRun(OngoingCiRunSource { artifact_name }) => {
@@ -106,7 +108,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
                         &destination,
                     )
                     .await?;
-                    Self::Artifact::from_existing(destination).await
+                    this.adapt_artifact(destination).await
                 }
                 .boxed()
                 // let artifact_name = self.artifact_name().to_string();
@@ -123,7 +125,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
             ExternalSource::CiRun(ci_run) => self.download_artifact(ci_run, destination),
             ExternalSource::LocalFile(source_path) => async move {
                 ide_ci::fs::mirror_directory(source_path, &destination).await?;
-                Self::Artifact::from_existing(destination).await
+                this.adapt_artifact(destination).await
             }
             .boxed(),
             ExternalSource::Release(release) => self.download_asset(release, destination, cache),
@@ -156,6 +158,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         let CiRunSource { run_id, artifact_name, repository, octocrab } = ci_run;
         let artifact_name = artifact_name.unwrap_or_else(|| self.artifact_name().to_string());
         let span = info_span!("Downloading CI Artifact.", %artifact_name, %repository, target = output_path.as_str());
+        let this = self.clone();
         async move {
             let artifact =
                 repository.find_artifact_by_name(&octocrab, run_id, &artifact_name).await?;
@@ -169,7 +172,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
                 output_path.as_ref().join(&artifact_name).with_appended_extension("tar.gz");
             ide_ci::archive::extract_to(&inner_archive_path, &output_path).await?;
             ide_ci::fs::remove_if_exists(&inner_archive_path)?;
-            Self::Artifact::from_existing(output_path).await
+            this.adapt_artifact(output_path).await
         }
         .instrument(span)
         .boxed()
@@ -189,6 +192,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         let span = info_span!("Downloading built target from a release asset.",
             asset_id = source.asset_id.0,
             repo = %source.repository);
+        let this = self.clone();
         async move {
             let ReleaseSource { asset_id, octocrab, repository } = &source;
             let archive_source = repository.download_asset_job(octocrab, *asset_id);
@@ -196,7 +200,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
             let directory = cache.get(extract_job).await?;
             ide_ci::fs::remove_if_exists(&destination)?;
             symlink::symlink_auto(&directory, &destination)?;
-            Self::Artifact::from_existing(destination).await
+            this.adapt_artifact(destination).await
         }
         .instrument(span)
         .boxed()
@@ -323,7 +327,7 @@ mod tests {
             octocrab:   Default::default(),
         });
 
-        ProjectManager
+        ProjectManager { target_os: TARGET_OS }
             .get_external(source, r"C:\temp\pm".into(), Cache::new_default().await?)
             .await?;
         Ok(())

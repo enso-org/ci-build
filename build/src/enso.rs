@@ -3,7 +3,6 @@ use crate::prelude::*;
 use ide_ci::env::Variable;
 use ide_ci::future::AsyncPolicy;
 use ide_ci::programs::docker::ContainerId;
-use platforms::TARGET_OS;
 
 use crate::paths::Paths;
 use crate::postgres;

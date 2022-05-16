@@ -1,7 +1,10 @@
-use crate::args::BuildKind;
 use crate::prelude::*;
+
+use crate::args::BuildKind;
+
 use anyhow::Context;
 use chrono::Datelike;
+use derivative::Derivative;
 use ide_ci::define_env_var;
 use ide_ci::env::new::TypedVariable;
 use ide_ci::models::config::RepoContext;
@@ -45,9 +48,11 @@ pub async fn latest_nightly_release(octocrab: &Octocrab, repo: &RepoContext) -> 
 }
 
 
-#[derive(Clone, Debug, Serialize, Deserialize, Shrinkwrap, PartialEq)]
+#[derive(Clone, Derivative, Serialize, Deserialize, Shrinkwrap, PartialEq)]
+#[derivative(Debug)]
 pub struct Versions {
     #[shrinkwrap(main_field)]
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub version:      Version,
     pub release_mode: bool,
 }

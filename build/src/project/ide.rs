@@ -6,24 +6,26 @@ use futures_util::future::try_join;
 use ide_ci::actions::artifacts::upload_compressed_directory;
 use ide_ci::actions::artifacts::upload_single_file;
 use ide_ci::actions::workflow::is_in_env;
-use platforms::TARGET_OS;
+
 
 pub struct Artifact {
+    /// Directory with unpacked client distribution.
     pub unpacked:       PathBuf,
-    // pub packed:         PathBuf,
+    /// File with the compressed client image (like installer or AppImage).
     pub image:          PathBuf,
+    /// File with the checksum of the image.
     pub image_checksum: PathBuf,
 }
 
 impl Artifact {
-    fn new(version: &Version, dist_dir: &Path) -> Self {
-        let unpacked = dist_dir.join(match TARGET_OS {
+    fn new(target_os: OS, version: &Version, dist_dir: impl AsRef<Path>) -> Self {
+        let unpacked = dist_dir.as_ref().join(match target_os {
             OS::Linux => "linux-unpacked",
             OS::MacOS => "mac",
             OS::Windows => "win-unpacked",
             _ => todo!("{TARGET_OS} is not supported"),
         });
-        let image = dist_dir.join(match TARGET_OS {
+        let image = dist_dir.as_ref().join(match target_os {
             OS::Linux => format!("enso-linux-{}.AppImage", version),
             OS::MacOS => format!("enso-mac-{}.dmg", version),
             OS::Windows => format!("enso-win-{}.exe", version),
@@ -45,12 +47,6 @@ impl Artifact {
         Ok(())
     }
 }
-//
-// impl IsArtifact for Artifact {
-//     fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
-//         todo!()
-//     }
-// }
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
@@ -75,7 +71,9 @@ pub enum OutputPath {
 
 
 #[derive(Clone, Debug)]
-pub struct Ide;
+pub struct Ide {
+    pub target_os: OS,
+}
 
 impl Ide {
     pub fn build(
@@ -83,11 +81,13 @@ impl Ide {
         input: BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Artifact>> {
-        let ide_desktop = crate::ide::web::IdeDesktop::new(&input.repo_root.app.ide_desktop);
+        let BuildInput { repo_root, version, project_manager, gui } = input;
+        let ide_desktop = crate::ide::web::IdeDesktop::new(&repo_root.app.ide_desktop);
+        let target_os = self.target_os;
         async move {
-            let (gui, project_manager) = try_join(input.gui, input.project_manager).await?;
-            ide_desktop.dist(&gui, &project_manager, &output_path).await?;
-            Ok(Artifact::new(&input.version, output_path.as_ref()))
+            let (gui, project_manager) = try_join(gui, project_manager).await?;
+            ide_desktop.dist(&gui, &project_manager, &output_path, target_os).await?;
+            Ok(Artifact::new(target_os, &version, output_path))
         }
         .boxed()
     }

@@ -3,7 +3,6 @@ use crate::prelude::*;
 use crate::ide::web::IdeDesktop;
 use crate::paths::generated::RepoRoot;
 use crate::project::wasm;
-use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
 use crate::project::PlainArtifact;
@@ -29,8 +28,12 @@ impl IsTarget for Gui {
     type BuildInput = GuiInputs;
     type Artifact = Artifact;
 
-    fn artifact_name(&self) -> &str {
-        "gui"
+    fn artifact_name(&self) -> String {
+        "gui".into()
+    }
+
+    fn adapt_artifact(self, path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self::Artifact>> {
+        Artifact::from_existing(path)
     }
 
     fn build_locally(

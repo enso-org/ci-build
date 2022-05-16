@@ -38,6 +38,7 @@ use crate::source::ReleaseSource;
 use crate::source::Source;
 use anyhow::Context;
 use clap::Parser;
+use derivative::Derivative;
 use futures_util::future::try_join;
 use ide_ci::actions::workflow::is_in_env;
 use ide_ci::cache::Cache;
@@ -53,14 +54,15 @@ use tempfile::tempdir;
 use tokio::process::Child;
 use tokio::runtime::Runtime;
 
-
 /// The basic, common information available in this application.
-#[derive(Clone, Debug)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct BuildContext {
     /// GitHub API client.
     ///
     /// If authorized, it will count API rate limits against our identity and allow operations like
     /// managing releases or downloading CI run artifacts.
+    #[derivative(Debug = "ignore")]
     pub octocrab: Octocrab,
 
     /// Version to be built.
@@ -79,10 +81,13 @@ pub struct BuildContext {
     /// version number.
     pub remote_repo: RepoContext,
 
+    /// Stores things like downloaded release assets to save time.
     pub cache: Cache,
 }
 
 impl BuildContext {
+    /// Setup common build environment information based on command line input and local
+    /// environment.
     pub async fn new(cli: &Cli) -> Result<Self> {
         let absolute_repo_path = cli.repo_path.absolutize()?;
         let octocrab = setup_octocrab()?;
@@ -93,7 +98,8 @@ impl BuildContext {
             &absolute_repo_path,
         )
         .await?;
-        let triple = TargetTriple::new(versions);
+        let mut triple = TargetTriple::new(versions);
+        triple.os = cli.target_os;
         triple.versions.publish()?;
         Ok(Self {
             octocrab,
@@ -173,7 +179,10 @@ impl BuildContext {
             Ok(ReleaseSource {
                 octocrab,
                 repository,
-                asset_id: target.find_asset(release.assets)?.id,
+                asset_id: target
+                    .find_asset(release.assets)
+                    .context(format!("Looking for asset in the release '{}'.", release.tag_name))?
+                    .id,
             })
         }
         .boxed()
@@ -182,7 +191,7 @@ impl BuildContext {
     pub fn commit(&self) -> BoxFuture<'static, Result<String>> {
         let root = self.source_root.clone();
         async move {
-            match ide_ci::actions::env::Sha.fetch() {
+            match ide_ci::actions::env::GITHUB_SHA.get() {
                 Ok(commit) => Ok(commit),
                 Err(_e) => Git::new(root).head_hash().await,
             }
@@ -221,16 +230,16 @@ impl BuildContext {
 
     pub fn get<Target>(
         &self,
-        target: Target,
         target_source: arg::Source<Target>,
     ) -> BoxFuture<'static, Result<Target::Artifact>>
     where
         Target: IsTarget + IsTargetSource + Send + Sync + 'static,
         Target: Resolvable,
     {
-        let get_task = self.resolve(target.clone(), target_source);
+        let target = self.target();
+        let get_task = self.target().map(|target| self.resolve(target, target_source));
         let cache = self.cache.clone();
-        async move { get_resolved(target, cache, get_task.await?).await }.boxed()
+        async move { get_resolved(target?, cache, get_task?.await?).await }.boxed()
     }
 
     pub fn repo_root(&self) -> RepoRoot {
@@ -277,7 +286,7 @@ impl BuildContext {
     pub fn handle_gui(&self, gui: arg::gui::Target) -> BoxFuture<'static, Result> {
         match gui.command {
             arg::gui::Command::Get { source } => {
-                let job = self.get(Gui, source);
+                let job = self.get(source);
                 job.void_ok().boxed()
             }
             arg::gui::Command::Watch { input } => self.watch_gui(input),
@@ -309,7 +318,7 @@ impl BuildContext {
         &self,
         project_manager: arg::project_manager::Target,
     ) -> BoxFuture<'static, Result> {
-        let job = self.get(ProjectManager, project_manager.source);
+        let job = self.get(project_manager.source);
         job.void_ok().boxed()
     }
 
@@ -392,7 +401,7 @@ impl BuildContext {
         source: arg::Source<ProjectManager>,
         custom_root: Option<PathBuf>,
     ) -> BoxFuture<'static, Result<Child>> {
-        let get_task = self.get(ProjectManager, source);
+        let get_task = self.get(source);
         async move {
             let project_manager = get_task.await?;
             let mut command = crate::programs::project_manager::spawn_from(&project_manager.path);
@@ -410,16 +419,23 @@ impl BuildContext {
     ) -> BoxFuture<'static, Result<ide::Artifact>> {
         let arg::ide::BuildInput { gui, project_manager, output_path } = params;
         let input = ide::BuildInput {
-            gui:             self.get(Gui, gui),
-            project_manager: self.get(ProjectManager, project_manager),
+            gui:             self.get(gui),
+            project_manager: self.get(project_manager),
             repo_root:       self.repo_root(),
             version:         self.triple.versions.version.clone(),
         };
-        Ide.build(input, output_path)
+        let target = Ide { target_os: self.triple.os };
+        target.build(input, output_path)
+    }
+
+    pub fn target<Target: Resolvable>(&self) -> Result<Target> {
+        Target::prepare_target(self)
     }
 }
 
-pub trait Resolvable: IsTarget + IsTargetSource {
+pub trait Resolvable: IsTarget + IsTargetSource + Clone {
+    fn prepare_target(context: &BuildContext) -> Result<Self>;
+
     fn resolve(
         ctx: &BuildContext,
         from: <Self as IsTargetSource>::BuildInput,
@@ -427,6 +443,10 @@ pub trait Resolvable: IsTarget + IsTargetSource {
 }
 
 impl Resolvable for Wasm {
+    fn prepare_target(_context: &BuildContext) -> Result<Self> {
+        Ok(Wasm {})
+    }
+
     fn resolve(
         ctx: &BuildContext,
         from: <Self as IsTargetSource>::BuildInput,
@@ -450,12 +470,16 @@ impl Resolvable for Wasm {
 }
 
 impl Resolvable for Gui {
+    fn prepare_target(_context: &BuildContext) -> Result<Self> {
+        Ok(Gui {})
+    }
+
     fn resolve(
         ctx: &BuildContext,
         from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
         Ok(gui::GuiInputs {
-            wasm:       ctx.get(Wasm, from.wasm),
+            wasm:       ctx.get(from.wasm),
             repo_root:  ctx.repo_root(),
             build_info: ctx.js_build_info(),
         })
@@ -463,6 +487,10 @@ impl Resolvable for Gui {
 }
 
 impl Resolvable for ProjectManager {
+    fn prepare_target(context: &BuildContext) -> Result<Self> {
+        Ok(ProjectManager { target_os: context.triple.os })
+    }
+
     fn resolve(
         ctx: &BuildContext,
         _from: <Self as IsTargetSource>::BuildInput,
@@ -578,7 +606,14 @@ mod tests {
             cache: Cache::new_default().await?,
         };
 
-        dbg!(context.resolve_release_designator(ProjectManager, "latest".into()).await)?;
+        dbg!(
+            context
+                .resolve_release_designator(
+                    ProjectManager { target_os: TARGET_OS },
+                    "latest".into()
+                )
+                .await
+        )?;
 
         Ok(())
     }

@@ -1,3 +1,5 @@
+#![feature(const_fmt_arguments_new)]
+#![feature(hash_set_entry)]
 #![feature(let_chains)]
 #![feature(min_specialization)]
 #![feature(exit_status_error)]
@@ -37,19 +39,20 @@ pub mod goodies;
 pub mod io;
 pub mod log;
 pub mod models;
+pub mod os;
 pub mod paths;
 pub mod platform;
 pub mod program;
 pub mod programs;
 pub mod reqwest;
 pub mod serde;
+
 pub mod prelude {
 
     pub type Result<T = ()> = anyhow::Result<T>;
     pub use anyhow::anyhow;
     pub use anyhow::bail;
     pub use anyhow::ensure;
-    // pub use anyhow::Context;
     pub use argh::FromArgs;
     pub use async_trait::async_trait;
     pub use bytes::Bytes;
@@ -82,6 +85,8 @@ pub mod prelude {
     pub use std::borrow::BorrowMut;
     pub use std::borrow::Cow;
     pub use std::collections::BTreeMap;
+    pub use std::collections::HashMap;
+    pub use std::collections::HashSet;
     pub use std::default::default;
     pub use std::ffi::OsStr;
     pub use std::ffi::OsString;
@@ -110,7 +115,6 @@ pub mod prelude {
     pub use tracing::error_span;
     pub use tracing::info;
     pub use tracing::info_span;
-    // pub use tracing::log;
     pub use tracing::span;
     pub use tracing::trace;
     pub use tracing::trace_span;
@@ -122,9 +126,22 @@ pub mod prelude {
 
     pub use crate::EMPTY_REQUEST_BODY;
 
-
     pub use crate::anyhow::ResultExt;
     pub use crate::env::Variable as EnvironmentVariable;
+    pub use crate::extensions::str::StrLikeExt;
+    pub use crate::github::RepoPointer;
+    pub use crate::goodie::Goodie;
+    pub use crate::os::target::TARGET_ARCH;
+    pub use crate::os::target::TARGET_OS;
+    pub use crate::program::command::Command;
+    pub use crate::program::command::IsCommandWrapper;
+    pub use crate::program::Program;
+    pub use crate::program::ProgramExt;
+    pub use crate::program::Shell;
+
+    pub use crate::env::new::RawVariable as _;
+    pub use crate::env::new::TypedVariable as _;
+    pub use crate::extensions::clap::ArgExt as _;
     pub use crate::extensions::command::CommandExt as _;
     pub use crate::extensions::from_string::FromString;
     pub use crate::extensions::future::FutureExt as _;
@@ -132,14 +149,6 @@ pub mod prelude {
     pub use crate::extensions::iterator::TryIteratorExt;
     pub use crate::extensions::output::OutputExt as _;
     pub use crate::extensions::path::PathExt as _;
-    pub use crate::extensions::str::StrLikeExt;
-    pub use crate::github::RepoPointer;
-    pub use crate::goodie::Goodie;
-    pub use crate::program::command::Command;
-    pub use crate::program::command::IsCommandWrapper;
-    pub use crate::program::Program;
-    pub use crate::program::ProgramExt;
-    pub use crate::program::Shell;
 
     pub fn into<T, U>(u: U) -> T
     where U: Into<T> {

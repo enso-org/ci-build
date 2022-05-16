@@ -36,23 +36,16 @@ pub fn is_self_hosted() -> Result<bool> {
     Ok(!name.starts_with("GitHub Actions"))
 }
 
-pub struct Repository;
-
-impl Variable for Repository {
-    const NAME: &'static str = "GITHUB_REPOSITORY";
-    type Value = RepoContext;
+crate::define_env_var! {
+    /// The owner and repository name. For example, `octocat/Hello-World`.
+    GITHUB_REPOSITORY, RepoContext
 }
-
-
-pub struct Sha;
-
-impl Variable for Sha {
-    const NAME: &'static str = "GITHUB_SHA";
+crate::define_env_var! {
+    /// The commit SHA that triggered the workflow. For example,
+    /// `"ffac537e6cbbf934b08745a378932722df287a53"`.
+    GITHUB_SHA, String
 }
-
-pub struct RunId;
-
-impl Variable for RunId {
-    const NAME: &'static str = "GITHUB_RUN_ID";
-    type Value = octocrab::models::RunId;
+crate::define_env_var! {
+    /// A unique number for each workflow run within a repository. This number does not change if you re-run the workflow run. For example, `1658821493`.
+    GITHUB_RUN_ID, octocrab::models::RunId
 }

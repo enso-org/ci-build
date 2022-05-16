@@ -126,6 +126,15 @@ impl<Assets, Output> Drop for ContentEnvironment<Assets, Output> {
     }
 }
 
+pub fn target_flag(os: OS) -> Result<&'static str> {
+    match os {
+        OS::Windows => Ok("--win"),
+        OS::Linux => Ok("--linux"),
+        OS::MacOS => Ok("--mac"),
+        _ => bail!("Not supported target for Electron client: {os}."),
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct IdeDesktop {
     pub package_dir: PathBuf,
@@ -210,12 +219,14 @@ impl IdeDesktop {
         dest = %output_path.as_ref().display(),
         ?gui,
         ?project_manager,
+        ?target_os,
         err))]
     pub async fn dist(
         &self,
         gui: &crate::project::gui::Artifact,
         project_manager: &crate::project::project_manager::Artifact,
         output_path: impl AsRef<Path>,
+        target_os: OS,
     ) -> Result {
         self.npm()?.install().run_ok().await?;
         let content_build = self
@@ -241,6 +252,8 @@ impl IdeDesktop {
             .workspace(Workspaces::Enso)
             // .args(["--loglevel", "verbose"])
             .run("dist", EMPTY_ARGS)
+            .arg("--")
+            .arg(target_flag(target_os)?)
             .run_ok()
             .await?;
 

@@ -7,8 +7,6 @@ use crate::fs::expect_file;
 use crate::io::download_and_extract;
 use crate::programs::Bash;
 use lazy_static::lazy_static;
-use platforms::TARGET_ARCH;
-use platforms::TARGET_OS;
 use std::env::consts::EXE_EXTENSION;
 use std::env::consts::EXE_SUFFIX;
 

@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-use lazy_static::lazy_static;
 use regex::Regex;
 
 lazy_static! {
@@ -43,7 +42,7 @@ pub fn multi_replace_all<'a, 'b>(
         .fold(init, |text, replacement| replacement.replace_all(&text).to_string())
 }
 
-/// Workaround fix by wdanilo, see: https://github.com/rustwasm/wasm-pack/issues/790
+/// Workaround fix by wdanilo, see: <https://github.com/rustwasm/wasm-pack/issues/790>
 pub fn js_workaround_patcher(code: impl Into<String>) -> Result<String> {
     let patched_code = multi_replace_all(code, REPLACEMENTS.as_slice());
     let epilogue = r"export function after_load(w,m) { wasm = w; init.__wbindgen_wasm_module = m;}";

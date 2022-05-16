@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
 use crate::env::new::TypedVariable;
-use platforms::TARGET_OS;
 use shrinkwraprs::Shrinkwrap;
 use std::collections::HashMap;
 use std::fmt::Formatter;

@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-// use crate::cli::arg::AppExt;
 use crate::cli::arg::ArgExt;
 use crate::cli::arg::OutputPath;
 use crate::cli::arg::Source;
@@ -54,24 +53,24 @@ impl From<ProfilingLevel> for crate::project::wasm::ProfilingLevel {
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInputs {
     /// Which crate should be treated as a WASM entry point. Relative path from source root.
-    #[clap(default_value = crate::project::wasm::TARGET_CRATE, long, prefixed_env())]
+    #[clap(default_value = crate::project::wasm::TARGET_CRATE, long, enso_env())]
     pub crate_path: PathBuf,
 
     /// Profile that is passed to wasm-pack.
-    #[clap(long, arg_enum, default_value_t = Profile::Release, prefixed_env())]
+    #[clap(long, arg_enum, default_value_t = Profile::Release, enso_env())]
     pub wasm_profile: Profile,
 
     /// Additional options to be passed to Cargo.
-    #[clap(last = true, prefixed_env())]
+    #[clap(last = true, enso_env())]
     pub cargo_options: Vec<String>,
 
     /// Compiles Enso with given profiling level. If not set, defaults to minimum.
-    #[clap(long, arg_enum, prefixed_env())]
+    #[clap(long, arg_enum, enso_env())]
     pub profiling_level: Option<ProfilingLevel>,
 
     /// Fail the build if compressed WASM exceeds the specified size. Supports format like
     /// "4.06MiB".
-    #[clap(long, prefixed_env())]
+    #[clap(long, enso_env())]
     pub wasm_size_limit: Option<byte_unit::Byte>,
 }
 

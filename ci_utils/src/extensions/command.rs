@@ -14,18 +14,18 @@ pub trait CommandExt {
     fn describe(&self) -> String {
         let mut ret = String::new();
         let pretty_printed = format!("{:?}", self.as_std());
-        let _ = writeln!(ret, "Command:\n\t{}", pretty_printed);
+        let _ = write!(ret, "Command:\n\t{}", pretty_printed);
         if let Some(cwd) = self.as_std().get_current_dir() {
-            let _ = writeln!(ret, "\twith working directory: {}", cwd.display());
+            let _ = write!(ret, "\n\twith working directory: {}", cwd.display());
         };
         let env = self.as_std().get_envs();
         if !env.is_empty() {
-            let _ = writeln!(ret, "\twith environment overrides:");
+            let _ = write!(ret, "\n\twith environment overrides:");
         }
         for (name, val) in self.as_std().get_envs() {
-            let _ = writeln!(
+            let _ = write!(
                 ret,
-                "\t\t{}={}",
+                "\n\t\t{}={}",
                 name.to_string_lossy(),
                 val.map_or(default(), OsStr::to_string_lossy)
             );

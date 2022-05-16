@@ -3,8 +3,6 @@ use std::env::consts::EXE_EXTENSION;
 use std::fmt::Formatter;
 
 use crate::version::Versions;
-use platforms::TARGET_ARCH;
-use platforms::TARGET_OS;
 
 pub mod generated {
     include!(concat!(env!("OUT_DIR"), "/paths.rs"));
@@ -84,10 +82,10 @@ pub struct TargetTriple {
 }
 
 impl TargetTriple {
+    /// Create a new triple with OS and architecture are inferred from the hosting system.
     pub fn new(versions: Versions) -> Self {
         Self { os: TARGET_OS, arch: TARGET_ARCH, versions }
     }
-
 
     /// Pretty prints architecture for our packages. Conform to GraalVM scheme as well.
     pub fn arch(&self) -> &'static str {
@@ -222,7 +220,7 @@ pub fn root_to_changelog(root: impl AsRef<Path>) -> PathBuf {
 }
 
 /// The default value of `ENSO_DATA_DIRECTORY`.
-/// See: https://enso.org/docs/developer/enso/distribution/distribution.html#installed-enso-distribution-layout
+/// See: <https://enso.org/docs/developer/enso/distribution/distribution.html#installed-enso-distribution-layout>
 pub fn default_data_directory() -> PathBuf {
     let project_path = match TARGET_OS {
         OS::MacOS => "org.enso",
