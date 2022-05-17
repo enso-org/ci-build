@@ -76,23 +76,28 @@ pub struct BuildInputs {
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
+    /// Build the WASM package.
     Build {
         #[clap(flatten)]
         params:      BuildInputs,
         #[clap(flatten)]
         output_path: OutputPath<Wasm>,
     },
+    /// Lint the coodebase.
     Check,
+    /// Get the WASM artifacts from arbitrary source (e.g. release).
     Get {
         #[clap(flatten)]
         source: Source<Wasm>,
     },
+    /// Start an ongoing watch process that rebuilds WASM when its sources are touched.
     Watch {
         #[clap(flatten)]
         params:      BuildInputs,
         #[clap(flatten)]
         output_path: OutputPath<Wasm>,
     },
+    /// Run the unit tests.
     Test {
         /// Skip the native (non-WASM) Rust tests.
         #[clap(long)]
@@ -105,7 +110,7 @@ pub enum Command {
 
 #[derive(Args, Clone, Debug)]
 pub struct Target {
-    /// Command for GUI package.
+    /// Command for WASM part of GUI (aka the Rust part).
     #[clap(subcommand, name = "command")]
     pub command: Command,
 }

@@ -11,7 +11,7 @@ source_args_hlp!(ProjectManager, "project-manager", BuildInput);
 
 #[derive(Args, Clone, Debug)]
 pub struct Target {
-    /// Command for GUI package.
+    /// Command for GUI package (i.e. Rust + JS content).
     #[clap(flatten)]
     pub source: Source<ProjectManager>,
 }
