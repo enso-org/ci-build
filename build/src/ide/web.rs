@@ -29,6 +29,7 @@ pub const ARCHIVED_ASSET_FILE: &str = "ide-assets-main/content/assets/";
 
 
 pub mod env {
+    use super::*;
     use ide_ci::define_env_var;
 
     define_env_var!(ENSO_BUILD_IDE, PathBuf);
@@ -38,6 +39,7 @@ pub mod env {
     define_env_var!(ENSO_BUILD_GUI_WASM, PathBuf);
     define_env_var!(ENSO_BUILD_GUI_JS_GLUE, PathBuf);
     define_env_var!(ENSO_BUILD_GUI_ASSETS, PathBuf);
+    define_env_var!(ENSO_BUILD_IDE_BUNDLED_ENGINE_VERSION, Version);
 }
 
 #[derive(Clone, Debug)]
@@ -229,11 +231,18 @@ impl IdeDesktop {
         target_os: OS,
     ) -> Result {
         self.npm()?.install().run_ok().await?;
+
+        let engine_version_to_use = project_manager.engine_versions.iter().max();
+        if engine_version_to_use.is_none() {
+            warn!("Bundled Project Manager does not contain any Engine.");
+        }
+
         let content_build = self
             .npm()?
             .set_env(env::ENSO_BUILD_GUI, gui.as_ref())?
             .set_env(env::ENSO_BUILD_PROJECT_MANAGER, project_manager.as_ref())?
             .set_env(env::ENSO_BUILD_IDE, output_path.as_ref())?
+            .set_env_opt(env::ENSO_BUILD_IDE_BUNDLED_ENGINE_VERSION, engine_version_to_use)?
             .workspace(Workspaces::Enso)
             .run("build", EMPTY_ARGS)
             .run_ok();
@@ -242,6 +251,7 @@ impl IdeDesktop {
         let icons_dist = TempDir::new()?;
         let icons_build = self.build_icons(&icons_dist);
         let (icons, _content) = try_join(icons_build, content_build).await?;
+
 
         self.npm()?
             .try_applying(&icons)?

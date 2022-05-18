@@ -310,7 +310,7 @@ impl BuildContext {
         async move {
             let source = source.await?;
             let mut wasm_watcher = wasm_target.watch(source, cache).await?;
-            let input = gui::GuiInputs {
+            let input = gui::BuildInput {
                 repo_root,
                 build_info,
                 wasm: ready(Ok(wasm_watcher.as_ref().clone())).boxed(),
@@ -485,7 +485,7 @@ impl Resolvable for Gui {
         ctx: &BuildContext,
         from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
-        Ok(gui::GuiInputs {
+        Ok(gui::BuildInput {
             wasm:       ctx.get(from.wasm),
             repo_root:  ctx.repo_root(),
             build_info: ctx.js_build_info(),

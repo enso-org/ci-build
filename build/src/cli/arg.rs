@@ -19,7 +19,7 @@ use octocrab::models::RunId;
 /// The prefix that will be used when reading the build script arguments from environment.
 pub const ENVIRONMENT_VARIABLE_NAME_PREFIX: &str = "ENSO_BUILD";
 
-pub const DEFAULT_REMOTE_REPOSITORY: &str = "enso-org/enso";
+pub const DEFAULT_REMOTE_REPOSITORY_FALLBACK: &str = "enso-org/enso";
 
 pub fn default_repo_path() -> Option<PathBuf> {
     crate::repo::deduce_repository_path()
@@ -28,7 +28,7 @@ pub fn default_repo_path() -> Option<PathBuf> {
 pub fn default_repo_remote() -> RepoContext {
     ide_ci::actions::env::GITHUB_REPOSITORY
         .get()
-        .unwrap_or_else(|_| RepoContext::from_str("DEFAULT_REMOTE_REPOSITORY").unwrap())
+        .unwrap_or_else(|_| RepoContext::from_str(DEFAULT_REMOTE_REPOSITORY_FALLBACK).unwrap())
 }
 
 pub fn default_cache_path() -> Option<PathBuf> {
@@ -47,7 +47,7 @@ impl<'h> ArgExt<'h> for Arg<'h> {
     }
 }
 
-/// We pass CLI paths through this to make sure that they are absolutized against the initial
+/// We pass CLI paths through this to make sure that they are resolved against the initial
 /// working directory, not whatever it will be set to later.
 pub fn normalize_path(path: &str) -> Result<PathBuf> {
     let ret = PathBuf::from(path);
@@ -56,6 +56,8 @@ pub fn normalize_path(path: &str) -> Result<PathBuf> {
 }
 
 /// Collection of strings used by CLI that are specific to a given target.
+///
+/// Having a common interface to them allows reusing code for `clap`-based structures.
 pub trait IsTargetSource {
     const SOURCE_NAME: &'static str;
     const PATH_NAME: &'static str;
@@ -119,24 +121,21 @@ pub struct Cli {
     /// The GitHub repository with the project. This is mainly used to manage releases (checking
     /// released versions to generate a new one, or uploading release assets).
     /// The argument should follow the format `owner/repo_name`.
-    #[clap(long, default_value = "enso/enso-staging", enso_env())] // FIXME
+    #[clap(long, default_value_t = default_repo_remote(), enso_env())]
     pub repo_remote: RepoContext,
 
     /// The build kind. Affects the default version generation.
     #[clap(long, arg_enum, default_value_t = BuildKind::Dev, enso_env())]
     pub build_kind: BuildKind,
 
+    /// Platform to target. Currently cross-compilation is enabled only for GUI/IDE (without
+    /// Project Manager) on platforms where Electron Builder supports this.
     #[clap(long, default_value_t = TARGET_OS, enso_env(), possible_values=[OS::Windows.as_str(), OS::Linux.as_str(), OS::MacOS.as_str()])]
     pub target_os: OS,
 
     #[clap(subcommand)]
     pub target: Target,
 }
-
-// pub fn parse_os(text: &str) -> Result<OS> {
-//     use std::str::FromStr;
-//     OS::from_str(text).anyhow_err()
-// }
 
 /// Describe where to get a target artifacts from.
 ///
@@ -195,6 +194,7 @@ pub struct OutputPath<Target: IsTargetSource> {
     /// Directory where artifacts should be placed.
     #[clap(name = Target::OUTPUT_PATH_NAME, long, parse(try_from_str=normalize_path), default_value = Target::DEFAULT_OUTPUT_PATH, enso_env())]
     pub output_path: PathBuf,
+    #[allow(missing_docs)]
     #[clap(skip)]
     pub phantom:     PhantomData<Target>,
 }

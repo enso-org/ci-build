@@ -79,7 +79,6 @@ impl ProjectManager {
     }
 }
 
-#[async_trait]
 impl IsTarget for ProjectManager {
     type BuildInput = BuildInput;
     type Artifact = Artifact;
@@ -97,12 +96,6 @@ impl IsTarget for ProjectManager {
         );
         async move {
             let engine_versions = bundled_engine_versions(&path).await?;
-
-            // let program_path = path.bin.project_managerexe.as_path();
-            // ide_ci::fs::allow_owner_execute(program_path)?;
-            // let output = Command::new(program_path).arg("--version").output_ok().await?;
-            // let string = String::from_utf8(output.stdout)?;
-            // let version = find_in_text(&string)?;
             Ok(Artifact { path, engine_versions })
         }
         .boxed()

@@ -11,6 +11,7 @@ use reqwest::header::ACCEPT;
 use reqwest::header::ACCEPT_ENCODING;
 use tokio::fs::create_dir_all;
 
+#[derive(Clone, Debug)]
 pub struct ArtifactDownloader {
     pub client:        SessionClient,
     pub artifact_name: String,

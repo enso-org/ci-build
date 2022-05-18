@@ -18,26 +18,17 @@ pub mod ide;
 pub mod project_manager;
 pub mod wasm;
 
+/// A built target, contained under a single directory.
+///
+/// The `AsRef<Path>` trait must return that directory path.
 pub trait IsArtifact: Clone + AsRef<Path> + Sized + Send + Sync + 'static {}
-//
-// /// The content, i.e. WASM, HTML, JS, assets.
-// pub struct Artifact(pub PathBuf);
-//
-// impl Artifact {
-//     fn from_existing(path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self>> {
-//         ready(Ok(path.as_ref().into())).boxed()
-//     }
-// }
-//
-// impl From<&Path> for Artifact {
-//     fn from(path: &Path) -> Self {
-//         Artifact(path.into())
-//     }
-// }
 
+/// Plain artifact is just a folder with... things.
 #[derive(Clone, Debug)]
 pub struct PlainArtifact<T> {
+    /// Directory path.
     pub path:    PathBuf,
+    /// Phantom, so we can tell artifacts of different projects apart.
     pub phantom: PhantomData<T>,
 }
 

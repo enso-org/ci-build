@@ -90,6 +90,18 @@ pub trait IsCommandWrapper {
         Ok(self)
     }
 
+    fn set_env_opt<T: TypedVariable, V: Borrow<T::Borrowed> + ?Sized>(
+        &mut self,
+        variable: T,
+        value: Option<&V>,
+    ) -> Result<&mut Self> {
+        if let Some(value) = value {
+            self.set_env(variable, value)
+        } else {
+            Ok(self)
+        }
+    }
+
     ///////////
 
     fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Self {

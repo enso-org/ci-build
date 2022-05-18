@@ -8,7 +8,8 @@ impl Program for SevenZip {
         "7z"
     }
     fn executable_name_fallback() -> Vec<&'static str> {
-        vec!["7za"]
+        // 7zz is reportedly used sometimes on macOS
+        vec!["7za", "7zz"]
     }
 
     fn default_locations(&self) -> Vec<PathBuf> {

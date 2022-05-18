@@ -70,6 +70,18 @@ pub fn run(os: OS, command_line: impl AsRef<str>) -> Step {
     }
 }
 
+pub fn cancel_workflow_action() -> Step {
+    Step {
+        name: Some("Cancel Previous Runs".into()),
+        uses: Some("styfle/cancel-workflow-action@0.9.1".into()),
+        with: Some(step::Argument::Other(HashMap::from_iter([(
+            "access_token".into(),
+            "${{ github.token }}".into(),
+        )]))),
+        ..default()
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JobId(String);
 
@@ -201,6 +213,8 @@ pub enum RunnerLabel {
     LinuxLatest,
     #[serde(rename = "windows-latest")]
     WindowsLatest,
+    #[serde(rename = "X64")]
+    X64,
 }
 
 pub fn runs_on(os: OS) -> Vec<RunnerLabel> {
@@ -256,6 +270,34 @@ pub trait JobArchetype {
 
 pub mod job {
     use super::*;
+
+    pub struct AssertChangelog;
+    impl JobArchetype for AssertChangelog {
+        fn job(os: OS) -> Job {
+            Job {
+                name: "Assert if CHANGELOG.md was updated (on pull request)".into(),
+                runs_on: runs_on(os),
+                steps: vec![Step {
+                    run: Some("if [[ ${{ contains(steps.changed_files.outputs.list,'CHANGELOG.md') || contains(github.event.head_commit.message,'[ci no changelog needed]') || contains(github.event.pull_request.body,'[ci no changelog needed]') }} == false ]]; then exit 1; fi".into()),
+                    r#if: Some("github.base_ref == 'develop' || github.base_ref == 'unstable' || github.base_ref == 'stable'".into()),
+                    ..default()
+                }],
+                ..default()
+            }
+        }
+    }
+
+    pub struct CancelWorkflow;
+    impl JobArchetype for CancelWorkflow {
+        fn job(os: OS) -> Job {
+            Job {
+                name: "Cancel Previous Runs".into(),
+                runs_on: runs_on(os),
+                steps: vec![cancel_workflow_action()],
+                ..default()
+            }
+        }
+    }
 
     pub struct Lint;
     impl JobArchetype for Lint {
@@ -326,6 +368,8 @@ mod tests {
             Workflow { name: "GUI CI".into(), on: Event { push: Some(push_event) }, ..default() };
 
         let primary_os = OS::Linux;
+        workflow.add::<job::AssertChangelog>(primary_os);
+        workflow.add::<job::CancelWorkflow>(primary_os);
         workflow.add::<job::Lint>(primary_os);
         workflow.add::<job::WasmTest>(primary_os);
         workflow.add::<job::NativeTest>(primary_os);

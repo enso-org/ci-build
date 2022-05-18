@@ -7,7 +7,7 @@ use ide_ci::actions::artifacts::upload_compressed_directory;
 use ide_ci::actions::artifacts::upload_single_file;
 use ide_ci::actions::workflow::is_in_env;
 
-
+#[derive(Clone, Debug)]
 pub struct Artifact {
     /// Directory with unpacked client distribution.
     pub unpacked:       PathBuf,
@@ -53,6 +53,7 @@ impl Artifact {
 pub struct BuildInput {
     #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub repo_root:       RepoRoot,
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub version:         Version,
     #[derivative(Debug = "ignore")]
     pub project_manager: BoxFuture<'static, Result<crate::project::project_manager::Artifact>>,
@@ -60,6 +61,7 @@ pub struct BuildInput {
     pub gui:             BoxFuture<'static, Result<crate::project::gui::Artifact>>,
 }
 
+#[derive(Clone, Debug)]
 pub enum OutputPath {
     /// The job must place the artifact under given path.
     Required(PathBuf),

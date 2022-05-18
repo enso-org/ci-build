@@ -12,7 +12,7 @@ pub type Artifact = PlainArtifact<Gui>;
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-pub struct GuiInputs {
+pub struct BuildInput {
     #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub repo_root:  RepoRoot,
     #[derivative(Debug = "ignore")]
@@ -26,7 +26,7 @@ pub struct Gui;
 
 #[async_trait]
 impl IsTarget for Gui {
-    type BuildInput = GuiInputs;
+    type BuildInput = BuildInput;
     type Artifact = Artifact;
 
     fn artifact_name(&self) -> String {

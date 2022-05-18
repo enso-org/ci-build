@@ -94,6 +94,7 @@ pub trait RepoPointer: Display {
             .context(format!("Failed to find release by id `{release_id}` in `{self}`."))
     }
 
+    #[tracing::instrument(skip(client), fields(%self, %text), err, ret)]
     async fn find_release_by_text(
         &self,
         client: &Octocrab,
@@ -106,6 +107,7 @@ pub trait RepoPointer: Display {
             .context(format!("No release with tag matching `{text}` in {self}."))
     }
 
+    #[tracing::instrument(skip(client), fields(%self, %run_id, %name), err, ret)]
     async fn find_artifact_by_name(
         &self,
         client: &Octocrab,
@@ -175,7 +177,7 @@ pub trait RepoPointer: Display {
         self.download_asset_job(client, asset_id).send_request().await
     }
 
-    #[tracing::instrument(name="Download the asset to a file.", skip(client,output_path), fields(self=%self, dest=%output_path.as_ref().display()), err)]
+    #[tracing::instrument(name="Download the asset to a file.", skip(client, output_path), fields(self=%self, dest=%output_path.as_ref().display()), err)]
     async fn download_asset_as(
         &self,
         client: &Octocrab,
