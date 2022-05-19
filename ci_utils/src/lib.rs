@@ -53,7 +53,6 @@ pub mod prelude {
     pub use anyhow::anyhow;
     pub use anyhow::bail;
     pub use anyhow::ensure;
-    pub use argh::FromArgs;
     pub use async_trait::async_trait;
     pub use bytes::Bytes;
     pub use derive_more::Display;

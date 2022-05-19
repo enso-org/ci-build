@@ -160,15 +160,15 @@ impl RunContext {
         // Make sure that Graal has installed the optional components that we need.
         // Some are not supported on Windows, in part because their runtime (Sulong) is not.
         // See e.g. https://github.com/oracle/graalpython/issues/156
-        let conditional_components: &[&str] =
-            if graalvm::sulong_supported() { &["python", "r"] } else { &[] };
-        graalvm::Gu
-            .cmd()?
-            .arg("install")
-            .arg("native-image")
-            .args(conditional_components)
-            .run_ok()
-            .await?;
+        let conditional_components: &[graalvm::ComponentId] = if graalvm::sulong_supported() {
+            &[graalvm::ComponentId::Python, graalvm::ComponentId::R]
+        } else {
+            &[]
+        };
+
+        let required_components = once(graalvm::ComponentId::NativeImage)
+            .chain(conditional_components.into_iter().copied());
+        graalvm::install_missing_components(required_components).await?;
         Ok(())
     }
 

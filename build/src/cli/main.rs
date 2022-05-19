@@ -46,6 +46,7 @@ use ide_ci::global;
 use ide_ci::log::setup_logging;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::cargo;
+use ide_ci::programs::rustc;
 use ide_ci::programs::Cargo;
 use ide_ci::programs::Git;
 use std::any::type_name;
@@ -292,6 +293,10 @@ impl BuildContext {
 
     pub fn handle_gui(&self, gui: arg::gui::Target) -> BoxFuture<'static, Result> {
         match gui.command {
+            // arg::gui::Command::Build { input } => {
+            //     let source = arg::Source::BuildLocally(input);
+            //     self.handle_gui(arg::gui::Target { command: arg::gui::Command::Get { source } })
+            // }
             arg::gui::Command::Get { source } => {
                 let job = self.get(source);
                 job.void_ok().boxed()
@@ -559,11 +564,13 @@ pub async fn main_internal() -> Result {
             Cargo
                 .cmd()?
                 .current_dir(ctx.repo_root())
-                .arg("clippy")
+                .arg(cargo::clippy::COMMAND)
                 .apply(&cargo::Options::Workspace)
                 .apply(&cargo::Options::Package("enso-integration-test".into()))
                 .apply(&cargo::Options::AllTargets)
-                .args(["--", "-D", "warnings"])
+                .apply(&cargo::Color::Always)
+                .arg("--")
+                .apply(&rustc::Option::Deny(rustc::Lint::Warnings))
                 .run_ok()
                 .await?;
 

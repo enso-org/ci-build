@@ -2,10 +2,13 @@ use enso_build::prelude::*;
 
 use enso_build::args::Args;
 use enso_build::engine::RunContext;
+use ide_ci::log::setup_logging;
 
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    setup_logging();
+
     // We want arg parsing to be the very first thing, so when user types wrong arguments, the error
     // diagnostics will be first and only thing that is output.
     let args: Args = argh::from_env();

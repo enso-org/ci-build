@@ -13,6 +13,7 @@ pub mod npx;
 pub mod pwsh;
 pub mod robocopy;
 pub mod rsync;
+pub mod rustc;
 pub mod rustup;
 pub mod sbt;
 pub mod seven_zip;

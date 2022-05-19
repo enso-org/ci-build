@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use std::time::Duration;
 
 use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
@@ -16,51 +15,13 @@ use ide_ci::programs::wasm_pack;
 use ide_ci::programs::Cargo;
 use ide_ci::programs::WasmPack;
 use semver::VersionReq;
+use std::time::Duration;
 use tempfile::tempdir;
 use tokio::process::Child;
 
+pub mod env;
 pub mod js_patcher;
 pub mod test;
-
-pub mod env {
-    ide_ci::define_env_var! {
-        /// Enable a Rust unstable feature that the `#[profile]` macro uses to obtain source-file
-        /// and line number information to include in generated profile files.
-        ///
-        /// The IntelliJ Rust plugin does not support the `proc_macro_span` Rust feature; using it
-        /// causes JetBrains IDEs to become entirely unaware of the items produced by `#[profile]`.
-        /// (See: https://github.com/intellij-rust/intellij-rust/issues/8655)
-        ///
-        /// In order to have line number information in actual usage, but keep everything
-        /// understandable by JetBrains IDEs, we need IntelliJ/CLion to build crates differently
-        /// from how they are built for the application to be run. This is accomplished by gating
-        /// the use of the unstable functionality by a `cfg` flag. A `cfg` flag is disabled by
-        /// default, so when a Rust IDE builds crates internally in order to determine macro
-        /// expansions, it will do so without line numbers. When this script is used to build the
-        /// application, it is not for the purpose of IDE macro expansion, so we can safely enable
-        /// line numbers.
-        ///
-        /// The reason we don't use a Cargo feature for this is because this script can build
-        /// different crates, and we'd like to enable this feature when building any crate that
-        /// depends on the `profiler` crates. We cannot do something like
-        /// '--feature=enso_profiler/line-numbers' without causing build to fail when building a
-        /// crate that doesn't have `enso_profiler` in its dependency tree.
-        ENSO_ENABLE_PROC_MACRO_SPAN, bool
-    }
-
-    ide_ci::define_env_var! {
-        /// Use the environment-variable API provided by the `enso_profiler_macros` library to
-        /// implement the public interface to profiling-level configuration (see:
-        /// https://github.com/enso-org/design/blob/main/epics/profiling/implementation.md)
-        ENSO_MAX_PROFILING_LEVEL, super::ProfilingLevel
-    }
-
-
-    ide_ci::define_env_var! {
-        /// The timeout in `wasm-bindgen-test-runner` in seconds.
-        WASM_BINDGEN_TEST_TIMEOUT, u64
-    }
-}
 
 pub const INTEGRATION_TESTS_WASM_TIMEOUT: Duration = Duration::from_secs(300);
 pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
@@ -376,7 +337,6 @@ impl Wasm {
             .args(additional_options)
             .run_ok()
             .await
-        // FIXME additional args
         // PM will be automatically killed by dropping the handle.
     }
 }
@@ -410,111 +370,10 @@ mod tests {
         Ok(())
     }
 
-    // pub struct WasmWatcher {
-    //     /// Drop this field to stop the event generation job.
-    //     _tx:                 tokio::sync::watch::Sender<WorkingData>,
-    //     pub ongoing_build:   Arc<Mutex<Option<JoinHandle<Result<Artifacts>>>>>,
-    //     pub event_generator: JoinHandle<std::result::Result<(), CriticalError>>,
-    // }
-    // impl WasmWatcher {
-    //     pub fn new(input: RepoRoot, output_path: PathBuf) -> Result<Self> {
-    //         let mut initial_config = WorkingData::default();
-    //         initial_config.pathset = vec![input.path.clone().into()];
-    //
-    //         let (tx, rx) = tokio::sync::watch::channel(default());
-    //         // We cannot just use initial value when creating the channel, as the watchexec
-    // expects         // at least one change.
-    //         tx.send(initial_config)?;
-    //         let (errors_tx, errors_rx) = tokio::sync::mpsc::channel(1024);
-    //         let (event_tx, mut event_rx) = tokio::sync::mpsc::channel(1024);
-    //         let event_generator = watchexec::fs::worker(rx, errors_tx, event_tx);
-    //
-    //         let event_generator = tokio::spawn(event_generator);
-    //         // let ok_stream = to_stream(event_rx).map(Result::Ok);
-    //         // let err_stream = to_stream(errors_rx).map(|e: RuntimeError|
-    // Result::Err(e.into()));         // let mut stream = futures::stream::select(ok_stream,
-    // err_stream);
-    //
-    //         let mut ongoing_build = Arc::new(Mutex::new(None));
-    //         let ret = Self { _tx: tx, ongoing_build, event_generator };
-    //         let ongoing_build = ret.ongoing_build.clone();
-    //         let event_processor = async move {
-    //             debug!("Awaiting events");
-    //             //while let Some(msg) = stream.next().await {
-    //             while let Some(msg) = event_rx.recv().await {
-    //                 trace!("Received a new event: {msg:#?}.");
-    //                 let previous_run = ongoing_build.lock().await.take();
-    //                 if let Some(previous_run) = previous_run {
-    //                     info!("Aborting previous WASM build.");
-    //                     previous_run.abort();
-    //                     drop(previous_run);
-    //                     // info!("Waiting for previous run to end.");
-    //                     // let result = previous_run.await?;
-    //                     // if let Err(e) = result {
-    //                     //     warn!("Previous run failed: {e}");
-    //                     // } else {
-    //                     //     warn!("Previous run completed.")
-    //                     // }
-    //                 }
-    //                 trace!("Spawning a new build job.");
-    //                 let new_run = tokio::spawn(Wasm.build(input.clone(), output_path.clone()));
-    //                 *ongoing_build.lock().await = Some(new_run);
-    //             }
-    //             debug!("Finished event processing.");
-    //             Result::Ok(())
-    //         };
-    //
-    //         tokio::spawn(event_processor);
-    //         Ok(ret)
-    //     }
-    // }
-    // #[tokio::test]
-    // async fn watcher() -> Result {
-    //     // console_subscriber::init();
-    //     pretty_env_logger::init();
-    //     debug!("Test is starting!");
-    //     let repo_root =
-    //         RepoRoot::new(r"H:\NBO\enso5", TargetTriple::new(Versions::default()).to_string());
-    //     let _w = WasmWatcher::new(repo_root.clone(), repo_root.dist.wasm.into())?;
-    //     tokio::time::sleep(Duration::from_secs(60 * 5)).await;
-    //     // let mut initial_config = WorkingData::default();
-    //     // initial_config.pathset = vec![r"H:\NBO\enso5".into()];
-    //     // let (tx, rx) = tokio::sync::watch::channel(initial_config.clone());
-    //     // tx.send(initial_config)?;
-    //     // let (errors_tx, errors_rx) = tokio::sync::mpsc::channel(1024);
-    //     // let (event_tx, mut event_rx) = tokio::sync::mpsc::channel(1024);
-    //     //
-    //     // let l1 = async move {
-    //     //     debug!("Awaiting events");
-    //     //     while let Some(msg) = event_rx.recv().await {
-    //     //         dbg!(&msg);
-    //     //         warn!("{msg:#?}");
-    //     //     }
-    //     // };
-    //     //
-    //     // tokio::spawn(l1);
-    //     // let worker = watchexec::fs::worker(rx, errors_tx, event_tx);
-    //     // worker.await?;
-    //     Ok(())
-    // }
-
     #[tokio::test]
     async fn build() -> Result {
         Ok(())
     }
-    //
-    // #[tokio::test]
-    // async fn test_artifact_download() -> Result {
-    //     let out = r"C:\temp\wasm";
-    //     let client = setup_octocrab()?;
-    //     // let client = OctocrabBuilder::new()
-    //     //     .personal_token("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".into())
-    //     //     .build()?;
-    //     let repo = RepoContext { owner: "enso-org".into(), name: "enso".into() };
-    //     // https://github.com/enso-org/enso/actions/runs/1982165517
-    //     download_wasm_from_run(&client, &repo, RunId(1982165517), out).await?;
-    //     Ok(())
-    // }
 
     #[tokio::test]
     async fn watch_by_cargo_watch() -> Result {
@@ -530,88 +389,6 @@ mod tests {
             .run_ok()
             .await?;
 
-
-        // 'build',
-        // '--target',
-        // 'web',
-        // '--out-dir',
-        // paths.wasm.root,
-        // '--out-name',
-        // 'ide',
-        // crate,
-        // ]
-
-
         Ok(())
     }
-    //
-    // #[tokio::test(flavor = "multi_thread")]
-    // async fn watch_test() -> Result {
-    //     use watchexec::action::Action;
-    //     use watchexec::action::Outcome;
-    //     use watchexec::config::InitConfig;
-    //     use watchexec::config::RuntimeConfig;
-    //     use watchexec::handler::Handler as _;
-    //     use watchexec::handler::PrintDebug;
-    //     use watchexec::Watchexec;
-    //
-    //     let repo_root = "H:/NBO/enso5";
-    //
-    //     let mut init = InitConfig::default();
-    //     init.on_error(PrintDebug(std::io::stderr()));
-    //
-    //     let mut runtime = RuntimeConfig::default();
-    //     runtime.pathset([repo_root]);
-    //     runtime.action_throttle(Duration::from_millis(500));
-    //     runtime.command(["cargo"]);
-    //     runtime.command_shell(watchexec::command::Shell::None);
-    //
-    //     runtime.on_pre_spawn(move |prespawn: PreSpawn| {
-    //         println!("======================================");
-    //         dbg!(prespawn);
-    //         println!("*****************************************");
-    //         ready(std::result::Result::<_, Infallible>::Ok(()))
-    //     });
-    //
-    //     runtime.on_action(async move |action: Action| -> std::result::Result<_, Infallible> {
-    //         // let ret = ready(std::result::Result::<_, Infallible>::Ok(()));
-    //
-    //         println!("Action!");
-    //         dbg!(&action);
-    //
-    //         let signals = action.events.iter().flat_map(Event::signals).collect_vec();
-    //         let paths = action.events.iter().flat_map(Event::paths).collect_vec();
-    //         let got_stop_signal = signals
-    //             .iter()
-    //             .any(|signal| matches!(signal, MainSignal::Terminate | MainSignal::Interrupt));
-    //
-    //         if got_stop_signal {
-    //             return Ok(action.outcome(Outcome::both(Outcome::Stop, Outcome::Exit)));
-    //         }
-    //         if paths.is_empty() && !signals.is_empty() {
-    //             let outcome = signals.iter().copied().fold(Outcome::DoNothing, |acc, signal| {
-    //                 Outcome::both(acc, Outcome::Signal(signal.into()))
-    //             });
-    //             return Ok(action.outcome(outcome));
-    //         }
-    //         if paths.is_empty() {
-    //             let completion = action.events.iter().flat_map(Event::completions).next();
-    //             if let Some(status) = completion {
-    //                 info!("Command completed with status: {:?}", status);
-    //             }
-    //             return Ok(action.outcome(Outcome::DoNothing));
-    //         }
-    //
-    //         let when_running = Outcome::both(Outcome::Stop, Outcome::Start);
-    //         let when_idle = Outcome::Start;
-    //         Ok(action.outcome(Outcome::if_running(when_running, when_idle)))
-    //     });
-    //
-    //     let we = Watchexec::new(init, runtime.clone())?;
-    //     let c = runtime.clone();
-    //     we.send_event(Event::default()).await?;
-    //     println!("Starting.");
-    //     we.main().await?;
-    //     Ok(())
-    // }
 }

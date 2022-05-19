@@ -90,7 +90,9 @@ pub fn remove_file_if_exists(path: impl AsRef<Path>) -> Result<()> {
     }
 }
 
-
+/// Remove a file being either directory or regular file..
+///
+/// Does not fail if the file is not found.
 pub fn remove_if_exists(path: impl AsRef<Path>) -> Result {
     let path = path.as_ref();
     if path.is_dir() {
@@ -117,7 +119,7 @@ pub fn reset_dir(path: impl AsRef<Path>) -> Result {
 
 pub fn require_exist(path: impl AsRef<Path>) -> Result {
     if path.as_ref().exists() {
-        debug!("{} does exist.", path.as_ref().display());
+        trace!("{} does exist.", path.as_ref().display());
         Ok(())
     } else {
         bail!("{} does not exist.", path.as_ref().display())

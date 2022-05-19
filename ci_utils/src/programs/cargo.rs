@@ -2,6 +2,9 @@ use crate::prelude::*;
 
 use crate::program::command::Manipulator;
 
+pub mod clippy;
+
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Cargo;
 
