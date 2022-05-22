@@ -23,6 +23,7 @@ pub struct BuildInput {
     ///
     /// Default instance will suffice, but then we are prone to hit API limits. Authorized one will
     /// likely do better.
+    #[derivative(Debug = "ignore")]
     pub octocrab:  Octocrab,
 }
 

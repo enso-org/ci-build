@@ -1,5 +1,9 @@
 use crate::prelude::*;
 
+/// Heuristic that checks if given path can be plausibly considered to be the root of the Enso
+/// repository.
+///
+/// Current heuristic is: contains Cargo workspace root and SBT build configuration file.
 pub fn looks_like_enso_repository_root(path: impl AsRef<Path>) -> bool {
     (move || -> Result<bool> {
         let cargo_toml = path.as_ref().join("Cargo.toml");
@@ -13,7 +17,6 @@ pub fn looks_like_enso_repository_root(path: impl AsRef<Path>) -> bool {
 }
 
 pub fn deduce_repository_path() -> Option<PathBuf> {
-    // let current_dir = std::env::current_dir().ok()?;
     let candidate_paths = [
         std::env::current_dir().ok(),
         std::env::current_dir().ok().and_then(|p| p.parent().map(ToOwned::to_owned)),
@@ -22,10 +25,8 @@ pub fn deduce_repository_path() -> Option<PathBuf> {
     ];
     for candidate in candidate_paths {
         if let Some(path) = candidate && looks_like_enso_repository_root(&path) {
-            debug!("Deduced repository path to be {}.", path.display());
             return Some(path)
         }
     }
-    debug!("Failed to deduce the repository path.");
     None
 }

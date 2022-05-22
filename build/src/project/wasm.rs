@@ -1,3 +1,5 @@
+//! Wrappers over the Rust part of the IDE codebase.
+
 use crate::prelude::*;
 
 use crate::paths::generated::RepoRoot;
@@ -23,11 +25,17 @@ pub mod env;
 pub mod js_patcher;
 pub mod test;
 
-pub const INTEGRATION_TESTS_WASM_TIMEOUT: Duration = Duration::from_secs(300);
-pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
+pub const DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT: Duration = Duration::from_secs(300);
+
 pub const OUTPUT_NAME: &str = "ide";
-pub const TARGET_CRATE: &str = "app/gui";
+
+/// wasm-pack version we require.
 pub const WASM_PACK_VERSION_REQ: &str = ">=0.10.1";
+
+/// Name of the artifact that will be uploaded as part of CI run.
+pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
+
+pub const DEFAULT_TARGET_CRATE: &str = "app/gui";
 
 #[derive(Clone, Copy, Debug, strum::Display, strum::EnumString, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
@@ -205,8 +213,8 @@ impl IsWatchable for Wasm {
             } = input;
 
             let current_exe = std::env::current_exe()?;
-            // Cargo watch apparently cannot handle extended-length UNC path prefix.
-            // We remove it and hope for the best.
+            // Cargo watch apparently cannot handle verbatim path prefix. We remove it and hope for
+            // the best.
             let current_exe = current_exe.without_verbatim_prefix();
 
 
@@ -322,13 +330,17 @@ impl Wasm {
         _project_manager: Option<Child>,
         headless: bool,
         additional_options: Vec<String>,
+        wasm_timeout: Option<Duration>,
     ) -> Result {
         info!("Running Rust WASM test suite.");
         use wasm_pack::TestFlags::*;
         WasmPack
             .cmd()?
             .current_dir(source_root)
-            .set_env(env::WASM_BINDGEN_TEST_TIMEOUT, &INTEGRATION_TESTS_WASM_TIMEOUT.as_secs())?
+            .set_env_opt(
+                env::WASM_BINDGEN_TEST_TIMEOUT,
+                wasm_timeout.map(|d| d.as_secs()).as_ref(),
+            )?
             .arg("test")
             .apply_opt(headless.then_some(&Headless))
             .apply(&Chrome)

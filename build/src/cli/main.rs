@@ -375,6 +375,7 @@ impl BuildContext {
                 project_manager,
                 wasm_pack_options,
                 headless,
+                wasm_timeout,
             } => {
                 let custom_root = tempdir();
                 let (custom_root, project_manager) = match custom_root {
@@ -396,6 +397,7 @@ impl BuildContext {
                         project_manager,
                         headless,
                         wasm_pack_options,
+                        Some(wasm_timeout.into()),
                     )
                     .await?;
                     // Custom root must live while the tests are being run.

@@ -17,14 +17,14 @@
 #![feature(duration_constants)]
 
 use crate::prelude::*;
+
 use anyhow::Context;
 use ide_ci::programs::java;
 use regex::Regex;
 
 pub mod prelude {
-    pub use ide_ci::prelude::*;
-
     pub use argh::FromArgs;
+    pub use ide_ci::prelude::*;
 }
 
 pub mod args;
@@ -68,11 +68,10 @@ pub fn get_string_assignment_value(
     let regex = Regex::new(&regex_text)?;
     Ok(regex
         .captures(&build_sbt_contents)
-        .ok_or_else(|| {
-            anyhow!(
+        .context(format!(
                 "Failed to find line with assignment to `{variable_name}`. Does it match the following regex?   {regex_text}  "
             )
-        })?
+        )?
         .get(1)
         // The below denotes an internal error in our regex syntax, we do want panic.
         .expect("Missing subcapture #1 with version despite matching the regex.")

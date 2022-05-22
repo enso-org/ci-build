@@ -2,10 +2,11 @@ use crate::prelude::*;
 
 use crate::cli::arg::OutputPath;
 use crate::cli::arg::Source;
-use crate::source_args_hlp;
-
 use crate::project::gui::Gui;
 use crate::project::project_manager::ProjectManager;
+use crate::project::wasm::DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT;
+use crate::source_args_hlp;
+
 use clap::Args;
 use clap::Subcommand;
 
@@ -46,7 +47,11 @@ pub enum Command {
         /// Run WASM tests in the headless mode
         #[clap(long, parse(try_from_str), default_value_t = true)]
         headless:          bool,
-        /// Additional options to be appended to the wasm-pack invocation.
+        /// Custom timeout for wasm-bindgen test runner. Supports formats like "300secs" or "5min".
+        #[clap(long, default_value_t = DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT.into())]
+        wasm_timeout:      humantime::Duration,
+        /// Additional options to be appended to the wasm-pack invocation. Note that wasm-pack will
+        /// further redirect any unrecognized option to the underlying cargo call.
         #[clap(last = true)]
         wasm_pack_options: Vec<String>,
     },

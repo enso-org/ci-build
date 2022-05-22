@@ -6,11 +6,11 @@ use ide_ci::log::setup_logging;
 
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    setup_logging();
+async fn main() -> Result {
+    setup_logging()?;
 
-    // We want arg parsing to be the very first thing, so when user types wrong arguments, the error
-    // diagnostics will be first and only thing that is output.
+    // We want arg parsing to be before any other logs, so if user types wrong arguments, the
+    // error diagnostics will be first and only thing that is output.
     let args: Args = argh::from_env();
 
     debug!("Initial environment:");

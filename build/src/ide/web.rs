@@ -1,19 +1,21 @@
 use crate::prelude::*;
-use futures_util::future::try_join;
-use futures_util::future::try_join3;
-use tempfile::TempDir;
-use tokio::process::Child;
 
 use crate::paths::generated;
 use crate::project::gui::BuildInfo;
 use crate::project::wasm;
 use crate::project::wasm::Artifact;
 use crate::project::ProcessWrapper;
+
+use anyhow::Context;
+use futures_util::future::try_join;
+use futures_util::future::try_join3;
 use ide_ci::io::download_all;
 use ide_ci::program::command;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
 use ide_ci::programs::Npm;
+use tempfile::TempDir;
+use tokio::process::Child;
 
 lazy_static! {
     /// Path to the file with build information that is consumed by the JS part of the IDE.
@@ -40,6 +42,7 @@ pub mod env {
     define_env_var!(ENSO_BUILD_GUI_JS_GLUE, PathBuf);
     define_env_var!(ENSO_BUILD_GUI_ASSETS, PathBuf);
     define_env_var!(ENSO_BUILD_IDE_BUNDLED_ENGINE_VERSION, Version);
+    define_env_var!(ENSO_BUILD_PROJECT_MANAGER_IN_BUNDLE_PATH, PathBuf);
 }
 
 #[derive(Clone, Debug)]
@@ -237,12 +240,20 @@ impl IdeDesktop {
             warn!("Bundled Project Manager does not contain any Engine.");
         }
 
+        let pm_in_bundle = project_manager
+            .path
+            .bin
+            .project_managerexe
+            .strip_prefix(&project_manager.path)
+            .context("Failed to generate in-bundle path to Project Manager executable")?;
+
         let content_build = self
             .npm()?
             .set_env(env::ENSO_BUILD_GUI, gui.as_ref())?
             .set_env(env::ENSO_BUILD_PROJECT_MANAGER, project_manager.as_ref())?
             .set_env(env::ENSO_BUILD_IDE, output_path.as_ref())?
             .set_env_opt(env::ENSO_BUILD_IDE_BUNDLED_ENGINE_VERSION, engine_version_to_use)?
+            .set_env(env::ENSO_BUILD_PROJECT_MANAGER_IN_BUNDLE_PATH, pm_in_bundle)?
             .workspace(Workspaces::Enso)
             .run("build", EMPTY_ARGS)
             .run_ok();

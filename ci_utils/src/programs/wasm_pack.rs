@@ -80,6 +80,10 @@ impl WasmPackCommand {
         self.arg("build")
     }
 
+    pub fn test(&mut self) -> &mut Self {
+        self.arg("test")
+    }
+
     pub fn target(&mut self, target: Target) -> &mut Self {
         self.arg("--target").arg(target)
     }

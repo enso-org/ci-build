@@ -40,6 +40,9 @@ impl GitCommand {
             .apply(&Clean::Force)
             .apply(&Clean::UntrackedDirectories)
             .apply(&Clean::Exclude(".idea".into()))
+            .apply(&Clean::Exclude(
+                PathBuf::from_iter(["target", "enso-build"]).display().to_string(),
+            ))
     }
 }
 

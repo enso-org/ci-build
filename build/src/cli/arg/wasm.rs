@@ -53,7 +53,7 @@ impl From<ProfilingLevel> for crate::project::wasm::ProfilingLevel {
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInputs {
     /// Which crate should be treated as a WASM entry point. Relative path from source root.
-    #[clap(default_value = crate::project::wasm::TARGET_CRATE, long, enso_env())]
+    #[clap(default_value = crate::project::wasm::DEFAULT_TARGET_CRATE, long, enso_env())]
     pub crate_path: PathBuf,
 
     /// Profile that is passed to wasm-pack.
