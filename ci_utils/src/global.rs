@@ -93,8 +93,9 @@ pub fn println(msg: impl AsRef<str>) {
 }
 
 pub fn spawn(name: impl AsRef<str>, f: impl Future<Output = Result> + Send + 'static) {
-    info!("Spawning a new global task named '{}'.", name.as_ref());
-    let join_handle = tokio::task::Builder::new().name(name.as_ref()).spawn(f);
+    // info!("Spawning a new global task named '{}'.", name.as_ref());
+    let join_handle = tokio::task::spawn(f.instrument(info_span!("task", name = name.as_ref())));
+    // let join_handle = tokio::task::Builder::new().name(name.as_ref()).spawn(f);
     GLOBAL.lock().unwrap().ongoing_tasks.push(join_handle);
 }
 

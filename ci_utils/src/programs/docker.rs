@@ -263,7 +263,9 @@ impl BuildOptions {
         }
         if let Some(file) = self.file.as_ref() {
             ret.push("--file".into());
-            ret.push(file.into());
+            // Docker can't handle verbatim Dockerfile path. It would fail like:
+            // `unable to prepare context: unable to get relative Dockerfile path: Rel: can't make \\?\C:\Users\mwu\ci\image\windows\Dockerfile relative to C:\Users\mwu\AppData\Local\Temp\2\.tmpOykTop`
+            ret.push(file.without_verbatim_prefix().into());
         }
         ret
     }
