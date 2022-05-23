@@ -381,7 +381,7 @@ impl RunContext {
         let std_libs = self.paths.engine.dir.join("lib").join("Standard");
         // Compile the Standard Libraries (Unix)
         debug!("Compiling standard libraries under {}", std_libs.display());
-        for entry in std_libs.read_dir()? {
+        for entry in ide_ci::fs::read_dir(&std_libs)? {
             let entry = entry?;
             let target = entry.path().join(self.paths.version().to_string());
             enso.compile_lib(target)?.run_ok().await?;
@@ -433,7 +433,7 @@ impl RunContext {
         self.paths.engine.pack().await?;
         let schema_dir =
             self.paths.repo_root.join_iter(["engine", "language-server", "src", "main", "schema"]);
-        let schema_files = schema_dir.read_dir()?.map(|e| e.map(|e| e.path())).collect_result()?;
+        let schema_files = ide_ci::fs::read_dir(&schema_dir)?.map(|e| e.map(|e| e.path())).collect_result()?;
         ide_ci::archive::create(self.paths.target.join("fbs-upload/fbs-schema.zip"), schema_files)
             .await?;
 

@@ -18,6 +18,7 @@ pub async fn create_dir_all(path: impl AsRef<Path>) -> Result {
     tokio::fs::create_dir_all(&path).await.anyhow_err()
 }
 
+#[context("Failed to read the directory: {}", path.as_ref().display())]
 pub async fn read_dir(path: impl AsRef<Path>) -> Result<tokio::fs::ReadDir> {
     tokio::fs::read_dir(&path).await.anyhow_err()
 }

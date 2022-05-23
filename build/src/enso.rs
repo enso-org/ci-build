@@ -48,6 +48,7 @@ impl BuiltEnso {
     }
 
     pub fn compile_lib(&self, target: impl AsRef<Path>) -> Result<Command> {
+        ide_ci::fs::require_exist(&target)?;
         let mut command = self.cmd()?;
         command
             .arg(IrCaches::Yes)

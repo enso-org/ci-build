@@ -108,7 +108,7 @@ impl<'a> Goodie for GraalVM<'a> {
             "{}-{}-{}",
             PACKAGE_PREFIX, self.java_version, self.graal_version
         ));
-        for entry in database.root_directory.read_dir()? {
+        for entry in crate::fs::read_dir(&database.root_directory)? {
             let entry = entry?;
             if entry.file_type()?.is_dir() && entry.path().file_name().contains(&expected_dir_name)
             {

@@ -23,6 +23,11 @@ pub fn read(path: impl AsRef<Path>) -> Result<Vec<u8>> {
     std::fs::read(&path).anyhow_err()
 }
 
+#[context("Failed to read the directory: {}", path.as_ref().display())]
+pub fn read_dir(path: impl AsRef<Path>) -> Result<std::fs::ReadDir> {
+    std::fs::read_dir(&path).anyhow_err()
+}
+
 #[context("Failed to read the file: {}", path.as_ref().display())]
 pub fn read_to_string(path: impl AsRef<Path>) -> Result<String> {
     std::fs::read_to_string(&path).anyhow_err()

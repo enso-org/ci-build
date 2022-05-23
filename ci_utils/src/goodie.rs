@@ -42,7 +42,7 @@ impl GoodieDatabase {
 
     pub fn find_dir(&self, directory_name: impl AsRef<Path>) -> Result<PathBuf> {
         let expected_dir_name = directory_name.as_ref();
-        for entry in self.root_directory.read_dir()? {
+        for entry in crate::fs::read_dir(&self.root_directory)? {
             let entry = entry?;
             if entry.file_type()?.is_dir() && entry.path().file_name().contains(&expected_dir_name)
             {
