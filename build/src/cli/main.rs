@@ -353,7 +353,7 @@ impl BuildContext {
                 let build_job = self.build_ide(params);
                 async move {
                     let ide = build_job.await?;
-                    Command::new(ide.unpacked.join("Enso")).run_ok().await?;
+                    ide.start_unpacked().run_ok().await?;
                     Ok(())
                 }
                 .boxed()
@@ -440,7 +440,7 @@ impl BuildContext {
             repo_root:       self.repo_root(),
             version:         self.triple.versions.version.clone(),
         };
-        let target = Ide { target_os: self.triple.os };
+        let target = Ide { target_os: self.triple.os, target_arch: self.triple.arch };
         target.build(input, output_path)
     }
 

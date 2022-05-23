@@ -10,29 +10,49 @@ use ide_ci::actions::workflow::is_in_env;
 #[derive(Clone, Debug)]
 pub struct Artifact {
     /// Directory with unpacked client distribution.
-    pub unpacked:       PathBuf,
+    pub unpacked:            PathBuf,
+    /// Entry point within an unpacked client distribution.
+    pub unpacked_executable: PathBuf,
     /// File with the compressed client image (like installer or AppImage).
-    pub image:          PathBuf,
+    pub image:               PathBuf,
     /// File with the checksum of the image.
-    pub image_checksum: PathBuf,
+    pub image_checksum:      PathBuf,
 }
 
 impl Artifact {
-    fn new(target_os: OS, version: &Version, dist_dir: impl AsRef<Path>) -> Self {
+    fn new(
+        target_os: OS,
+        target_arch: Arch,
+        version: &Version,
+        dist_dir: impl AsRef<Path>,
+    ) -> Self {
         let unpacked = dist_dir.as_ref().join(match target_os {
             OS::Linux => "linux-unpacked",
-            OS::MacOS => "mac",
+            OS::MacOS if target_arch == Arch::AArch64 => "mac-arm64",
+            OS::MacOS if target_arch == Arch::X86_64 => "mac-amd64",
             OS::Windows => "win-unpacked",
-            _ => todo!("{TARGET_OS} is not supported"),
+            _ => todo!("{target_os}-{target_arch} combination is not supported"),
         });
+        let unpacked_executable = match target_os {
+            OS::Linux => "enso",
+            OS::MacOS if target_arch == Arch::AArch64 => "Enso.app",
+            OS::Windows => "Enso.exe",
+            _ => todo!("{target_os}-{target_arch} combination is not supported"),
+        }
+        .into();
         let image = dist_dir.as_ref().join(match target_os {
             OS::Linux => format!("enso-linux-{}.AppImage", version),
             OS::MacOS => format!("enso-mac-{}.dmg", version),
             OS::Windows => format!("enso-win-{}.exe", version),
-            _ => todo!("{TARGET_OS} is not supported"),
+            _ => todo!("{target_os}-{target_arch} combination is not supported"),
         });
 
-        Self { image_checksum: image.with_extension("sha256"), image, unpacked }
+        Self {
+            image_checksum: image.with_extension("sha256"),
+            image,
+            unpacked,
+            unpacked_executable,
+        }
     }
 
     pub async fn upload(&self) -> Result {
@@ -45,6 +65,10 @@ impl Artifact {
             info!("Not in the CI environment, will not upload the artifacts.")
         }
         Ok(())
+    }
+
+    pub fn start_unpacked(&self) -> Command {
+        Command::new(self.unpacked.join(&self.unpacked_executable))
     }
 }
 
@@ -73,9 +97,10 @@ pub enum OutputPath {
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Ide {
-    pub target_os: OS,
+    pub target_os:   OS,
+    pub target_arch: Arch,
 }
 
 impl Ide {
@@ -87,10 +112,11 @@ impl Ide {
         let BuildInput { repo_root, version, project_manager, gui } = input;
         let ide_desktop = crate::ide::web::IdeDesktop::new(&repo_root.app.ide_desktop);
         let target_os = self.target_os;
+        let target_arch = self.target_arch;
         async move {
             let (gui, project_manager) = try_join(gui, project_manager).await?;
             ide_desktop.dist(&gui, &project_manager, &output_path, target_os).await?;
-            Ok(Artifact::new(target_os, &version, output_path))
+            Ok(Artifact::new(target_os, target_arch, &version, output_path))
         }
         .boxed()
     }
