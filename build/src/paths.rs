@@ -42,7 +42,7 @@ impl ComponentPaths {
         dirname: &str,
         triple: &TargetTriple,
     ) -> Self {
-        let name = PathBuf::from(iformat!("{name_prefix}-{triple}"));
+        let name = PathBuf::from(iformat!("{name_prefix}-{triple.engine()}"));
         let root = build_root.join(&name);
         let dir = root.join(dirname);
         let artifact_archive = root.with_appended_extension(ARCHIVE_EXTENSION);
@@ -87,6 +87,20 @@ impl TargetTriple {
         Self { os: TARGET_OS, arch: TARGET_ARCH, versions }
     }
 
+    /// Get the triple effectively used by the Engine build.
+    /// 
+    /// As the GraalVM we use does not support native Aarch64 builds, it should be treated as amd64 there.
+    pub fn engine(&self) -> Self {
+        let mut ret = self.clone();
+        ret.arch = 
+        if self.arch == Arch::AArch64 && self.os == OS::MacOS {
+            Arch::X86_64
+        } else {
+            self.arch
+        };
+        ret
+    }
+
     /// Pretty prints architecture for our packages. Conform to GraalVM scheme as well.
     pub fn arch(&self) -> &'static str {
         pretty_print_arch(self.arch)
@@ -108,8 +122,6 @@ pub struct Paths {
     pub engine:          ComponentPaths,
     pub project_manager: ComponentPaths,
     pub triple:          TargetTriple,
-    /* graal_dist_name: PathBuf,
-     * graal_dist_root: PathBuf, */
 }
 
 impl Paths {
