@@ -433,7 +433,8 @@ impl RunContext {
         self.paths.engine.pack().await?;
         let schema_dir =
             self.paths.repo_root.join_iter(["engine", "language-server", "src", "main", "schema"]);
-        let schema_files = ide_ci::fs::read_dir(&schema_dir)?.map(|e| e.map(|e| e.path())).collect_result()?;
+        let schema_files =
+            ide_ci::fs::read_dir(&schema_dir)?.map(|e| e.map(|e| e.path())).collect_result()?;
         ide_ci::archive::create(self.paths.target.join("fbs-upload/fbs-schema.zip"), schema_files)
             .await?;
 

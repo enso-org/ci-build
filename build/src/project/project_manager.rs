@@ -75,8 +75,11 @@ pub struct ProjectManager {
 impl ProjectManager {
     pub fn matches_platform(&self, name: &str) -> bool {
         // Sample name: "project-manager-bundle-2022.1.1-nightly.2022-04-16-linux-amd64.tar.gz"
-        name.contains(self.target_os.as_str()) && name.contains(pretty_print_arch(TARGET_ARCH))
-        // TODO workaround for macOS and M1 (they should be allowed to use amd64 artifacts)
+        let os_matches = name.contains(self.target_os.as_str());
+        // Arch test involves a workaround for Engine being built through Rosette on Apple Silicon.
+        let arch_matches = name.contains(pretty_print_arch(TARGET_ARCH))
+            || (TARGET_ARCH == Arch::AArch64 && name.contains(pretty_print_arch(Arch::X86_64)));
+        os_matches && arch_matches
     }
 }
 

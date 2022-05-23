@@ -88,12 +88,12 @@ impl TargetTriple {
     }
 
     /// Get the triple effectively used by the Engine build.
-    /// 
-    /// As the GraalVM we use does not support native Aarch64 builds, it should be treated as amd64 there.
+    ///
+    /// As the GraalVM we use does not support native Aarch64 builds, it should be treated as amd64
+    /// there.
     pub fn engine(&self) -> Self {
         let mut ret = self.clone();
-        ret.arch = 
-        if self.arch == Arch::AArch64 && self.os == OS::MacOS {
+        ret.arch = if self.arch == Arch::AArch64 && self.os == OS::MacOS {
             Arch::X86_64
         } else {
             self.arch
