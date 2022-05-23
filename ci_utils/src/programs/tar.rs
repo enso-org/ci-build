@@ -112,7 +112,7 @@ impl AsRef<OsStr> for Command {
 pub struct Tar;
 
 impl Program for Tar {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "tar"
     }
 }

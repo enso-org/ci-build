@@ -3,7 +3,7 @@ use crate::prelude::*;
 pub struct Conda;
 
 impl Program for Conda {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "conda"
     }
     fn default_locations(&self) -> Vec<PathBuf> {

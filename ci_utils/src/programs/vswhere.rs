@@ -9,7 +9,7 @@ impl Program for VsWhere {
         Vec::from_iter(dir_opt)
     }
 
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "vswhere"
     }
 }

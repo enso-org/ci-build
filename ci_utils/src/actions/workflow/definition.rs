@@ -289,10 +289,14 @@ pub mod job {
 
     pub struct CancelWorkflow;
     impl JobArchetype for CancelWorkflow {
-        fn job(os: OS) -> Job {
+        fn job(_os: OS) -> Job {
             Job {
                 name: "Cancel Previous Runs".into(),
-                runs_on: runs_on(os),
+                // It is important that this particular job runs pretty much everywhere (we use x64,
+                // as all currently available GH runners have this label). If we limited it only to
+                // our self-hosted machines (as we usually do), it'd be enqueued after other jobs
+                // and wouldn't be able to cancel them.
+                runs_on: vec![RunnerLabel::X64],
                 steps: vec![cancel_workflow_action()],
                 ..default()
             }
@@ -393,79 +397,3 @@ mod tests {
         Ok(())
     }
 }
-
-
-/*
-
-
-name: 'Setup Enso Build'
-description: 'Installs enso-build tool.'
-inputs:
-  clean:
-    description: Whether the repository should be cleaned.
-    required: true
-    default: 'false'
-
-#  enso_ref:
-#    description: Reference to be cheked out in the Enso repository.
-#    required: false
-#    default: ''
-
-runs:
-  using: "composite"
-  steps:
-    - name: Setup conda (GH runners only)
-      uses: s-weigand/setup-conda@v1.0.5
-      if: startsWith(runner.name, 'GitHub Actions') || startsWith(runner.name, 'Hosted Agent') # GitHub-hosted runner.
-      with:
-        update-conda: false
-        conda-channels: anaconda, conda-forge
-    - name: Install wasm-pack (macOS GH runners only)
-      env:
-        WASMPACKURL: https://github.com/rustwasm/wasm-pack/releases/download/v0.10.2
-        WASMPACKDIR: wasm-pack-v0.10.2-x86_64-apple-darwin
-      run: |-
-        curl -L "$WASMPACKURL/$WASMPACKDIR.tar.gz" | tar -xz -C .
-        mv $WASMPACKDIR/wasm-pack ~/.cargo/bin
-        rm -r $WASMPACKDIR
-      shell: bash
-      if: startsWith(runner.name, 'GitHub Actions') || startsWith(runner.name, 'Hosted Agent') # GitHub-hosted runner.
-#    - uses: actions/checkout@v3
-#      name: Checkout the repository
-#      with:
-#        clean: ${{ inputs.clean }}
-
-    # Runs a set of commands using the runners shell
-    - uses: actions/github-script@v6
-      name: Setup the Artifact API environment
-      with:
-        script: |-
-          core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
-          core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
-          core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
-    - run: ./run.sh --help
-      shell: bash
-      if: runner.os != 'Windows'
-    - run: .\run.cmd --help
-      shell: cmd
-      if: runner.os == 'Windows'
-
- */
-
-// lint:
-// name: Lint
-// runs-on: ${{ matrix.runner }}
-// strategy:
-// matrix:
-// runner:
-// #      - ["macos-latest"]
-// #      - [Windows, self-hosted]
-// - [Linux, self-hosted, engine]
-// fail-fast: false
-// steps:
-// - uses: actions/checkout@v3
-// name: Checkout the repository
-// with:
-// clean: false
-// - uses: ./actions/setup-build
-// - run: bash run.sh lint

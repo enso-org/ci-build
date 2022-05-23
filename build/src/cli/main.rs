@@ -293,10 +293,12 @@ impl BuildContext {
 
     pub fn handle_gui(&self, gui: arg::gui::Target) -> BoxFuture<'static, Result> {
         match gui.command {
-            // arg::gui::Command::Build { input } => {
-            //     let source = arg::Source::BuildLocally(input);
-            //     self.handle_gui(arg::gui::Target { command: arg::gui::Command::Get { source } })
-            // }
+            arg::gui::Command::Build { input, output_path } => {
+                let job = self.resolve_inputs::<Gui>(input).and_then(|input| {
+                    self.target::<Gui>().map(|gui| gui.build_locally(input, output_path))
+                });
+                async move { job?.await }.void_ok().boxed()
+            }
             arg::gui::Command::Get { source } => {
                 let job = self.get(source);
                 job.void_ok().boxed()

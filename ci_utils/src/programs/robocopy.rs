@@ -6,7 +6,7 @@ use crate::prelude::*;
 pub struct Robocopy;
 
 impl Program for Robocopy {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "robocopy"
     }
 

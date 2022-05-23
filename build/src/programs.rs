@@ -15,7 +15,7 @@ pub mod project_manager {
     pub struct ProjectManager;
 
     impl Program for ProjectManager {
-        fn executable_name() -> &'static str {
+        fn executable_name(&self) -> &'static str {
             "project-manager"
         }
     }

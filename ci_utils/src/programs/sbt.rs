@@ -4,7 +4,7 @@ use crate::prelude::*;
 pub struct Sbt;
 
 impl Program for Sbt {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "sbt"
     }
 }

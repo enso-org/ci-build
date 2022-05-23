@@ -36,7 +36,7 @@ use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies;
 use ide_ci::goodies::graalvm;
 use ide_ci::models::config::RepoContext;
-use ide_ci::platform::default_shell;
+use ide_ci::platform::DEFAULT_SHELL;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::Flatc;
 use ide_ci::programs::Git;
@@ -504,11 +504,7 @@ impl RunContext {
                         .exit_ok()?;
                 } else {
                     debug!("Spawning default shell.");
-                    default_shell()
-                        .run_shell()?
-                        .current_dir(&self.paths.repo_root)
-                        .run_ok()
-                        .await?;
+                    DEFAULT_SHELL.run_shell()?.current_dir(&self.paths.repo_root).run_ok().await?;
                 }
             }
             Operation::Build(_) => {

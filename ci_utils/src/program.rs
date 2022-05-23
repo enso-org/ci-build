@@ -36,7 +36,7 @@ pub trait Program: Sized + 'static {
     ///
     /// This should just the stem name, not a full path. The os-specific executable extension should
     /// be skipped.
-    fn executable_name() -> &'static str;
+    fn executable_name(&self) -> &str;
 
     /// If program can be found under more than one name, additional names are provided.
     ///
@@ -50,8 +50,8 @@ pub trait Program: Sized + 'static {
         Vec::new()
     }
 
-    fn pretty_name() -> &'static str {
-        Self::executable_name()
+    fn pretty_name(&self) -> &str {
+        self.executable_name()
     }
 
     /// Locate the program executable.
@@ -59,14 +59,14 @@ pub trait Program: Sized + 'static {
     /// The lookup locations are program-defined, they typically include Path environment variable
     /// and program-specific default locations.
     fn lookup(&self) -> anyhow::Result<Location<Self>> {
-        Resolver::<Self>::new(Self::executable_names(), self.default_locations())?
+        Resolver::<Self>::new(self.executable_names(), self.default_locations())?
             .lookup()
             .map(Location::new)
     }
 
     async fn require_present(&self) -> Result<String> {
         let version = self.version_string().await?;
-        debug!("Found {}: {}", Self::executable_name(), version);
+        debug!("Found {}: {}", self.executable_name(), version);
         Ok(version)
     }
 
@@ -75,7 +75,7 @@ pub trait Program: Sized + 'static {
         if &found_version != required_version {
             bail!(
                 "Failed to find {} in version == {}. Found version: {}",
-                Self::executable_name(),
+                self.executable_name(),
                 required_version,
                 found_version
             )
@@ -88,7 +88,7 @@ pub trait Program: Sized + 'static {
         ensure!(
             required_version.matches(&found_version),
             "Failed to find {} in version that satisfied requirement {}. Found version: {}",
-            Self::executable_name(),
+            self.executable_name(),
             required_version,
             found_version
         );
@@ -147,8 +147,8 @@ pub trait Program: Sized + 'static {
 }
 
 pub trait ProgramExt: Program {
-    fn executable_names() -> Vec<&'static str> {
-        let mut ret = vec![Self::executable_name()];
+    fn executable_names(&self) -> Vec<&str> {
+        let mut ret = vec![self.executable_name()];
         ret.extend(Self::executable_name_fallback());
         ret
     }
@@ -175,3 +175,14 @@ pub trait ProgramExt: Program {
 }
 
 impl<T> ProgramExt for T where T: Program {}
+
+
+///
+
+
+pub struct Unknown(pub String);
+impl Program for Unknown {
+    fn executable_name(&self) -> &str {
+        &self.0
+    }
+}

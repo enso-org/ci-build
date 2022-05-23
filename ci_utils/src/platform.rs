@@ -1,13 +1,7 @@
-use crate::prelude::*;
-
 pub mod win;
 
-pub type DefaultShell = impl Shell;
+#[cfg(target_os = "windows")]
+pub const DEFAULT_SHELL: crate::programs::Cmd = crate::programs::Cmd;
 
-pub fn default_shell() -> DefaultShell {
-    #[cfg(not(target_os = "windows"))]
-    return crate::programs::Bash;
-
-    #[cfg(target_os = "windows")]
-    return crate::programs::Cmd;
-}
+#[cfg(not(target_os = "windows"))]
+pub const DEFAULT_SHELL: crate::programs::Bash = crate::programs::Bash;

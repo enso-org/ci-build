@@ -8,7 +8,7 @@ pub struct Resolver<P> {
 }
 
 impl<P> Resolver<P> {
-    pub fn new(names: Vec<&'static str>, fallback_dirs: Vec<PathBuf>) -> Result<Self> {
+    pub fn new(names: Vec<&str>, fallback_dirs: Vec<PathBuf>) -> Result<Self> {
         let path = std::env::var_os("PATH").unwrap_or_default();
         let env_path_dirs = std::env::split_paths(&path);
         let lookup_dirs = std::env::join_paths(env_path_dirs.chain(fallback_dirs.clone()))?;

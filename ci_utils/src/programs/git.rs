@@ -10,7 +10,7 @@ pub struct Git {
 
 impl Program for Git {
     type Command = GitCommand;
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "git"
     }
     fn current_directory(&self) -> Option<PathBuf> {

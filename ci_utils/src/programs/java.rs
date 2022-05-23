@@ -3,7 +3,7 @@ use crate::prelude::*;
 pub struct Java;
 
 impl Program for Java {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "java"
     }
 }

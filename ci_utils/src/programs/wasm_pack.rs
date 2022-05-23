@@ -67,7 +67,7 @@ pub struct WasmPack;
 
 impl Program for WasmPack {
     type Command = WasmPackCommand;
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "wasm-pack"
     }
 }

@@ -5,7 +5,7 @@ use crate::prelude::*;
 pub struct Node;
 
 impl Program for Node {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "node"
     }
 }
@@ -45,7 +45,7 @@ pub struct Npm;
 impl Program for Npm {
     type Command = NpmCommand;
 
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "npm"
     }
 }

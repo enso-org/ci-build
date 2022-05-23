@@ -27,11 +27,13 @@ pub struct WatchInput {
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
-    // /// Builds the GUI from the local sources.
-    // Build {
-    //     #[clap(flatten)]
-    //     input: BuildInput,
-    // },
+    /// Builds the GUI from the local sources.
+    Build {
+        #[clap(flatten)]
+        input:       BuildInput,
+        #[clap(flatten)]
+        output_path: OutputPath<Gui>,
+    },
     /// Gets the GUI, either by compiling it from scratch or downloading from an external source.
     Get {
         #[clap(flatten)]

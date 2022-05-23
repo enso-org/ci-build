@@ -3,7 +3,7 @@ use crate::prelude::*;
 pub struct Sh;
 
 impl Program for Sh {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "sh"
     }
 }
@@ -11,7 +11,7 @@ impl Program for Sh {
 pub struct Bash;
 
 impl Program for Bash {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "bash"
     }
 }

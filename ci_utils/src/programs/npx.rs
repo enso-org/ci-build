@@ -4,7 +4,7 @@ use crate::prelude::*;
 pub struct Npx;
 
 impl Program for Npx {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "npx"
     }
 }

@@ -108,12 +108,12 @@ impl BuiltEnso {
 
 #[async_trait]
 impl Program for BuiltEnso {
-    fn executable_name() -> &'static str {
-        ide_ci::platform::DefaultShell::executable_name()
+    fn executable_name(&self) -> &str {
+        ide_ci::platform::DEFAULT_SHELL.executable_name()
     }
 
     fn cmd(&self) -> Result<Command> {
-        ide_ci::platform::default_shell().run_script(self.wrapper_script_path())
+        ide_ci::platform::DEFAULT_SHELL.run_script(self.wrapper_script_path())
     }
 
     async fn version_string(&self) -> Result<String> {

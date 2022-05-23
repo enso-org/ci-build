@@ -3,7 +3,7 @@ use crate::prelude::*;
 pub struct Rsync;
 
 impl Program for Rsync {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "rsync"
     }
 }

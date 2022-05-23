@@ -9,7 +9,7 @@ use crate::programs::vswhere::VsWhere;
 pub struct Cl;
 
 impl Program for Cl {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "cl"
     }
 }

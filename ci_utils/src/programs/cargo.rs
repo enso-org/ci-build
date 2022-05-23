@@ -13,7 +13,7 @@ impl Program for Cargo {
         Color::Always.apply(cmd);
         cmd
     }
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "cargo"
     }
 }

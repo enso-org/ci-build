@@ -12,7 +12,7 @@ use crate::programs::java;
 pub struct Gu;
 
 impl Program for Gu {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "gu"
     }
 }

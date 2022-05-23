@@ -4,7 +4,7 @@ use snafu::Snafu;
 pub struct SevenZip;
 
 impl Program for SevenZip {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "7z"
     }
     fn executable_name_fallback() -> Vec<&'static str> {

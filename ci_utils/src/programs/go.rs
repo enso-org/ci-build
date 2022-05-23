@@ -6,7 +6,7 @@ use crate::programs::Program;
 pub struct Go;
 
 impl Program for Go {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "go"
     }
     fn default_locations(&self) -> Vec<PathBuf> {

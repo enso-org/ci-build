@@ -8,8 +8,8 @@ pub struct WithCwd<T> {
 }
 
 impl<T: Program> Program for WithCwd<T> {
-    fn executable_name() -> &'static str {
-        T::executable_name()
+    fn executable_name(&self) -> &str {
+        self.underlying_program.executable_name()
     }
 
     fn current_directory(&self) -> Option<PathBuf> {

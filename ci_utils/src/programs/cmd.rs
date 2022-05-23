@@ -21,7 +21,7 @@ pub mod args {
 
 
 impl Program for Cmd {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "cmd"
     }
 }

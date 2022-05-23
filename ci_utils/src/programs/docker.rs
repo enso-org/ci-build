@@ -69,7 +69,7 @@ pub struct NetworkInfo {
 pub struct Docker;
 
 impl Program for Docker {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         "docker"
     }
 }

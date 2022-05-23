@@ -17,7 +17,7 @@ lazy_static! {
 pub struct Gcc;
 
 impl Program for Gcc {
-    fn executable_name() -> &'static str {
+    fn executable_name(&self) -> &'static str {
         &PROGRAM_NAME
     }
 }
