@@ -127,9 +127,21 @@ pub struct Push {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+pub struct PullRequest {}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct WorkflowDispatch {}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Event {
     #[serde(skip_serializing_if = "Option::is_none")]
-    push: Option<Push>,
+    push:              Option<Push>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pull_request:      Option<PullRequest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    workflow_dispatch: Option<WorkflowDispatch>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -367,9 +379,15 @@ mod tests {
 
     #[test]
     fn generate() -> Result {
-        let push_event = Push { ..default() };
-        let mut workflow =
-            Workflow { name: "GUI CI".into(), on: Event { push: Some(push_event) }, ..default() };
+        let on = Event {
+            pull_request:      Some(PullRequest {}),
+            workflow_dispatch: Some(WorkflowDispatch {}),
+            push:              Some(Push {
+                branches: vec!["develop".into(), "unstable".into(), "stable".into()],
+                ..default()
+            }),
+        };
+        let mut workflow = Workflow { name: "GUI CI".into(), on, ..default() };
 
         let primary_os = OS::Linux;
         workflow.add::<job::AssertChangelog>(primary_os);
