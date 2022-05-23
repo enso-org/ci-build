@@ -24,20 +24,27 @@ pub struct BuildInput {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
+    /// Builds both Project Manager and GUI, puts them together into a single, client Electron
+    /// application.
     Build {
         #[clap(flatten)]
         params: BuildInput,
     },
+    /// Like `Build` but automatically starts the IDE.
     Start {
         #[clap(flatten)]
         params: BuildInput,
     },
+    /// Builds Project Manager and runs it in the background. Builds GUI and runs it using
+    /// webpack's dev server.
     Watch {
         #[clap(flatten)]
         gui:             crate::cli::arg::gui::WatchInput,
         #[clap(flatten)]
         project_manager: Source<ProjectManager>,
     },
+    /// Runs integration tests. This involves building and spawning Project Manager, unless
+    /// requested otherwise.
     IntegrationTest {
         /// If set, the project manager won't be spawned.
         #[clap(long)]
