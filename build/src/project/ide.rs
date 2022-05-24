@@ -29,7 +29,7 @@ impl Artifact {
         let unpacked = dist_dir.as_ref().join(match target_os {
             OS::Linux => "linux-unpacked",
             OS::MacOS if target_arch == Arch::AArch64 => "mac-arm64",
-            OS::MacOS if target_arch == Arch::X86_64 => "mac-amd64",
+            OS::MacOS if target_arch == Arch::X86_64 => "mac",
             OS::Windows => "win-unpacked",
             _ => todo!("{target_os}-{target_arch} combination is not supported"),
         });
@@ -70,7 +70,7 @@ impl Artifact {
     pub fn start_unpacked(&self) -> Command {
         let application_path = self.unpacked.join(&self.unpacked_executable);
         if TARGET_OS == OS::MacOS {
-            let mut ret =Command::new("open");
+            let mut ret = Command::new("open");
             ret.arg(application_path);
             ret
         } else {
