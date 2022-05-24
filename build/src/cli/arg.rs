@@ -160,9 +160,9 @@ pub struct Source<Target: IsTargetSource> {
     #[clap(name = Target::ARTIFACT_NAME_NAME, long, enso_env())]
     pub artifact_name: Option<String>,
 
-    /// If source is `run`, this argument is required to identify a release with asset to download.
-    /// This can be either the release tag or a predefined placeholder (currently supported one is
-    /// only 'latest').
+    /// If source is `release`, this argument is required to identify a release with asset to
+    /// download. This can be either the release tag or a predefined placeholder (currently
+    /// supported one is only 'latest').
     #[clap(name = Target::RELEASE_DESIGNATOR_NAME, long, required_if_eq(Target::SOURCE_NAME, "release"), enso_env())]
     pub release: Option<String>,
 
