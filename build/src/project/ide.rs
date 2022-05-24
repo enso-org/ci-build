@@ -68,7 +68,14 @@ impl Artifact {
     }
 
     pub fn start_unpacked(&self) -> Command {
-        Command::new(self.unpacked.join(&self.unpacked_executable))
+        let application_path = self.unpacked.join(&self.unpacked_executable);
+        if TARGET_OS == OS::MacOS {
+            let mut ret =Command::new("open");
+            ret.arg(application_path);
+            ret
+        } else {
+            Command::new(application_path)
+        }
     }
 }
 
