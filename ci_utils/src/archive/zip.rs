@@ -54,7 +54,6 @@ pub fn extract_subtree(
 ) -> Result {
     // let bar = crate::global::new_spinner("Extracting archive.");
     for index in 0..archive.len() {
-        // std::thread::sleep(Duration::SECOND);
         let mut file = archive.by_index(index)?;
         let path_in_archive = file
             .enclosed_name()
@@ -62,12 +61,8 @@ pub fn extract_subtree(
         if let Ok(relative_path) = path_in_archive.strip_prefix(&prefix) {
             let output = output.as_ref().join(relative_path);
             trace!("Extracting {}", output.display());
-            // bar.set_message(msg);
-            // std::thread::sleep(Duration::from_secs(1));
-            // bar.set_message(format!("Extracting {}", output.display()));
             extract_file(&mut file, output)?;
         }
     }
-    // bar.finish_with_message(format!("Done extracting archive to {}", output.as_ref().display()));
     Ok(())
 }
