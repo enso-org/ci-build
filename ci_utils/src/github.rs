@@ -6,7 +6,6 @@ use octocrab::models::ArtifactId;
 use octocrab::models::AssetId;
 use octocrab::models::ReleaseId;
 use octocrab::models::RunId;
-use std::io::Cursor;
 
 // use crate::global::new_spinner;
 use crate::cache::download::DownloadFile;
@@ -131,12 +130,11 @@ pub trait RepoPointer: Display {
     }
 
     async fn download_artifact(&self, client: &Octocrab, artifact_id: ArtifactId) -> Result<Bytes> {
-        // let _bar = new_spinner(format!("Downloading artifact id={}", artifact_id));
         client
             .actions()
             .download_artifact(self.owner(), self.name(), artifact_id, ArchiveFormat::Zip)
             .await
-            .anyhow_err()
+            .context(format!("Failed to download artifact with ID={artifact_id}."))
     }
 
     async fn download_and_unpack_artifact(
@@ -146,8 +144,7 @@ pub trait RepoPointer: Display {
         output_dir: &Path,
     ) -> Result {
         let bytes = self.download_artifact(client, artifact_id).await?;
-        let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
-        archive.extract(output_dir)?;
+        crate::archive::zip::extract_bytes(bytes, output_dir)?;
         Ok(())
     }
 

@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 use heck::ToKebabCase;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub fn is_github_hosted() -> String {
     "startsWith(runner.name, 'GitHub Actions') || startsWith(runner.name, 'Hosted Agent')".into()
@@ -25,7 +25,7 @@ pub fn setup_wasm_pack_step() -> Step {
     Step {
         name: Some("Installing wasm-pack".into()),
         uses: Some("jetli/wasm-pack-action@v0.3.0".into()),
-        with: Some(step::Argument::Other(HashMap::from_iter([(
+        with: Some(step::Argument::Other(BTreeMap::from_iter([(
             "version".into(),
             "latest".into(),
         )]))),
@@ -74,7 +74,7 @@ pub fn cancel_workflow_action() -> Step {
     Step {
         name: Some("Cancel Previous Runs".into()),
         uses: Some("styfle/cancel-workflow-action@0.9.1".into()),
-        with: Some(step::Argument::Other(HashMap::from_iter([(
+        with: Some(step::Argument::Other(BTreeMap::from_iter([(
             "access_token".into(),
             "${{ github.token }}".into(),
         )]))),
@@ -92,7 +92,7 @@ pub struct Workflow {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub on:          Event,
-    pub jobs:        HashMap<String, Job>,
+    pub jobs:        BTreeMap<String, Job>,
 }
 
 impl Workflow {
@@ -158,6 +158,8 @@ pub struct Job {
 #[serde(rename_all = "kebab-case")]
 pub struct Step {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub id:    Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name:  Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uses:  Option<String>,
@@ -167,8 +169,8 @@ pub struct Step {
     pub r#if:  Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub with:  Option<step::Argument>,
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub env:   HashMap<String, String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub env:   BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shell: Option<Shell>,
 }
@@ -203,7 +205,7 @@ pub mod step {
         GitHubScript {
             script: String,
         },
-        Other(HashMap<String, String>),
+        Other(BTreeMap<String, String>),
     }
 }
 
@@ -286,13 +288,31 @@ pub mod job {
     pub struct AssertChangelog;
     impl JobArchetype for AssertChangelog {
         fn job(os: OS) -> Job {
+            let changed_files = r#"
+git fetch
+list=`git diff --name-only origin/develop HEAD | tr '\n' ' '`
+echo $list
+echo "::set-output name=list::'$list'"
+"#
+            .trim()
+            .to_string();
+
+            let changed_files_id = "changed_files";
+
             Job {
                 name: "Assert if CHANGELOG.md was updated (on pull request)".into(),
                 runs_on: runs_on(os),
-                steps: vec![Step {
-                    run: Some("if [[ ${{ contains(steps.changed_files.outputs.list,'CHANGELOG.md') || contains(github.event.head_commit.message,'[ci no changelog needed]') || contains(github.event.pull_request.body,'[ci no changelog needed]') }} == false ]]; then exit 1; fi".into()),
-                    r#if: Some("github.base_ref == 'develop' || github.base_ref == 'unstable' || github.base_ref == 'stable'".into()),
-                    ..default()
+                steps: vec![
+                    checkout_repo_step(),
+                    Step {
+                        id: Some(changed_files_id.into()),
+                        run: Some(changed_files),
+                        ..default()
+                    },
+                    Step {
+                        run: Some(format!("if [[ ${{{{ contains(steps.{changed_files_id}.outputs.list,'CHANGELOG.md') || contains(github.event.head_commit.message,'[ci no changelog needed]') || contains(github.event.pull_request.body,'[ci no changelog needed]') }}}} == false ]]; then exit 1; fi")),
+                        r#if: Some("github.base_ref == 'develop' || github.base_ref == 'unstable' || github.base_ref == 'stable'".into()),
+                        ..default()
                 }],
                 ..default()
             }

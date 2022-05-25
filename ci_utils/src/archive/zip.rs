@@ -1,12 +1,21 @@
 use crate::prelude::*;
 
-pub use ::zip::*;
 use anyhow::Context;
-
+use bytes::Buf;
+use std::io::Cursor;
 use zip::read::ZipFile;
+
+pub use ::zip::*;
 
 pub fn open(path: impl AsRef<Path>) -> Result<ZipArchive<std::fs::File>> {
     ZipArchive::new(crate::fs::open(path)?).anyhow_err()
+}
+
+#[context("Failed to extract in-memory archive to {}.", output_dir.as_ref().display())]
+pub fn extract_bytes(bytes: Bytes, output_dir: impl AsRef<Path>) -> Result {
+    let mut archive = zip::ZipArchive::new(Cursor::new(&bytes))?;
+    archive.extract(&output_dir)?;
+    Ok(())
 }
 
 pub fn extract_file(file: &mut ZipFile, output: impl AsRef<Path>) -> Result {
