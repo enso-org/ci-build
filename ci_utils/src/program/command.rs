@@ -263,18 +263,14 @@ impl Command {
     }
 
     pub fn spawn_intercepting(&mut self) -> Result<Child> {
-        use command_group::tokio::AsyncCommandGroup;
-
         self.stdout(Stdio::piped());
         self.stderr(Stdio::piped());
 
         let pretty = self.describe();
         let program = self.inner.as_std().get_program();
         let program = Path::new(program).file_stem().unwrap_or_default().to_os_string();
-        debug!("Will run: {}", pretty);
-        let child = self.inner.group_spawn();
         let program = program.to_string_lossy();
-        let mut child = child?.into_inner();
+        let mut child = self.inner.spawn()?;
         // FIXME unwraps
         spawn_log_processor(format!("{program}ℹ️"), child.stdout.take().unwrap());
         spawn_log_processor(format!("{program}⚠️"), child.stderr.take().unwrap());
