@@ -35,7 +35,7 @@ impl Artifact {
         });
         let unpacked_executable = match target_os {
             OS::Linux => "enso",
-            OS::MacOS if target_arch == Arch::AArch64 => "Enso.app",
+            OS::MacOS => "Enso.app",
             OS::Windows => "Enso.exe",
             _ => todo!("{target_os}-{target_arch} combination is not supported"),
         }
