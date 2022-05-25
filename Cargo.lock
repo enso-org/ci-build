@@ -739,18 +739,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "command-group"
-version = "1.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7a8a86f409b4a59df3a3e4bee2de0b83f1755fdd2a25e3a9684c396fc4bed2c"
-dependencies = [
- "async-trait",
- "nix 0.22.3",
- "tokio",
- "winapi",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1077,7 +1065,6 @@ dependencies = [
  "cfg-if",
  "chrono",
  "clap",
- "command-group",
  "console-subscriber",
  "derivative",
  "dirs",
@@ -1098,7 +1085,7 @@ dependencies = [
  "lazy_static",
  "log",
  "mime",
- "nix 0.23.1",
+ "nix",
  "octocrab",
  "ouroboros",
  "path-absolutize",
@@ -1751,7 +1738,6 @@ dependencies = [
  "cfg-if",
  "chrono",
  "clap",
- "command-group",
  "convert_case 0.5.0",
  "data-encoding",
  "derivative",
@@ -1777,7 +1763,7 @@ dependencies = [
  "log",
  "mime",
  "new_mime_guess",
- "nix 0.23.1",
+ "nix",
  "octocrab",
  "path-absolutize",
  "path-slash",
@@ -2084,19 +2070,6 @@ checksum = "c2d684d1b59e0dc07b37e2203ef576987473288f530082512aff850585c61b1f"
 dependencies = [
  "mime",
  "unicase",
-]
-
-[[package]]
-name = "nix"
-version = "0.22.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4916f159ed8e5de0082076562152a76b7a1f64a01fd9d1e0fea002c37624faf"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if",
- "libc",
- "memoffset",
 ]
 
 [[package]]
