@@ -4,7 +4,7 @@ use ide_ci::models::config::RepoContext;
 
 use aws_sdk_s3::model::ObjectCannedAcl;
 use aws_sdk_s3::output::PutObjectOutput;
-use aws_sdk_s3::ByteStream;
+use aws_sdk_s3::types::ByteStream;
 use aws_sdk_s3::Client;
 use bytes::Buf;
 use serde::de::DeserializeOwned;

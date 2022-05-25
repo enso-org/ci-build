@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
 use anyhow::Context;
-use bytes::Buf;
 use std::io::Cursor;
 use zip::read::ZipFile;
 
