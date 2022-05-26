@@ -97,7 +97,8 @@ pub enum Target {
     ProjectManager(project_manager::Target),
     /// Build/Run/Test IDE bundle (includes GUI and Project Manager).
     Ide(ide::Target),
-    /// Clean the repository. Keeps the IntelliJ's .idea directory intact.
+    /// Clean the repository. Keeps the IntelliJ's .idea directory intact. WARNING: This removes
+    /// files that are not under version control in the repository subtree.
     Clean,
     /// Lint the codebase.
     Lint,
