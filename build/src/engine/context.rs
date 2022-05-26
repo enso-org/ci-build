@@ -38,6 +38,7 @@ use ide_ci::goodies::graalvm;
 use ide_ci::models::config::RepoContext;
 use ide_ci::platform::DEFAULT_SHELL;
 use ide_ci::program::with_cwd::WithCwd;
+use ide_ci::programs::graal;
 use ide_ci::programs::Flatc;
 use ide_ci::programs::Git;
 use ide_ci::programs::Sbt;
@@ -155,20 +156,20 @@ impl RunContext {
             arch:          TARGET_ARCH,
         };
         self.goodies.require(&graalvm).await?;
-        graalvm::Gu.require_present().await?;
+        graal::Gu.require_present().await?;
 
         // Make sure that Graal has installed the optional components that we need.
         // Some are not supported on Windows, in part because their runtime (Sulong) is not.
         // See e.g. https://github.com/oracle/graalpython/issues/156
-        let conditional_components: &[graalvm::ComponentId] = if graalvm::sulong_supported() {
-            &[graalvm::ComponentId::Python, graalvm::ComponentId::R]
+        let conditional_components: &[graal::Component] = if graal::sulong_supported() {
+            &[graal::Component::Python, graal::Component::R]
         } else {
             &[]
         };
 
-        let required_components = once(graalvm::ComponentId::NativeImage)
-            .chain(conditional_components.into_iter().copied());
-        graalvm::install_missing_components(required_components).await?;
+        let required_components =
+            once(graal::Component::NativeImage).chain(conditional_components.into_iter().copied());
+        graal::install_missing_components(required_components).await?;
         Ok(())
     }
 
