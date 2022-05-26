@@ -10,6 +10,8 @@ use crate::project::IsTarget;
 use crate::project::IsWatchable;
 
 use anyhow::Context;
+use async_compression::tokio::bufread::GzipEncoder;
+use async_compression::Level;
 use derivative::Derivative;
 use ide_ci::env::Variable;
 use ide_ci::programs::cargo;
@@ -37,9 +39,10 @@ pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
 
 pub const DEFAULT_TARGET_CRATE: &str = "app/gui";
 
-#[derive(Clone, Copy, Debug, strum::Display, strum::EnumString, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, strum::Display, strum::EnumString, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
 pub enum ProfilingLevel {
+    #[default]
     Objective,
     Task,
     Details,
@@ -61,29 +64,30 @@ pub struct BuildInput {
 
 impl BuildInput {
     pub async fn perhaps_check_size(&self, wasm_path: impl AsRef<Path>) -> Result {
+        let compressed_size = compressed_size(&wasm_path).await?.get_appropriate_unit(true);
+        info!("Compressed size of {} is {}.", wasm_path.as_ref().display(), compressed_size);
         if let Some(wasm_size_limit) = self.wasm_size_limit {
+            let wasm_size_limit = wasm_size_limit.get_appropriate_unit(true);
             if self.profile != wasm_pack::Profile::Release {
                 warn!(
-                    "Skipping size check because profile={} rather than {}.",
+                    "Skipping size check because profile is {} rather than {}.",
                     self.profile,
                     wasm_pack::Profile::Release
                 );
-            } else if self.profiling_level.map_or(false, |level| level != ProfilingLevel::Objective)
-            {
+            } else if self.profiling_level.unwrap_or_default() != ProfilingLevel::Objective {
+                // TODO? additional leeway as sanity check
                 warn!(
-                    "Skipping size check because profiling level={:?} rather than {}.",
+                    "Skipping size check because profiling level is {:?} rather than {}.",
                     self.profiling_level,
                     ProfilingLevel::Objective
                 );
             } else {
-                let actual_size = compressed_size(&wasm_path).await?;
-                info!(
-                    "Checking that {} size: {} <= {} (limit).",
-                    wasm_path.as_ref().display(),
-                    actual_size.get_appropriate_unit(true),
-                    wasm_size_limit.get_appropriate_unit(true)
-                );
-                ensure!(actual_size < wasm_size_limit)
+                ensure!(
+                    compressed_size < wasm_size_limit,
+                    "Compressed WASM size {} exceeds the limit of {}.",
+                    compressed_size,
+                    wasm_size_limit
+                )
             }
         }
         Ok(())
@@ -356,7 +360,7 @@ impl Wasm {
 /// Get the size of a file after gzip compression.
 pub async fn compressed_size(path: impl AsRef<Path>) -> Result<byte_unit::Byte> {
     let file = tokio::io::BufReader::new(ide_ci::fs::tokio::open(&path).await?);
-    let encoded_stream = async_compression::tokio::bufread::GzipEncoder::new(file);
+    let encoded_stream = GzipEncoder::with_quality(file, Level::Best);
     ide_ci::io::read_length(encoded_stream).await.map(into)
 }
 

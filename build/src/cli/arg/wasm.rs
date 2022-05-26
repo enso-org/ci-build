@@ -10,8 +10,17 @@ use clap::ArgEnum;
 use clap::Args;
 use clap::Subcommand;
 use ide_ci::programs::wasm_pack;
+use std::lazy::SyncOnceCell;
 
 source_args_hlp!(Wasm, "wasm", BuildInputs);
+
+static DEFAULT_WASM_SIZE_LIMIT: SyncOnceCell<String> = SyncOnceCell::new();
+
+pub fn initialize_default_wasm_size_limit(limit: byte_unit::Byte) -> Result {
+    DEFAULT_WASM_SIZE_LIMIT
+        .set(limit.get_appropriate_unit(true).to_string())
+        .map_err(|e| anyhow!("WASM size limit was already set to {e}."))
+}
 
 #[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
 pub enum Profile {
@@ -70,7 +79,7 @@ pub struct BuildInputs {
 
     /// Fail the build if compressed WASM exceeds the specified size. Supports format like
     /// "4.06MiB".
-    #[clap(long, enso_env())]
+    #[clap(long, enso_env(), maybe_default = DEFAULT_WASM_SIZE_LIMIT.get() )]
     pub wasm_size_limit: Option<byte_unit::Byte>,
 }
 

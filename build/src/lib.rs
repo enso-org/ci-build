@@ -1,3 +1,4 @@
+#![feature(derive_default_enum)]
 #![feature(hash_set_entry)]
 #![feature(type_alias_impl_trait)]
 #![feature(trait_alias)]

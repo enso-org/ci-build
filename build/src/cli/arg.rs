@@ -99,7 +99,7 @@ pub enum Target {
     Ide(ide::Target),
     /// Clean the repository. Keeps the IntelliJ's .idea directory intact. WARNING: This removes
     /// files that are not under version control in the repository subtree.
-    Clean,
+    GitClean,
     /// Lint the codebase.
     Lint,
     /// Apply automatic formatters on the repository.
@@ -134,6 +134,10 @@ pub struct Cli {
     #[clap(long, default_value_t = TARGET_OS, enso_env(), possible_values=[OS::Windows.as_str(), OS::Linux.as_str(), OS::MacOS.as_str()])]
     pub target_os: OS,
 
+    /// Does not check the program version requirements defined in the build-config.yaml.
+    #[clap(long, enso_env())]
+    pub skip_version_check: bool,
+
     #[clap(subcommand)]
     pub target: Target,
 }
@@ -153,6 +157,9 @@ pub struct Source<Target: IsTargetSource> {
     pub path: PathBuf,
 
     /// If source is `run`, this argument is required to provide CI run ID.
+    ///
+    /// `GITHUB_TOKEN` environment variable with "repo" access is required to download CI run
+    /// artifacts.
     #[clap(name = Target::RUN_ID_NAME, long, required_if_eq(Target::SOURCE_NAME, "ci-run"), enso_env())]
     pub run_id: Option<RunId>,
 

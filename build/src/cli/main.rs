@@ -548,12 +548,22 @@ where
 }
 
 #[tracing::instrument(err)]
-pub async fn main_internal() -> Result {
-    let cli = Cli::parse();
+pub async fn main_internal(config: crate::config::Config) -> Result {
     setup_logging()?;
+
+    // Setup that affects Cli parser construction.
+    if let Some(wasm_size_limit) = config.wasm_size_limit {
+        crate::cli::arg::wasm::initialize_default_wasm_size_limit(wasm_size_limit)?;
+    }
+
+    let cli = Cli::parse();
 
     pretty_env_logger::init();
     debug!("Parsed CLI arguments: {cli:#?}");
+
+    if !cli.skip_version_check {
+        config.check_programs().await?;
+    }
 
     let ctx = BuildContext::new(&cli).instrument(info_span!("Building context.")).await?;
     match cli.target {
@@ -563,7 +573,7 @@ pub async fn main_internal() -> Result {
             ctx.handle_project_manager(project_manager).await?,
         Target::Ide(ide) => ctx.handle_ide(ide).await?,
         // TODO: consider if out-of-source ./dist should be removed
-        Target::Clean => Git::new(ctx.repo_root()).cmd()?.nice_clean().run_ok().await?,
+        Target::GitClean => Git::new(ctx.repo_root()).cmd()?.nice_clean().run_ok().await?,
         Target::Lint => {
             Cargo
                 .cmd()?
@@ -598,9 +608,9 @@ pub async fn main_internal() -> Result {
     Ok(())
 }
 
-pub fn main() -> Result {
+pub fn main(config: crate::config::Config) -> Result {
     let rt = Runtime::new()?;
-    rt.block_on(async { main_internal().await })?;
+    rt.block_on(async { main_internal(config).await })?;
     rt.shutdown_timeout(Duration::from_secs(60 * 30));
     info!("Successfully ending.");
     Ok(())

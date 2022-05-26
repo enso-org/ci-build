@@ -22,16 +22,16 @@ impl RecognizedProgram {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ConfigRaw {
-    pub wasm_size_limit:   String,
+    pub wasm_size_limit:   Option<String>,
     pub required_versions: HashMap<String, String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Config {
-    pub wasm_size_limit:   Byte,
+    pub wasm_size_limit:   Option<Byte>,
     pub required_versions: HashMap<RecognizedProgram, VersionReq>,
 }
 
@@ -47,7 +47,10 @@ impl Config {
                     version_req
                 );
             } else {
-                info!("Found program {:?} in supported version {}.", program, found);
+                info!(
+                    "Found program {:?} in supported version {} (required {}).",
+                    program, found, version_req
+                );
             }
         }
         Ok(())
@@ -67,7 +70,10 @@ impl TryFrom<ConfigRaw> for Config {
         }
 
         Ok(Self {
-            wasm_size_limit: <Byte as FromString>::from_str(&value.wasm_size_limit)?,
+            wasm_size_limit: value
+                .wasm_size_limit
+                .map(|limit_text| <Byte as FromString>::from_str(&limit_text))
+                .transpose()?,
             required_versions,
         })
     }
