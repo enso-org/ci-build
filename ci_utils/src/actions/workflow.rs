@@ -17,7 +17,7 @@ pub fn is_in_env() -> bool {
 pub fn set_output(name: &str, value: &impl ToString) {
     let value = value.to_string();
     debug!("Setting GitHub Actions step output {name} to {value}");
-    debug!("::set-output name={name}::{value}");
+    println!("::set-output name={name}::{value}");
 }
 
 /// Prints a debug message to the log.
@@ -50,13 +50,13 @@ pub fn set_env(name: &str, value: &impl ToString) -> Result {
 
 pub fn mask_text(text: impl AsRef<str>) {
     if is_in_env() {
-        debug!("::add-mask::{}", text.as_ref())
+        println!("::add-mask::{}", text.as_ref())
     }
 }
 
 pub fn mask_value(value: impl Display) {
     if is_in_env() {
-        debug!("::add-mask::{value}")
+        println!("::add-mask::{value}")
     }
 }
 
@@ -86,6 +86,6 @@ impl Message {
     }
 
     pub fn send(&self) {
-        debug!("::{} ::{}", self.level, self.text);
+        println!("::{} ::{}", self.level, self.text);
     }
 }

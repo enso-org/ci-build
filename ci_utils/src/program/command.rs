@@ -270,6 +270,7 @@ impl Command {
         let program = self.inner.as_std().get_program();
         let program = Path::new(program).file_stem().unwrap_or_default().to_os_string();
         let program = program.to_string_lossy();
+        info!("Spawning child process: {}", pretty);
         let mut child = self.inner.spawn()?;
         // FIXME unwraps
         spawn_log_processor(format!("{program}ℹ️"), child.stdout.take().unwrap());
