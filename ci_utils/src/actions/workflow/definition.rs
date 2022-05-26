@@ -51,9 +51,10 @@ pub fn setup_artifact_api() -> Step {
 
 pub fn run(os: OS, command_line: impl AsRef<str>) -> Step {
     let bash_step = Step {
-        run: Some(format!("./run.sh {}", command_line.as_ref())),
+        run: Some(format!("./run {}", command_line.as_ref())),
         // r#if: Some("runner.os != 'Windows'".into()),
         shell: Some(Shell::Bash),
+        env: once(github_token_env()).collect(),
         ..default()
     };
 
@@ -61,6 +62,7 @@ pub fn run(os: OS, command_line: impl AsRef<str>) -> Step {
         run: Some(format!(r".\run.cmd {}", command_line.as_ref())),
         // r#if: Some("runner.os == 'Windows'".into()),
         shell: Some(Shell::Cmd),
+        env: once(github_token_env()).collect(),
         ..default()
     };
     if os == OS::Windows {
@@ -175,11 +177,18 @@ pub struct Step {
     pub shell: Option<Shell>,
 }
 
+pub fn github_token_env() -> (String, String) {
+    ("GITHUB_TOKEN".into(), "${{ secrets.GITHUB_TOKEN }}".into())
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Shell {
+    /// Command Prompt.
     Cmd,
     Bash,
+    /// Power Shell.
+    Pwsh,
 }
 
 pub mod step {
@@ -430,7 +439,7 @@ mod tests {
 
         let yaml = serde_yaml::to_string(&workflow)?;
         println!("{yaml}");
-        let path = r"H:\NBO\enso-staging\.github\workflows\gui.yml";
+        let path = r"H:\NBO\enso4\.github\workflows\gui.yml";
         crate::fs::write(path, yaml)?;
         Ok(())
     }
