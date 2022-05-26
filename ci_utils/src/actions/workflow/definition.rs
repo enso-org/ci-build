@@ -27,7 +27,7 @@ pub fn setup_wasm_pack_step() -> Step {
         uses: Some("jetli/wasm-pack-action@v0.3.0".into()),
         with: Some(step::Argument::Other(BTreeMap::from_iter([(
             "version".into(),
-            "latest".into(),
+            "0.10.2".into(),
         )]))),
         r#if: Some(is_github_hosted()),
         ..default()
@@ -307,6 +307,13 @@ echo "::set-output name=list::'$list'"
             .to_string();
 
             let changed_files_id = "changed_files";
+            let changelog_was_changed =
+                format!("contains(steps.{changed_files_id}.outputs.list,'CHANGELOG.md')");
+            let omit_in_commit_msg =
+                "contains(github.event.head_commit.message,'[ci no changelog needed]')";
+            let omit_in_pr_body =
+                "contains(github.event.pull_request.body,'[ci no changelog needed]')";
+            let is_dependabot = "github.event.pull_request.user.login == 'dependabot'";
 
             Job {
                 name: "Assert if CHANGELOG.md was updated (on pull request)".into(),
@@ -319,7 +326,7 @@ echo "::set-output name=list::'$list'"
                         ..default()
                     },
                     Step {
-                        run: Some(format!("if [[ ${{{{ contains(steps.{changed_files_id}.outputs.list,'CHANGELOG.md') || contains(github.event.head_commit.message,'[ci no changelog needed]') || contains(github.event.pull_request.body,'[ci no changelog needed]') }}}} == false ]]; then exit 1; fi")),
+                        run: Some(format!("if [[ ${{{{ {changelog_was_changed} || {omit_in_commit_msg} || {omit_in_pr_body} || {is_dependabot} }}}} == false ]]; then exit 1; fi")),
                         r#if: Some("github.base_ref == 'develop' || github.base_ref == 'unstable' || github.base_ref == 'stable'".into()),
                         ..default()
                 }],
