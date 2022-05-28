@@ -27,7 +27,7 @@ pub fn setup_wasm_pack_step() -> Step {
         uses: Some("jetli/wasm-pack-action@v0.3.0".into()),
         with: Some(step::Argument::Other(BTreeMap::from_iter([(
             "version".into(),
-            "0.10.2".into(),
+            "v0.10.2".into(),
         )]))),
         r#if: Some(is_github_hosted()),
         ..default()
