@@ -8,12 +8,6 @@ pub mod generated {
     include!(concat!(env!("OUT_DIR"), "/paths.rs"));
 }
 
-#[cfg(target_os = "linux")]
-pub const LIBRARIES_TO_TEST: [&str; 6] =
-    ["Tests", "Table_Tests", "Database_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
-
-// Test postgres only on Linux
-#[cfg(not(target_os = "linux"))]
 pub const LIBRARIES_TO_TEST: [&str; 5] =
     ["Tests", "Table_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
 
@@ -189,6 +183,14 @@ impl Paths {
 
     pub fn edition_name(&self) -> String {
         self.triple.versions.edition_name()
+    }
+
+    pub fn manifest_file(&self) -> PathBuf {
+        self.engine.dir.join("manifest.yaml")
+    }
+
+    pub fn launcher_manifest_file(&self) -> PathBuf {
+        self.distribution().join("launcher-manifest.yaml")
     }
 
     // e.g. enso2\distribution\editions\2021.20-SNAPSHOT.yaml
