@@ -69,6 +69,7 @@ impl RunContext {
                 Operation::Run(RunOperation { command_pieces: command_pieces.clone() }),
             WhatToDo::Build(args::Build {}) => Operation::Build(BuildOperation {}),
         };
+        debug!("Operation to perform: {:?}", operation);
 
         let target_repo = if let Operation::Release(release_op) = &operation {
             Ok(&release_op.repo)
