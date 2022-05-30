@@ -55,7 +55,7 @@ impl RunContext {
     pub async fn new(args: &Args) -> Result<Self> {
         // Get default build configuration for a given build kind.
         let config = BuildConfiguration::new(&args);
-        let octocrab = setup_octocrab()?;
+        let octocrab = setup_octocrab().await?;
         let enso_root = args.target.clone();
         debug!("Received target location: {}", enso_root.display());
         let enso_root = args.target.absolutize()?.to_path_buf();

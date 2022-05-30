@@ -91,7 +91,7 @@ impl BuildContext {
     /// environment.
     pub async fn new(cli: &Cli) -> Result<Self> {
         let absolute_repo_path = cli.repo_path.absolutize()?;
-        let octocrab = setup_octocrab()?;
+        let octocrab = setup_octocrab().await?;
         let versions = crate::version::deduce_versions(
             &octocrab,
             BuildKind::Dev,

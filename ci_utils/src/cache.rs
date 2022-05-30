@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod artifact;
 pub mod asset;
 pub mod download;
 

@@ -7,6 +7,7 @@ use tracing::Event;
 use tracing::Id;
 use tracing::Metadata;
 use tracing::Subscriber;
+use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Registry;
@@ -57,11 +58,16 @@ impl<S: Subscriber + Debug + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S
 
 
 pub fn setup_logging() -> Result {
+    let filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(LevelFilter::TRACE.into())
+        .from_env_lossy();
+
     tracing::subscriber::set_global_default(
         Registry::default().with(MyLayer).with(
             tracing_subscriber::fmt::layer()
                 .without_time()
-                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE),
+                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+                .with_filter(filter),
         ),
     )
     .anyhow_err()

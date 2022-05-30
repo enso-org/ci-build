@@ -27,9 +27,11 @@ pub struct BuildInput {
     pub octocrab:  Octocrab,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct Artifact {
     /// Location of the Project Manager distribution.
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub path:            crate::paths::generated::ProjectManager,
     /// Versions of Engine that are bundled in this Project Manager distribution.
     ///
@@ -39,6 +41,7 @@ pub struct Artifact {
     ///
     /// Artifacts built with [`ProjectManager::build_locally`] will have exactly one engine
     /// bundled.
+    #[derivative(Debug(format_with = "ide_ci::fmt::display_sequence"))]
     pub engine_versions: Vec<Version>,
 }
 

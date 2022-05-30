@@ -106,6 +106,10 @@ impl BuildConfiguration {
             config.build_engine_package = true;
         }
 
+        if config.test_standard_library {
+            config.build_engine_package = true;
+        }
+
         config
     }
 

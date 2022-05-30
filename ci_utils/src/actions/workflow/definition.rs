@@ -261,6 +261,13 @@ pub fn checkout_repo_step() -> Step {
 pub fn plain_job(os: OS, name: impl AsRef<str>, command_line: impl AsRef<str>) -> Job {
     let checkout_repo_step = checkout_repo_step();
     let run_step = run(os, command_line);
+    let list_everything_on_failure = Step {
+        name: Some("List files if failed".into()),
+        r#if: Some("failure()".into()),
+        run: Some("ls -R".into()),
+        ..default()
+    };
+
     let name = format!("{} ({})", name.as_ref(), os);
     let steps = vec![
         setup_conda(),
@@ -270,6 +277,7 @@ pub fn plain_job(os: OS, name: impl AsRef<str>, command_line: impl AsRef<str>) -
         // We don't care about help but this compiles the script as a single step.
         run(os, "--help"),
         run_step,
+        list_everything_on_failure,
     ];
     let runs_on = runs_on(os);
     Job { name, runs_on, steps, ..default() }

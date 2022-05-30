@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+use derivative::Derivative;
 use ide_ci::actions::artifacts;
 use ide_ci::cache;
 use ide_ci::cache::Cache;
@@ -24,11 +25,13 @@ pub mod wasm;
 pub trait IsArtifact: Clone + AsRef<Path> + Sized + Send + Sync + 'static {}
 
 /// Plain artifact is just a folder with... things.
-#[derive(Clone, Debug)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct PlainArtifact<T> {
     /// Directory path.
     pub path:    PathBuf,
     /// Phantom, so we can tell artifacts of different projects apart.
+    #[derivative(Debug = "ignore")]
     pub phantom: PhantomData<T>,
 }
 
@@ -103,7 +106,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
                 }
                 .boxed()
             }
-            ExternalSource::CiRun(ci_run) => self.download_artifact(ci_run, destination),
+            ExternalSource::CiRun(ci_run) => self.download_artifact(ci_run, destination, cache),
             ExternalSource::LocalFile(source_path) => async move {
                 ide_ci::fs::mirror_directory(source_path, &destination).await?;
                 this.adapt_artifact(destination).await
@@ -135,6 +138,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         &self,
         ci_run: CiRunSource,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
+        cache: Cache,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let CiRunSource { run_id, artifact_name, repository, octocrab } = ci_run;
         let artifact_name = artifact_name.unwrap_or_else(|| self.artifact_name().to_string());
@@ -144,15 +148,14 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
             let artifact =
                 repository.find_artifact_by_name(&octocrab, run_id, &artifact_name).await?;
             info!("Will download artifact: {:#?}", artifact);
-            ide_ci::fs::reset_dir(&output_path)?;
-            repository
-                .download_and_unpack_artifact(&octocrab, artifact.id, output_path.as_ref())
-                .await?;
-
+            let artifact_to_get = cache::artifact::ExtractedArtifact {
+                client: octocrab.clone(),
+                key:    cache::artifact::Key { artifact_id: artifact.id, repository },
+            };
+            let artifact = cache.get(artifact_to_get).await?;
             let inner_archive_path =
-                output_path.as_ref().join(&artifact_name).with_appended_extension("tar.gz");
+                artifact.join(&artifact_name).with_appended_extension("tar.gz");
             ide_ci::archive::extract_to(&inner_archive_path, &output_path).await?;
-            ide_ci::fs::remove_if_exists(&inner_archive_path)?;
             this.adapt_artifact(output_path).await
         }
         .instrument(span)

@@ -272,6 +272,9 @@ impl Command {
         let program = program.to_string_lossy();
         info!("Spawning child process: {}", pretty);
         let mut child = self.inner.spawn()?;
+        if let Some(pid) = child.id() {
+            tracing::Span::current().record("pid", &pid);
+        }
         // FIXME unwraps
         spawn_log_processor(format!("{program}ℹ️"), child.stdout.take().unwrap());
         spawn_log_processor(format!("{program}⚠️"), child.stderr.take().unwrap());
@@ -279,9 +282,16 @@ impl Command {
     }
 
     pub fn run_ok(&mut self) -> BoxFuture<'static, Result<()>> {
+        let pretty = self.describe();
+        let span = info_span!(
+            "Running process.",
+            status = tracing::field::Empty,
+            pid = tracing::field::Empty,
+            command = %self.describe()
+        )
+        .entered();
         let child = self.spawn_intercepting();
         let status_checker = self.status_checker.clone();
-        let pretty = self.describe();
         async move {
             let mut child = child?;
             let status = child
@@ -292,11 +302,7 @@ impl Command {
                 .await?;
             status_checker(status).context(format!("Command failed: {}", pretty))
         }
-        .instrument(info_span!(
-            "Waiting for process.",
-            status = tracing::field::Empty,
-            command = %self.describe()
-        ))
+        .instrument(span.exit())
         .boxed()
     }
 

@@ -103,12 +103,21 @@ pub fn retrieve_github_access_token() -> Result<String> {
         .or_else(|_| get_token_from_file())
 }
 
-pub fn setup_octocrab() -> Result<Octocrab> {
+pub async fn setup_octocrab() -> Result<Octocrab> {
     let mut builder = octocrab::OctocrabBuilder::new();
     if let Ok(access_token) = retrieve_github_access_token() {
-        builder = builder.personal_token(access_token)
+        builder = builder.personal_token(access_token);
+        let octocrab = builder.build()?;
+        match octocrab.current().user().await {
+            Ok(user) => info!("Authenticated as user '{}' to GitHub REST API.", user.login),
+            Err(e) => bail!(
+                "Failed to get user info: {e}. GitHub Personal Access Token might be invalid."
+            ),
+        }
+        Ok(octocrab)
+    } else {
+        builder.build().anyhow_err()
     }
-    builder.build().anyhow_err()
 }
 
 #[cfg(test)]

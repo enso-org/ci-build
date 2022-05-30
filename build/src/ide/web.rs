@@ -14,6 +14,7 @@ use ide_ci::program::command;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
 use ide_ci::programs::Npm;
+use std::process::Stdio;
 use tempfile::TempDir;
 use tokio::process::Child;
 
@@ -153,7 +154,9 @@ impl IdeDesktop {
     pub fn npm(&self) -> Result<NpmCommand> {
         let mut command = Npm.cmd()?;
         command.arg("--color").arg("always");
+        command.arg("--yes");
         command.current_dir(&self.package_dir);
+        command.stdin(Stdio::null()); // nothing in that process subtree should require input
         Ok(command)
     }
 
@@ -163,7 +166,7 @@ impl IdeDesktop {
     }
 
     pub async fn install(&self) -> Result {
-        self.npm()?.install().run_ok().await?;
+        self.npm()?.install().arg("--workspaces").arg("--verbose").run_ok().await?;
         Ok(())
     }
 
@@ -266,7 +269,7 @@ impl IdeDesktop {
 
         self.npm()?
             .try_applying(&icons)?
-            .env("DEBUG", "electron-builder")
+            // .env("DEBUG", "electron-builder")
             .set_env(env::ENSO_BUILD_GUI, gui.as_ref())?
             .set_env(env::ENSO_BUILD_IDE, output_path.as_ref())?
             .set_env(env::ENSO_BUILD_PROJECT_MANAGER, project_manager.as_ref())?

@@ -30,6 +30,7 @@ pub mod ci;
 pub mod deploy;
 pub mod env;
 pub mod extensions;
+pub mod fmt;
 pub mod fs;
 pub mod future;
 pub mod github;
