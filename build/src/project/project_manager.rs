@@ -41,7 +41,7 @@ pub struct Artifact {
     ///
     /// Artifacts built with [`ProjectManager::build_locally`] will have exactly one engine
     /// bundled.
-    #[derivative(Debug(format_with = "ide_ci::fmt::display_sequence"))]
+    #[derivative(Debug(format_with = "ide_ci::fmt::display_list"))]
     pub engine_versions: Vec<Version>,
 }
 

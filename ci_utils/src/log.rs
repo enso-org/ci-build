@@ -59,6 +59,7 @@ impl<S: Subscriber + Debug + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S
 
 pub fn setup_logging() -> Result {
     let filter = tracing_subscriber::EnvFilter::builder()
+        .with_env_var("ENSO_BUILD_LOG")
         .with_default_directive(LevelFilter::TRACE.into())
         .from_env_lossy();
 

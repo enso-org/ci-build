@@ -95,7 +95,8 @@ pub fn retrieve_github_access_token() -> Result<String> {
     fn get_token_from_file() -> Result<String> {
         let path =
             dirs::home_dir().context("Failed to locate home directory.")?.join("GITHUB_TOKEN");
-        ide_ci::fs::read_to_string(path)
+        let content = ide_ci::fs::read_to_string(path)?;
+        Ok(content.trim().into())
     }
 
     ide_ci::env::expect_var("GITHUB_TOKEN")
@@ -108,10 +109,13 @@ pub async fn setup_octocrab() -> Result<Octocrab> {
     if let Ok(access_token) = retrieve_github_access_token() {
         builder = builder.personal_token(access_token);
         let octocrab = builder.build()?;
-        match octocrab.current().user().await {
-            Ok(user) => info!("Authenticated as user '{}' to GitHub REST API.", user.login),
+        match octocrab.ratelimit().get().await {
+            Ok(rate) => info!(
+                "Current rate limit: {}/{}",
+                rate.resources.core.used, rate.resources.core.limit
+            ),
             Err(e) => bail!(
-                "Failed to get user info: {e}. GitHub Personal Access Token might be invalid."
+                "Failed to get rate limit info: {e}. GitHub Personal Access Token might be invalid."
             ),
         }
         Ok(octocrab)
@@ -123,6 +127,13 @@ pub async fn setup_octocrab() -> Result<Octocrab> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    #[ignore]
+    async fn setup_octocrab_test() -> Result {
+        let _client = setup_octocrab().await?;
+        Ok(())
+    }
 
 
     #[test]
