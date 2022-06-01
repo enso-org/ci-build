@@ -30,7 +30,6 @@ pub trait ArgExt<'h>: Sized + 'h {
 impl<'h> ArgExt<'h> for Arg<'h> {
     fn maybe_default<S: AsRef<str>>(self, f: impl Borrow<Option<S>>) -> Self {
         if let Some(default) = f.borrow().as_ref() {
-            debug!("Adding default value {} to argument {}", default.as_ref(), self.get_id());
             self.default_value(store_static_text(default)).required(false)
         } else {
             self
