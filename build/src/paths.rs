@@ -116,6 +116,7 @@ pub struct Paths {
     pub engine:          ComponentPaths,
     pub project_manager: ComponentPaths,
     pub triple:          TargetTriple,
+    pub test_results:    PathBuf,
 }
 
 impl Paths {
@@ -137,7 +138,17 @@ impl Paths {
         );
         let project_manager =
             ComponentPaths::new(&build_dist_root, "enso-project-manager", "enso", &triple);
-        Ok(Paths { repo_root, build_dist_root, target, launcher, engine, project_manager, triple })
+        let test_results = target.join("test-results");
+        Ok(Paths {
+            repo_root,
+            build_dist_root,
+            target,
+            launcher,
+            engine,
+            project_manager,
+            triple,
+            test_results,
+        })
     }
 
     /// Create a new set of paths for building the Enso with a given version number.
@@ -166,6 +177,10 @@ impl Paths {
         }
 
         ide_ci::actions::workflow::set_env("TARGET_DIR", &self.target.to_string_lossy())?;
+        ide_ci::actions::workflow::set_env(
+            "ENSO_TEST_JUNIT_DIR",
+            &self.test_results.to_string_lossy(),
+        )?;
         Ok(())
     }
 

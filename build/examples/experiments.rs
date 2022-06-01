@@ -5,7 +5,7 @@ use octocrab::models::ReleaseId;
 
 #[tokio::main]
 async fn main() -> Result {
-    let octo = setup_octocrab()?;
+    let octo = setup_octocrab().await?;
     let repo = RepoContext::from_str("enso-org/enso-staging")?;
     let handler = repo.repos(&octo);
     let releases = handler.releases();

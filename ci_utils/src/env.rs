@@ -251,6 +251,7 @@ pub trait Variable {
 
     fn set(&self, value: &Self::Value)
     where Self::Value: ToString {
+        debug!("Setting env {}={}", self.name(), self.format(value));
         std::env::set_var(self.name(), self.format(value))
     }
 

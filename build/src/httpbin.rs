@@ -13,6 +13,7 @@ pub mod env {
     }
 }
 
+#[derive(Debug)]
 pub struct Spawned {
     pub process: Child,
     pub url:     Url,
@@ -25,13 +26,13 @@ pub async fn get_and_spawn_httpbin(port: u16) -> Result<Spawned> {
     let gopath = PathBuf::from(gopath); // be careful of trailing newline!
     let program = gopath.join("bin").join("httpbin");
     debug!("Will spawn {}", program.display());
-    let process = tokio::process::Command::new(program) // TODO? wrap in Program?
-        .args(["-host", &iformat!(":{port}")])
+    let process = Command::new(program) // TODO? wrap in Program?
+        .args(["-host", &format!(":{port}")])
         .kill_on_drop(true)
-        .spawn()
+        .spawn_intercepting()
         .anyhow_err()?;
 
-    let url_string = iformat!("http://localhost:{port}");
+    let url_string = format!("http://localhost:{port}");
     let url = Url::parse(&url_string)?;
     env::Url.set(&url);
     Ok(Spawned { url, process })
@@ -39,10 +40,28 @@ pub async fn get_and_spawn_httpbin(port: u16) -> Result<Spawned> {
 
 impl Drop for Spawned {
     fn drop(&mut self) {
+        debug!("Dropping the httpbin wrapper.");
         env::Url.remove();
     }
 }
 
 pub async fn get_and_spawn_httpbin_on_free_port() -> Result<Spawned> {
     get_and_spawn_httpbin(ide_ci::get_free_port()?).await
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::project::ProcessWrapper;
+
+    use super::*;
+
+
+    #[tokio::test]
+    #[ignore]
+    async fn spawn() -> Result {
+        let mut spawned = get_and_spawn_httpbin_on_free_port().await?;
+        dbg!(&spawned);
+        spawned.process.wait_ok().await?;
+        Ok(())
+    }
 }

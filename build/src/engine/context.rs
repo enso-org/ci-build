@@ -23,6 +23,7 @@ use crate::get_graal_version;
 use crate::get_java_major_version;
 use crate::paths::cache_directory;
 use crate::paths::Paths;
+use crate::project::ProcessWrapper;
 use crate::retrieve_github_access_token;
 use crate::setup_octocrab;
 
@@ -229,6 +230,11 @@ impl RunContext {
             // change its version might break the caches.
             // See (private): https://discord.com/channels/401396655599124480/407883082310352928/939618590158630922
             ide_ci::fs::remove_dir_if_exists(cache_directory())?;
+        }
+
+        if self.config.test_standard_library {
+            // If we run tests, make sure that old and new results won't end up mixed together.
+            ide_ci::fs::reset_dir(&self.paths.test_results)?;
         }
 
         let git = Git::new(&self.paths.repo_root);
@@ -507,7 +513,9 @@ impl RunContext {
                         .exit_ok()?;
                 } else {
                     debug!("Spawning default shell.");
-                    DEFAULT_SHELL.run_shell()?.current_dir(&self.paths.repo_root).run_ok().await?;
+                    let mut shell =
+                        DEFAULT_SHELL.run_shell()?.current_dir(&self.paths.repo_root).spawn()?;
+                    shell.wait_ok().await?;
                 }
             }
             Operation::Build(_) => {
