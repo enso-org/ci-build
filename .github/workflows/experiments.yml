@@ -15,8 +15,9 @@ jobs:
         os:
           - [mwu-deluxe]
         command:
-          - "engine"
-          - "project-manager"
+          - "enso-build2 --repo-remote enso-org/ci-build engine"
+          - "enso-build2 --repo-remote enso-org/ci-build project-manager"
+          - "enso-build4"
       fail-fast: false
 
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -25,7 +26,7 @@ jobs:
 #        with:
 #          enso_ref: ${{ github.ref }}
       - name: Run a multi-line script
-        run: enso-build2 --repo-remote enso-org/ci-build ${{ matrix.command }}
+        run: ${{ matrix.command }}
         working-directory: ${{ github.workspace }}/ci-build
         env:
           GITHUB_TOKEN: ${{ github.token }}
