@@ -42,6 +42,7 @@ mime = "0.3.16"
 new_mime_guess = "4.0.0"
 nix = "0.24.1"
 octocrab = { git = "https://github.com/enso-org/octocrab", default-features = false, features = ["rustls"] }
+paste = "1.0.7"
 path-absolutize = "3.0.11"
 pathdiff = "0.2.1"
 path-slash = "0.1.4"

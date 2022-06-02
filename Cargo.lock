@@ -1136,6 +1136,7 @@ dependencies = [
  "nix",
  "octocrab",
  "ouroboros",
+ "paste",
  "path-absolutize",
  "pin-project",
  "platforms",
@@ -1828,6 +1829,7 @@ dependencies = [
  "new_mime_guess",
  "nix",
  "octocrab",
+ "paste",
  "path-absolutize",
  "path-slash",
  "pathdiff",
@@ -2348,6 +2350,12 @@ dependencies = [
  "rand_core 0.6.3",
  "subtle",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c520e05135d6e763148b6426a837e239041653ba7becd2e538c076c738025fc"
 
 [[package]]
 name = "path-absolutize"

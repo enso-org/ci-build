@@ -268,11 +268,6 @@ impl RunContext {
         debug!("Bootstrapping Enso project.");
         sbt.call_arg("bootstrap").await?;
 
-        if TARGET_OS != OS::Windows {
-            // FIXME [mwu] apparently this is broken on Windows because of the line endings mismatch
-            sbt.call_arg("verifyLicensePackages").await?;
-        }
-
         // If we have much memory, we can try building everything in a single batch. Reducing number
         // of SBT invocations significantly helps build time. However, it is more memory heavy, so
         // we don't want to call this in environments like GH-hosted runners.
@@ -284,6 +279,12 @@ impl RunContext {
                 tasks.push("buildEngineDistribution");
                 tasks.push("engine-runner/assembly");
                 ret.packages.engine = Some(self.paths.engine.clone());
+            }
+
+            if TARGET_OS != OS::Windows {
+                // FIXME [mwu] apparently this is broken on Windows because of the line endings
+                // mismatch
+                tasks.push("verifyLicensePackages");
             }
 
             if self.config.build_project_manager_package() {
@@ -418,18 +419,20 @@ impl RunContext {
                 verify_generated_package(&sbt, "project-manager", &self.paths.project_manager.dir)
                     .await?;
             }
-            for libname in ["Base", "Table", "Image", "Database"] {
-                verify_generated_package(
-                    &sbt,
-                    libname,
-                    self.paths
-                        .engine
-                        .dir
-                        .join_iter(["lib", "Standard"])
-                        .join(libname)
-                        .join(self.paths.version().to_string()),
-                )
-                .await?;
+            if self.config.build_engine_package {
+                for libname in ["Base", "Table", "Image", "Database"] {
+                    verify_generated_package(
+                        &sbt,
+                        libname,
+                        self.paths
+                            .engine
+                            .dir
+                            .join_iter(["lib", "Standard"])
+                            .join(libname)
+                            .join(self.paths.version().to_string()),
+                    )
+                    .await?;
+                }
             }
         }
 
