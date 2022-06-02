@@ -22,8 +22,8 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
-        with:
-          enso_ref: ${{ github.ref }}
+#        with:
+#          enso_ref: ${{ github.ref }}
       - name: Run a multi-line script
         run: enso-build2 --repo-remote enso-org/ci-build ${{ matrix.command }}
         working-directory: ${{ github.workspace }}/ci-build
