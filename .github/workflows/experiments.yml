@@ -15,8 +15,8 @@ jobs:
         os:
           - [mwu-deluxe]
         command:
-          - "engine build"
-          - "project-manager build"
+          - "engine"
+          - "project-manager"
       fail-fast: false
 
     # Steps represent a sequence of tasks that will be executed as part of the job
