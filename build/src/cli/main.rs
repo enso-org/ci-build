@@ -27,6 +27,8 @@ use crate::project::gui;
 use crate::project::gui::Gui;
 use crate::project::ide;
 use crate::project::ide::Ide;
+use crate::project::project_manager;
+use crate::project::project_manager::ProjectManager;
 use crate::project::wasm;
 use crate::project::wasm::Wasm;
 use crate::project::IsTarget;
@@ -309,6 +311,13 @@ impl BuildContext {
         self.get(engine.source).void_ok().boxed()
     }
 
+    pub fn handle_project_manager(
+        &self,
+        project_manager: arg::project_manager::Target,
+    ) -> BoxFuture<'static, Result> {
+        self.get(project_manager.source).void_ok().boxed()
+    }
+
     pub fn handle_gui(&self, gui: arg::gui::Target) -> BoxFuture<'static, Result> {
         match gui.command {
             arg::gui::Command::Build { input, output_path } =>
@@ -342,7 +351,7 @@ impl BuildContext {
         .boxed()
     }
 
-    pub fn handle_project_manager(
+    pub fn handle_backend(
         &self,
         project_manager: arg::backend::Target,
     ) -> BoxFuture<'static, Result> {
@@ -533,6 +542,23 @@ impl Resolvable for Backend {
     }
 }
 
+impl Resolvable for ProjectManager {
+    fn prepare_target(_context: &BuildContext) -> Result<Self> {
+        Ok(ProjectManager)
+    }
+
+    fn resolve(
+        ctx: &BuildContext,
+        _from: <Self as IsTargetSource>::BuildInput,
+    ) -> Result<<Self as IsTarget>::BuildInput> {
+        Ok(project_manager::BuildInput {
+            repo_root: ctx.repo_root().path,
+            octocrab:  ctx.octocrab.clone(),
+            versions:  ctx.triple.versions.clone(),
+        })
+    }
+}
+
 impl Resolvable for Engine {
     fn prepare_target(_context: &BuildContext) -> Result<Self> {
         Ok(Engine)
@@ -600,9 +626,10 @@ pub async fn main_internal(config: crate::config::Config) -> Result {
     match cli.target {
         Target::Wasm(wasm) => ctx.handle_wasm(wasm).await?,
         Target::Gui(gui) => ctx.handle_gui(gui).await?,
-        Target::Engine(engine) => ctx.handle_engine(engine).await?,
         Target::ProjectManager(project_manager) =>
             ctx.handle_project_manager(project_manager).await?,
+        Target::Engine(engine) => ctx.handle_engine(engine).await?,
+        Target::Backend(backend) => ctx.handle_backend(backend).await?,
         Target::Ide(ide) => ctx.handle_ide(ide).await?,
         // TODO: consider if out-of-source ./dist should be removed
         Target::GitClean => Git::new(ctx.repo_root()).cmd()?.nice_clean().run_ok().await?,

@@ -4,6 +4,7 @@ pub mod backend;
 pub mod engine;
 pub mod gui;
 pub mod ide;
+pub mod project_manager;
 pub mod wasm;
 
 use crate::args::BuildKind;
@@ -94,10 +95,12 @@ pub enum Target {
     Wasm(wasm::Target),
     /// Build/Run GUI that consists of WASM and JS parts. This is what we deploy to cloud.
     Gui(gui::Target),
+    /// Project Manager package (just the binary, no Engine)
+    ProjectManager(project_manager::Target),
     /// Enso Engine distribution.
     Engine(engine::Target),
     /// Build/Get Project Manager bundle (includes Enso Engine with GraalVM Runtime).
-    ProjectManager(backend::Target),
+    Backend(backend::Target),
     /// Build/Run/Test IDE bundle (includes GUI and Project Manager).
     Ide(ide::Target),
     /// Clean the repository. Keeps the IntelliJ's .idea directory intact. WARNING: This removes

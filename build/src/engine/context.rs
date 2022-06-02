@@ -44,6 +44,7 @@ use ide_ci::programs::Flatc;
 use ide_ci::programs::Git;
 use ide_ci::programs::Sbt;
 
+#[derive(Clone, Debug)]
 pub struct RunContext {
     pub config:    BuildConfiguration,
     pub octocrab:  Octocrab,
