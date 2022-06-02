@@ -14,6 +14,8 @@ use crate::source::OngoingCiRunSource;
 use crate::source::ReleaseSource;
 use crate::source::Source;
 
+pub mod backend;
+pub mod engine;
 pub mod gui;
 pub mod ide;
 pub mod project_manager;
@@ -296,7 +298,7 @@ pub trait IsWatchable: IsTarget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::project::project_manager::ProjectManager;
+    use crate::project::backend::Backend;
     use ide_ci::log::setup_logging;
     use ide_ci::models::config::RepoContext;
 
@@ -311,7 +313,7 @@ mod tests {
             octocrab:   Default::default(),
         });
 
-        ProjectManager { target_os: TARGET_OS }
+        Backend { target_os: TARGET_OS }
             .get_external(source, r"C:\temp\pm".into(), Cache::new_default().await?)
             .await?;
         Ok(())

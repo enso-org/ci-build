@@ -87,7 +87,7 @@ pub struct BuildInput {
     #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub version:         Version,
     #[derivative(Debug = "ignore")]
-    pub project_manager: BoxFuture<'static, Result<crate::project::project_manager::Artifact>>,
+    pub project_manager: BoxFuture<'static, Result<crate::project::backend::Artifact>>,
     #[derivative(Debug = "ignore")]
     pub gui:             BoxFuture<'static, Result<crate::project::gui::Artifact>>,
 }

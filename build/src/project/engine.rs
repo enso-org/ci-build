@@ -38,14 +38,14 @@ pub struct BuildInput {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ProjectManager;
+pub struct Engine;
 
-impl IsTarget for ProjectManager {
+impl IsTarget for Engine {
     type BuildInput = BuildInput;
     type Artifact = Artifact;
 
     fn artifact_name(&self) -> String {
-        "Enso Project Manager".into()
+        "Enso Engine".into()
     }
 
     fn adapt_artifact(self, path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self::Artifact>> {
@@ -65,7 +65,7 @@ impl IsTarget for ProjectManager {
                 goodies: GoodieDatabase::new()?,
                 config: BuildConfiguration {
                     clean_repo: false,
-                    build_project_manager_package: true,
+                    build_engine_package: true,
                     ..crate::engine::NIGHTLY
                 },
                 octocrab: input.octocrab.clone(),
@@ -73,7 +73,7 @@ impl IsTarget for ProjectManager {
             };
             let artifacts = context.build().await?;
             let engine_distribution =
-                artifacts.packages.project_manager.context("Missing Project Manager package!")?;
+                artifacts.packages.engine.context("Missing Engine Distribution!")?;
             ide_ci::fs::mirror_directory(&engine_distribution.dir, &output_path).await?;
             this.adapt_artifact(output_path).await
         }
@@ -88,15 +88,15 @@ mod tests {
     use ide_ci::log::setup_logging;
 
     #[tokio::test]
-    async fn build_project_manager() -> Result {
+    async fn build_engine() -> Result {
         setup_logging()?;
-        let engine = ProjectManager;
+        let engine = Engine;
         let input = BuildInput {
             versions:  Versions::default(),
             repo_root: r"H:\NBO\enso".into(),
             octocrab:  setup_octocrab().await?,
         };
-        let output_path = r"C:\temp\project-manager";
+        let output_path = r"C:\temp\engine-build";
         let result = engine.build_locally(input, output_path).await?;
         dbg!(&result);
         Ok(())

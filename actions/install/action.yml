@@ -6,7 +6,7 @@ inputs:
     required: true
     default: 'false'
   enso_ref:
-    description: Reference to be cheked out in the Enso repository.
+    description: Reference to be checked out in the Enso repository.
     required: false
     default: ''
 

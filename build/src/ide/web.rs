@@ -232,7 +232,7 @@ impl IdeDesktop {
     pub async fn dist(
         &self,
         gui: &crate::project::gui::Artifact,
-        project_manager: &crate::project::project_manager::Artifact,
+        project_manager: &crate::project::backend::Artifact,
         output_path: impl AsRef<Path>,
         target_os: OS,
     ) -> Result {

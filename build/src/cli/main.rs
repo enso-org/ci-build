@@ -14,16 +14,19 @@ use crate::args::BuildKind;
 use crate::cli::arg;
 use crate::cli::arg::Cli;
 use crate::cli::arg::IsTargetSource;
+use crate::cli::arg::OutputPath;
 use crate::cli::arg::Target;
 use crate::paths::generated::RepoRoot;
 use crate::paths::TargetTriple;
 use crate::prettier;
+use crate::project::backend;
+use crate::project::backend::Backend;
+use crate::project::engine;
+use crate::project::engine::Engine;
 use crate::project::gui;
 use crate::project::gui::Gui;
 use crate::project::ide;
 use crate::project::ide::Ide;
-use crate::project::project_manager;
-use crate::project::project_manager::ProjectManager;
 use crate::project::wasm;
 use crate::project::wasm::Wasm;
 use crate::project::IsTarget;
@@ -221,8 +224,8 @@ impl BuildContext {
         .boxed()
     }
 
-    pub fn pm_info(&self) -> crate::project::project_manager::BuildInput {
-        crate::project::project_manager::BuildInput {
+    pub fn pm_info(&self) -> crate::project::backend::BuildInput {
+        crate::project::backend::BuildInput {
             octocrab:  self.octocrab.clone(),
             versions:  self.triple.versions.clone(),
             repo_root: self.source_root.clone(),
@@ -252,6 +255,17 @@ impl BuildContext {
 
     pub fn repo_root(&self) -> RepoRoot {
         RepoRoot::new(&self.source_root, &self.triple.to_string())
+    }
+
+    pub fn build_locally<Target: Resolvable>(
+        &self,
+        input: <Target as IsTargetSource>::BuildInput,
+        output_path: OutputPath<Target>,
+    ) -> BoxFuture<'static, Result> {
+        let job = self.resolve_inputs::<Target>(input).and_then(|input| {
+            self.target().map(|target: Target| target.build_locally(input, output_path))
+        });
+        async move { job?.await }.void_ok().boxed()
     }
 
     pub fn handle_wasm(&self, wasm: arg::wasm::Target) -> BoxFuture<'static, Result> {
@@ -291,14 +305,14 @@ impl BuildContext {
         }
     }
 
+    pub fn handle_engine(&self, engine: arg::engine::Target) -> BoxFuture<'static, Result> {
+        self.get(engine.source).void_ok().boxed()
+    }
+
     pub fn handle_gui(&self, gui: arg::gui::Target) -> BoxFuture<'static, Result> {
         match gui.command {
-            arg::gui::Command::Build { input, output_path } => {
-                let job = self.resolve_inputs::<Gui>(input).and_then(|input| {
-                    self.target::<Gui>().map(|gui| gui.build_locally(input, output_path))
-                });
-                async move { job?.await }.void_ok().boxed()
-            }
+            arg::gui::Command::Build { input, output_path } =>
+                self.build_locally(input, output_path),
             arg::gui::Command::Get { source } => {
                 let job = self.get(source);
                 job.void_ok().boxed()
@@ -330,7 +344,7 @@ impl BuildContext {
 
     pub fn handle_project_manager(
         &self,
-        project_manager: arg::project_manager::Target,
+        project_manager: arg::backend::Target,
     ) -> BoxFuture<'static, Result> {
         let job = self.get(project_manager.source);
         job.void_ok().boxed()
@@ -414,7 +428,7 @@ impl BuildContext {
     /// Spawns a Project Manager.
     pub fn spawn_project_manager(
         &self,
-        source: arg::Source<ProjectManager>,
+        source: arg::Source<Backend>,
         custom_root: Option<PathBuf>,
     ) -> BoxFuture<'static, Result<Child>> {
         let get_task = self.get(source);
@@ -502,16 +516,33 @@ impl Resolvable for Gui {
     }
 }
 
-impl Resolvable for ProjectManager {
+impl Resolvable for Backend {
     fn prepare_target(context: &BuildContext) -> Result<Self> {
-        Ok(ProjectManager { target_os: context.triple.os })
+        Ok(Backend { target_os: context.triple.os })
     }
 
     fn resolve(
         ctx: &BuildContext,
         _from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
-        Ok(project_manager::BuildInput {
+        Ok(backend::BuildInput {
+            repo_root: ctx.repo_root().path,
+            octocrab:  ctx.octocrab.clone(),
+            versions:  ctx.triple.versions.clone(),
+        })
+    }
+}
+
+impl Resolvable for Engine {
+    fn prepare_target(_context: &BuildContext) -> Result<Self> {
+        Ok(Engine)
+    }
+
+    fn resolve(
+        ctx: &BuildContext,
+        _from: <Self as IsTargetSource>::BuildInput,
+    ) -> Result<<Self as IsTarget>::BuildInput> {
+        Ok(engine::BuildInput {
             repo_root: ctx.repo_root().path,
             octocrab:  ctx.octocrab.clone(),
             versions:  ctx.triple.versions.clone(),
@@ -569,6 +600,7 @@ pub async fn main_internal(config: crate::config::Config) -> Result {
     match cli.target {
         Target::Wasm(wasm) => ctx.handle_wasm(wasm).await?,
         Target::Gui(gui) => ctx.handle_gui(gui).await?,
+        Target::Engine(engine) => ctx.handle_engine(engine).await?,
         Target::ProjectManager(project_manager) =>
             ctx.handle_project_manager(project_manager).await?,
         Target::Ide(ide) => ctx.handle_ide(ide).await?,
@@ -636,10 +668,7 @@ mod tests {
 
         dbg!(
             context
-                .resolve_release_designator(
-                    ProjectManager { target_os: TARGET_OS },
-                    "latest".into()
-                )
+                .resolve_release_designator(Backend { target_os: TARGET_OS }, "latest".into())
                 .await
         )?;
 

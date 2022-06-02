@@ -277,23 +277,19 @@ impl RunContext {
         // we don't want to call this in environments like GH-hosted runners.
         let github_hosted_macos_memory = 15_032_385;
         if system.total_memory() > github_hosted_macos_memory {
-            let mut tasks = vec![
-                "engine-runner/assembly",
-                // "project-manager/buildNativeImage",
-                // "launcher/buildNativeImage",
-                // "buildLauncherDistribution",
-                // "buildEngineDistribution",
-                // "buildProjectManagerDistribution",
-            ];
+            let mut tasks = vec![];
 
             if self.config.build_engine_package() {
                 tasks.push("buildEngineDistribution");
+                tasks.push("engine-runner/assembly");
                 ret.packages.engine = Some(self.paths.engine.clone());
             }
+
             if self.config.build_project_manager_package() {
                 tasks.push("buildProjectManagerDistribution");
                 ret.packages.project_manager = Some(self.paths.project_manager.clone());
             }
+
             if self.config.build_launcher_package() {
                 tasks.push("buildLauncherDistribution");
                 ret.packages.launcher = Some(self.paths.launcher.clone());
@@ -386,19 +382,20 @@ impl RunContext {
             enso.run_tests(IrCaches::No, PARALLEL_ENSO_TESTS).await?;
         }
 
-        let std_libs = self.paths.engine.dir.join("lib").join("Standard");
-        // Compile the Standard Libraries (Unix)
-        debug!("Compiling standard libraries under {}", std_libs.display());
-        for entry in ide_ci::fs::read_dir(&std_libs)? {
-            let entry = entry?;
-            let target = entry.path().join(self.paths.version().to_string());
-            enso.compile_lib(target)?.run_ok().await?;
+        if self.config.build_engine_package() {
+            let std_libs = self.paths.engine.dir.join("lib").join("Standard");
+            // Compile the Standard Libraries (Unix)
+            debug!("Compiling standard libraries under {}", std_libs.display());
+            for entry in ide_ci::fs::read_dir(&std_libs)? {
+                let entry = entry?;
+                let target = entry.path().join(self.paths.version().to_string());
+                enso.compile_lib(target)?.run_ok().await?;
+            }
         }
 
         if self.config.test_standard_library {
             enso.run_tests(IrCaches::Yes, PARALLEL_ENSO_TESTS).await?;
         }
-
 
         // Verify License Packages in Distributions
         // FIXME apparently this does not work on Windows due to some CRLF issues?

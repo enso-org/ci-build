@@ -187,6 +187,10 @@ pub fn get_free_port() -> Result<u16> {
         .context("Failed to find a free local port.")
 }
 
+pub fn ok_ready_boxed<'a, T: 'a + Send>(t: T) -> BoxFuture<'a, Result<T>> {
+    ready(Ok(t)).boxed()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
