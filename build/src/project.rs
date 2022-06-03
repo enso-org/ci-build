@@ -21,6 +21,13 @@ pub mod ide;
 pub mod project_manager;
 pub mod wasm;
 
+pub use backend::Backend;
+pub use engine::Engine;
+pub use gui::Gui;
+pub use ide::Ide;
+pub use project_manager::ProjectManager;
+pub use wasm::Wasm;
+
 /// A built target, contained under a single directory.
 ///
 /// The `AsRef<Path>` trait must return that directory path.

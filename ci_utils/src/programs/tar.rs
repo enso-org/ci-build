@@ -118,6 +118,7 @@ impl Program for Tar {
 }
 
 impl Tar {
+    #[context("Failed to crate an archive {}.", output_archive.as_ref().display())]
     pub fn pack_cmd<P: AsRef<Path>>(
         &self,
         output_archive: impl AsRef<Path>,
@@ -137,7 +138,7 @@ impl Tar {
 
         match paths.as_slice() {
             [item] =>
-                if let Some(parent) = item.canonicalize()?.parent() {
+                if let Some(parent) = crate::fs::canonicalize(item)?.parent() {
                     cmd.args(&Switch::WorkingDir(parent));
                     cmd.arg(item.file_name().unwrap()); // None can happen only when path ends with
                                                         // ".." - that's why we canonicalize

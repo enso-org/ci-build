@@ -37,7 +37,7 @@ pub struct BuildInput {
     pub octocrab:  Octocrab,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Engine;
 
 impl IsTarget for Engine {
