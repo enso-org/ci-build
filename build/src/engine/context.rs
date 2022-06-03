@@ -436,19 +436,24 @@ impl RunContext {
             }
         }
 
-        // Compress the built artifacts for upload
-        // The artifacts are compressed before upload to work around an error with long path
-        // handling in the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
-        self.paths.engine.pack().await?;
-        let schema_dir =
-            self.paths.repo_root.join_iter(["engine", "language-server", "src", "main", "schema"]);
-        let schema_files =
-            ide_ci::fs::read_dir(&schema_dir)?.map(|e| e.map(|e| e.path())).collect_result()?;
-        ide_ci::archive::create(self.paths.target.join("fbs-upload/fbs-schema.zip"), schema_files)
-            .await?;
+        if self.config.build_engine_package {
+            // Compress the built artifacts for upload
+            // The artifacts are compressed before upload to work around an error with long path
+            // handling in the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
+            self.paths.engine.pack().await?;
+            if TARGET_OS == OS::Linux && ide_ci::ci::run_in_ci() {
+                self.paths.upload_edition_file_artifact().await?;
+            }
 
-        if TARGET_OS == OS::Linux && ide_ci::ci::run_in_ci() {
-            self.paths.upload_edition_file_artifact().await?;
+            let schema_dir = self.paths.repo_root.join_iter([
+                "engine",
+                "language-server",
+                "src",
+                "main",
+                "schema",
+            ]);
+            ide_ci::actions::artifacts::upload_compressed_directory(&schema_dir, "fbs-schema")
+                .await?;
         }
 
         if self.config.build_launcher_bundle {
