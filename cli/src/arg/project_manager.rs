@@ -1,8 +1,8 @@
-use crate::prelude::*;
+use enso_build::prelude::*;
 
-use crate::cli::arg::Source;
-use crate::project::project_manager::ProjectManager;
+use crate::arg::Source;
 use crate::source_args_hlp;
+use enso_build::project::project_manager::ProjectManager;
 
 use clap::Args;
 

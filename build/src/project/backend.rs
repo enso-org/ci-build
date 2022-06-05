@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use crate::engine::BuildConfiguration;
+use crate::engine::BuildConfigurationFlags;
 use crate::engine::BuildOperation;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
@@ -125,11 +125,12 @@ impl IsTarget for Backend {
             let context = crate::engine::context::RunContext {
                 operation: crate::engine::Operation::Build(BuildOperation {}),
                 goodies: GoodieDatabase::new()?,
-                config: BuildConfiguration {
+                config: BuildConfigurationFlags {
                     clean_repo: false,
                     build_project_manager_bundle: true,
                     ..crate::engine::NIGHTLY
-                },
+                }
+                .into(),
                 octocrab: input.octocrab.clone(),
                 paths,
             };

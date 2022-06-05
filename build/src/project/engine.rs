@@ -1,15 +1,15 @@
 use crate::prelude::*;
 
-use crate::engine::BuildConfiguration;
+use crate::engine::BuildConfigurationFlags;
 use crate::engine::BuildOperation;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
-use crate::version::Versions;
 
 use anyhow::Context;
-use derivative::Derivative;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::ok_ready_boxed;
+
+pub use crate::project::backend::BuildInput;
 
 #[derive(Clone, Debug)]
 pub struct Artifact {
@@ -24,18 +24,6 @@ impl AsRef<Path> for Artifact {
 
 impl IsArtifact for Artifact {}
 
-#[derive(Clone, Derivative)]
-#[derivative(Debug)]
-pub struct BuildInput {
-    pub repo_root: PathBuf,
-    pub versions:  Versions,
-    /// Used for GraalVM release lookup.
-    ///
-    /// Default instance will suffice, but then we are prone to hit API limits. Authorized one will
-    /// likely do better.
-    #[derivative(Debug = "ignore")]
-    pub octocrab:  Octocrab,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Engine;
@@ -63,11 +51,12 @@ impl IsTarget for Engine {
             let context = crate::engine::context::RunContext {
                 operation: crate::engine::Operation::Build(BuildOperation {}),
                 goodies: GoodieDatabase::new()?,
-                config: BuildConfiguration {
+                config: BuildConfigurationFlags {
                     clean_repo: false,
                     build_engine_package: true,
                     ..crate::engine::NIGHTLY
-                },
+                }
+                .into(),
                 octocrab: input.octocrab.clone(),
                 paths,
             };
@@ -85,6 +74,7 @@ impl IsTarget for Engine {
 mod tests {
     use super::*;
     use crate::setup_octocrab;
+    use crate::version::Versions;
     use ide_ci::log::setup_logging;
 
     #[tokio::test]

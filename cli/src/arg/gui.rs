@@ -1,10 +1,10 @@
-use crate::prelude::*;
+use enso_build::prelude::*;
 
-use crate::cli::arg::OutputPath;
-use crate::cli::arg::Source;
-use crate::project::gui::Gui;
-use crate::project::wasm::Wasm;
+use crate::arg::OutputPath;
+use crate::arg::Source;
 use crate::source_args_hlp;
+use enso_build::project::gui::Gui;
+use enso_build::project::wasm::Wasm;
 
 use clap::Args;
 use clap::Subcommand;

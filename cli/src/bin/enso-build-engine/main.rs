@@ -1,9 +1,7 @@
 use enso_build::prelude::*;
 
-use enso_build::args::Args;
-use enso_build::engine::RunContext;
+use enso_build_cli::args::Args;
 use ide_ci::log::setup_logging;
-
 
 #[tokio::main]
 async fn main() -> Result {
@@ -19,7 +17,7 @@ async fn main() -> Result {
     }
     debug!("\n===End of the environment dump===\n");
 
-    let ctx = RunContext::new(&args).await?;
+    let ctx = args.run_context().await?;
     ctx.execute().await?;
     Ok(())
 }

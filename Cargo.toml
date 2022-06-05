@@ -3,6 +3,7 @@
 members = [
     "build",
     "ci_utils",
+    "cli",
 ]
 
 [profile.release]

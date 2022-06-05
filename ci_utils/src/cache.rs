@@ -18,7 +18,7 @@ pub fn default_path() -> Result<PathBuf> {
 
 pub trait Storable: Debug + Borrow<Self::Key> + Send + Sync + 'static {
     type Metadata: Serialize + DeserializeOwned + Send + Sync + 'static;
-    type Output: Send + Sync + 'static;
+    type Output: Clone + Send + Sync + 'static;
     type Key: Clone + Debug + Serialize + DeserializeOwned + Send + Sync + 'static;
 
     fn generate(&self, cache: Cache, store: PathBuf) -> BoxFuture<'static, Result<Self::Metadata>>;

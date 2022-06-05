@@ -1,9 +1,9 @@
-use crate::cli::arg::Source;
-use crate::prelude::*;
-use crate::project;
-use crate::project::backend::Backend;
+use crate::arg::Source;
 use crate::source_args_hlp;
 use clap::Args;
+use enso_build::prelude::*;
+use enso_build::project;
+use enso_build::project::backend::Backend;
 
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInput {

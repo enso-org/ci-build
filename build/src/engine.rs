@@ -1,8 +1,5 @@
 use crate::prelude::*;
 
-use crate::args::Args;
-use crate::args::BuildKind;
-use crate::args::WhatToDo;
 use crate::paths::ComponentPaths;
 use crate::paths::Paths;
 
@@ -61,7 +58,7 @@ pub enum BuildMode {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct BuildConfiguration {
+pub struct BuildConfigurationFlags {
     /// If true, repository shall be cleaned at the build start.
     ///
     /// Makes sense given that incremental builds with SBT are currently broken.
@@ -83,19 +80,17 @@ pub struct BuildConfiguration {
     pub build_project_manager_bundle: bool,
 }
 
-impl BuildConfiguration {
-    pub fn new(args: &Args) -> Self {
-        let mut config = match args.kind {
-            BuildKind::Dev => DEV,
-            BuildKind::Nightly => NIGHTLY,
-        };
+impl From<BuildConfigurationFlags> for BuildConfigurationResolved {
+    fn from(value: BuildConfigurationFlags) -> Self {
+        Self::new(value)
+    }
+}
 
-        // Update build configuration with a custom arg overrides.
-        if matches!(args.command, WhatToDo::Upload(_)) || args.bundle.contains(&true) {
-            config.build_launcher_bundle = true;
-            config.build_project_manager_bundle = true;
-        }
+#[derive(Clone, Debug, Shrinkwrap)]
+pub struct BuildConfigurationResolved(BuildConfigurationFlags);
 
+impl BuildConfigurationResolved {
+    pub fn new(mut config: BuildConfigurationFlags) -> Self {
         if config.build_launcher_bundle {
             config.build_launcher_package = true;
             config.build_engine_package = true;
@@ -110,9 +105,11 @@ impl BuildConfiguration {
             config.build_engine_package = true;
         }
 
-        config
+        Self(config)
     }
+}
 
+impl BuildConfigurationFlags {
     pub fn build_engine_package(&self) -> bool {
         self.build_engine_package
             || self.build_launcher_bundle
@@ -129,7 +126,7 @@ impl BuildConfiguration {
     }
 }
 
-pub const DEV: BuildConfiguration = BuildConfiguration {
+pub const DEV: BuildConfigurationFlags = BuildConfigurationFlags {
     clean_repo: true,
     mode: BuildMode::Development,
     test_scala: true,
@@ -143,7 +140,7 @@ pub const DEV: BuildConfiguration = BuildConfiguration {
     build_project_manager_bundle: false,
 };
 
-pub const NIGHTLY: BuildConfiguration = BuildConfiguration {
+pub const NIGHTLY: BuildConfigurationFlags = BuildConfigurationFlags {
     clean_repo: true,
     mode: BuildMode::NightlyRelease,
     test_scala: false,
@@ -164,35 +161,10 @@ pub enum ReleaseCommand {
     Publish,
 }
 
-impl TryFrom<WhatToDo> for ReleaseCommand {
-    type Error = anyhow::Error;
-
-    fn try_from(value: WhatToDo) -> Result<Self> {
-        Ok(match value {
-            WhatToDo::Create(_) => ReleaseCommand::Create,
-            WhatToDo::Upload(_) => ReleaseCommand::Upload,
-            WhatToDo::Publish(_) => ReleaseCommand::Publish,
-            _ => bail!("Not a release command: {}", value),
-        })
-    }
-}
-
 #[derive(Clone, PartialEq, Debug)]
 pub struct ReleaseOperation {
     pub command: ReleaseCommand,
     pub repo:    RepoContext,
-}
-
-impl ReleaseOperation {
-    pub fn new(args: &Args) -> Result<Self> {
-        let command = args.command.clone().try_into()?;
-        let repo = match args.repo.clone() {
-            Some(repo) => repo,
-            None => ide_ci::actions::env::GITHUB_REPOSITORY.get()?,
-        };
-
-        Ok(Self { command, repo })
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]

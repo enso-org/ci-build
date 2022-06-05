@@ -22,17 +22,17 @@ use crate::prelude::*;
 use anyhow::Context;
 use ide_ci::programs::java;
 use regex::Regex;
+use strum::EnumString;
 
 pub mod prelude {
     pub use argh::FromArgs;
     pub use ide_ci::prelude::*;
 }
 
-pub mod args;
 pub mod aws;
+pub mod build;
 pub mod bump_version;
 pub mod changelog;
-pub mod cli;
 pub mod config;
 pub mod engine;
 pub mod enso;
@@ -184,8 +184,9 @@ val stdLibVersion       = defaultDevEnsoVersion
     }
 }
 
-
-pub fn check_run_build() {
-    let path = PathBuf::from("/runner/_work/ci-build/ci-build/enso/app/ide-desktop/node_modules/app-builder-bin/linux/x64/app-builder");
-    println!("App builder exists? {}", path.exists());
+#[derive(clap::ArgEnum, Clone, Copy, PartialEq, Debug, EnumString)]
+#[strum(serialize_all = "kebab-case")]
+pub enum BuildKind {
+    Dev,
+    Nightly,
 }

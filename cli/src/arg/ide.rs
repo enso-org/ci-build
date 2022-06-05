@@ -1,11 +1,11 @@
-use crate::prelude::*;
+use enso_build::prelude::*;
 
-use crate::cli::arg::OutputPath;
-use crate::cli::arg::Source;
-use crate::project::backend::Backend;
-use crate::project::gui::Gui;
-use crate::project::wasm::DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT;
+use crate::arg::OutputPath;
+use crate::arg::Source;
 use crate::source_args_hlp;
+use enso_build::project::backend::Backend;
+use enso_build::project::gui::Gui;
+use enso_build::project::wasm::DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT;
 
 use clap::Args;
 use clap::Subcommand;
@@ -39,7 +39,7 @@ pub enum Command {
     /// webpack's dev server.
     Watch {
         #[clap(flatten)]
-        gui:             crate::cli::arg::gui::WatchInput,
+        gui:             crate::arg::gui::WatchInput,
         #[clap(flatten)]
         project_manager: Source<Backend>,
     },

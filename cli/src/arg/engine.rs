@@ -1,9 +1,9 @@
-use crate::prelude::*;
+use enso_build::prelude::*;
 
-use crate::cli::arg::Source;
-use crate::project::engine::Engine;
+use crate::arg::Source;
 use crate::source_args_hlp;
 use clap::Args;
+use enso_build::project::engine::Engine;
 
 source_args_hlp!(Engine, "engine", BuildInput);
 

@@ -1,49 +1,61 @@
+#![feature(option_result_contains)]
+#![feature(once_cell)]
+#![feature(default_free_fn)]
+
+pub mod arg;
+pub mod args;
+pub use enso_build::prelude;
+
+use enso_build::prelude::*;
+use ide_ci::env::Variable;
+
+
+pub struct BuildKind;
+impl Variable for BuildKind {
+    const NAME: &'static str = "ENSO_BUILD_KIND";
+    type Value = enso_build::BuildKind;
+}
+
 // #![feature(explicit_generic_args_with_impl_trait)]
 // #![feature(once_cell)]
 // #![feature(exit_status_error)]
 // #![feature(associated_type_defaults)]
 // #![feature(is_some_with)]
-// #![feature(default_free_fn)]
 // #![feature(adt_const_params)]
 
-pub use crate::prelude;
 
-use crate::prelude::*;
-
-use crate::args::BuildKind;
-use crate::cli::arg;
-use crate::cli::arg::Cli;
-use crate::cli::arg::IsTargetSource;
-use crate::cli::arg::OutputPath;
-use crate::cli::arg::Target;
-use crate::paths::generated::RepoRoot;
-use crate::paths::TargetTriple;
-use crate::prettier;
-use crate::project::backend;
-use crate::project::backend::Backend;
-use crate::project::engine;
-use crate::project::engine::Engine;
-use crate::project::gui;
-use crate::project::gui::Gui;
-use crate::project::ide;
-use crate::project::ide::Ide;
-use crate::project::project_manager;
-use crate::project::project_manager::ProjectManager;
-use crate::project::wasm;
-use crate::project::wasm::Wasm;
-use crate::project::IsTarget;
-use crate::project::IsWatchable;
-use crate::project::IsWatcher;
-use crate::setup_octocrab;
-use crate::source::CiRunSource;
-use crate::source::ExternalSource;
-use crate::source::GetTargetJob;
-use crate::source::OngoingCiRunSource;
-use crate::source::ReleaseSource;
-use crate::source::Source;
+use crate::arg::Cli;
+use crate::arg::IsTargetSource;
+use crate::arg::OutputPath;
+use crate::arg::Target;
 use anyhow::Context;
 use clap::Parser;
 use derivative::Derivative;
+use enso_build::paths::generated::RepoRoot;
+use enso_build::paths::TargetTriple;
+use enso_build::prettier;
+use enso_build::project::backend;
+use enso_build::project::backend::Backend;
+use enso_build::project::engine;
+use enso_build::project::engine::Engine;
+use enso_build::project::gui;
+use enso_build::project::gui::Gui;
+use enso_build::project::ide;
+use enso_build::project::ide::Ide;
+use enso_build::project::project_manager;
+use enso_build::project::project_manager::ProjectManager;
+use enso_build::project::wasm;
+use enso_build::project::wasm::Wasm;
+use enso_build::project::IsTarget;
+use enso_build::project::IsWatchable;
+use enso_build::project::IsWatcher;
+use enso_build::setup_octocrab;
+use enso_build::source::CiRunSource;
+use enso_build::source::ExternalSource;
+use enso_build::source::GetTargetJob;
+use enso_build::source::OngoingCiRunSource;
+use enso_build::source::ReleaseSource;
+use enso_build::source::Source;
 use futures_util::future::try_join;
 use ide_ci::actions::workflow::is_in_env;
 use ide_ci::cache::Cache;
@@ -59,6 +71,10 @@ use std::time::Duration;
 use tempfile::tempdir;
 use tokio::process::Child;
 use tokio::runtime::Runtime;
+
+fn resolve_artifact_name(input: Option<String>, project: &impl IsTarget) -> String {
+    input.unwrap_or_else(|| project.artifact_name())
+}
 
 /// The basic, common information available in this application.
 #[derive(Clone, Derivative)]
@@ -97,9 +113,9 @@ impl BuildContext {
     pub async fn new(cli: &Cli) -> Result<Self> {
         let absolute_repo_path = cli.repo_path.absolutize()?;
         let octocrab = setup_octocrab().await?;
-        let versions = crate::version::deduce_versions(
+        let versions = enso_build::version::deduce_versions(
             &octocrab,
-            BuildKind::Dev,
+            enso_build::BuildKind::Dev,
             Ok(&cli.repo_remote),
             &absolute_repo_path,
         )
@@ -143,14 +159,14 @@ impl BuildContext {
                         octocrab: self.octocrab.clone(),
                         run_id,
                         repository: self.remote_repo.clone(),
-                        artifact_name: source.artifact_name.clone(),
+                        artifact_name: resolve_artifact_name(source.artifact_name.clone(), &target),
                     }))
                 }))
                 .boxed()
             }
             arg::SourceKind::CurrentCiRun =>
                 ready(Ok(Source::External(ExternalSource::OngoingCiRun(OngoingCiRunSource {
-                    artifact_name: source.artifact_name.clone(),
+                    artifact_name: resolve_artifact_name(source.artifact_name.clone(), &target),
                 }))))
                 .boxed(),
             arg::SourceKind::Release => {
@@ -180,7 +196,8 @@ impl BuildContext {
         async move {
             let release = match designator.as_str() {
                 "latest" => repository.latest_release(&octocrab).await?,
-                "nightly" => crate::version::latest_nightly_release(&octocrab, &repository).await?,
+                "nightly" =>
+                    enso_build::version::latest_nightly_release(&octocrab, &repository).await?,
                 tag => repository.find_release_by_text(&octocrab, tag).await?,
             };
             Ok(ReleaseSource {
@@ -226,8 +243,8 @@ impl BuildContext {
         .boxed()
     }
 
-    pub fn pm_info(&self) -> crate::project::backend::BuildInput {
-        crate::project::backend::BuildInput {
+    pub fn pm_info(&self) -> enso_build::project::backend::BuildInput {
+        enso_build::project::backend::BuildInput {
             octocrab:  self.octocrab.clone(),
             versions:  self.triple.versions.clone(),
             repo_root: self.source_root.clone(),
@@ -284,7 +301,7 @@ impl BuildContext {
                 let inputs = self.resolve_inputs::<Wasm>(params);
                 let cache = self.cache.clone();
                 async move {
-                    let source = crate::source::Source::BuildLocally(inputs?);
+                    let source = enso_build::source::Source::BuildLocally(inputs?);
                     let job = GetTargetJob { source, destination: output_path.output_path };
                     get_resolved(Wasm, cache, job).await?;
                     Ok(())
@@ -382,7 +399,7 @@ impl BuildContext {
                 .boxed()
             }
             arg::ide::Command::Watch { project_manager, gui } => {
-                use crate::project::ProcessWrapper;
+                use enso_build::project::ProcessWrapper;
                 let gui_watcher = self.watch_gui(gui);
                 let project_manager = self.spawn_project_manager(project_manager, None);
 
@@ -443,9 +460,11 @@ impl BuildContext {
         let get_task = self.get(source);
         async move {
             let project_manager = get_task.await?;
-            let mut command = crate::programs::project_manager::spawn_from(&project_manager.path);
+            let mut command =
+                enso_build::programs::project_manager::spawn_from(&project_manager.path);
             if let Some(custom_root) = custom_root {
-                command.set_env(crate::programs::project_manager::PROJECTS_ROOT, &custom_root)?;
+                command
+                    .set_env(enso_build::programs::project_manager::PROJECTS_ROOT, &custom_root)?;
             }
             command.spawn_intercepting()
         }
@@ -605,17 +624,16 @@ where
 }
 
 #[tracing::instrument(err)]
-pub async fn main_internal(config: crate::config::Config) -> Result {
+pub async fn main_internal(config: enso_build::config::Config) -> Result {
     setup_logging()?;
 
     // Setup that affects Cli parser construction.
     if let Some(wasm_size_limit) = config.wasm_size_limit {
-        crate::cli::arg::wasm::initialize_default_wasm_size_limit(wasm_size_limit)?;
+        crate::arg::wasm::initialize_default_wasm_size_limit(wasm_size_limit)?;
     }
 
     let cli = Cli::parse();
 
-    pretty_env_logger::init();
     debug!("Parsed CLI arguments: {cli:#?}");
 
     if !cli.skip_version_check {
@@ -667,7 +685,7 @@ pub async fn main_internal(config: crate::config::Config) -> Result {
     Ok(())
 }
 
-pub fn main(config: crate::config::Config) -> Result {
+pub fn lib_main(config: enso_build::config::Config) -> Result {
     let rt = Runtime::new()?;
     rt.block_on(async { main_internal(config).await })?;
     rt.shutdown_timeout(Duration::from_secs(60 * 30));
@@ -679,7 +697,7 @@ pub fn main(config: crate::config::Config) -> Result {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::version::Versions;
+    use enso_build::version::Versions;
 
     #[tokio::test]
     async fn resolving_release() -> Result {

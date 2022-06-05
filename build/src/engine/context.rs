@@ -3,20 +3,15 @@ use crate::prelude::*;
 use ide_ci::env::Variable;
 use sysinfo::SystemExt;
 
-use crate::args;
-use crate::args::Args;
-use crate::args::WhatToDo;
 use crate::engine::download_project_templates;
 use crate::engine::env;
-use crate::engine::BuildConfiguration;
+use crate::engine::BuildConfigurationResolved;
 use crate::engine::BuildMode;
-use crate::engine::BuildOperation;
 use crate::engine::BuiltArtifacts;
 use crate::engine::ComponentPathExt;
 use crate::engine::Operation;
 use crate::engine::ReleaseCommand;
 use crate::engine::ReleaseOperation;
-use crate::engine::RunOperation;
 use crate::engine::FLATC_VERSION;
 use crate::engine::PARALLEL_ENSO_TESTS;
 use crate::get_graal_version;
@@ -25,13 +20,11 @@ use crate::paths::cache_directory;
 use crate::paths::Paths;
 use crate::project::ProcessWrapper;
 use crate::retrieve_github_access_token;
-use crate::setup_octocrab;
 
 use crate::engine::bundle::Bundle;
 use crate::engine::sbt::verify_generated_package;
 use crate::enso::BuiltEnso;
 use crate::enso::IrCaches;
-use crate::version::deduce_versions;
 
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies;
@@ -46,7 +39,7 @@ use ide_ci::programs::Sbt;
 
 #[derive(Clone, Debug)]
 pub struct RunContext {
-    pub config:    BuildConfiguration,
+    pub config:    BuildConfigurationResolved,
     pub octocrab:  Octocrab,
     pub paths:     Paths,
     pub goodies:   GoodieDatabase,
@@ -54,38 +47,6 @@ pub struct RunContext {
 }
 
 impl RunContext {
-    pub async fn new(args: &Args) -> Result<Self> {
-        // Get default build configuration for a given build kind.
-        let config = BuildConfiguration::new(&args);
-        let octocrab = setup_octocrab().await?;
-        let enso_root = args.target.clone();
-        debug!("Received target location: {}", enso_root.display());
-        let enso_root = args.target.absolutize()?.to_path_buf();
-        debug!("Absolute target location: {}", enso_root.display());
-
-
-        let operation = match &args.command {
-            WhatToDo::Create(_) | WhatToDo::Upload(_) | WhatToDo::Publish(_) =>
-                Operation::Release(ReleaseOperation::new(args)?),
-            WhatToDo::Run(args::Run { command_pieces }) =>
-                Operation::Run(RunOperation { command_pieces: command_pieces.clone() }),
-            WhatToDo::Build(args::Build {}) => Operation::Build(BuildOperation {}),
-        };
-        debug!("Operation to perform: {:?}", operation);
-
-        let target_repo = if let Operation::Release(release_op) = &operation {
-            Ok(&release_op.repo)
-        } else {
-            Err(anyhow!("Missing repository information for release operation."))
-        };
-        let versions = deduce_versions(&octocrab, args.kind, target_repo, &enso_root).await?;
-        versions.publish()?;
-        debug!("Target version: {versions:?}.");
-        let paths = Paths::new_version(&enso_root, versions.version.clone())?;
-        let goodies = GoodieDatabase::new()?;
-        Ok(Self { config, octocrab, paths, goodies, operation })
-    }
-
     /// Check that required programs are present (if not, installs them, if supported). Set
     /// environment variables for the build to follow.
     pub async fn prepare_build_env(&self) -> Result {

@@ -15,8 +15,8 @@ jobs:
         os:
           - [mwu-deluxe]
         command:
-          - "enso-build2 --repo-remote enso-org/ci-build engine"
-          - "enso-build2 --repo-remote enso-org/ci-build project-manager"
+          - "enso-build-cli --repo-remote enso-org/ci-build engine"
+          - "enso-build-cli --repo-remote enso-org/ci-build project-manager"
           - "enso-build4"
       fail-fast: false
 

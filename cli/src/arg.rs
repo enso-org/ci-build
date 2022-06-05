@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use enso_build::prelude::*;
 
 pub mod backend;
 pub mod engine;
@@ -6,8 +6,6 @@ pub mod gui;
 pub mod ide;
 pub mod project_manager;
 pub mod wasm;
-
-use crate::args::BuildKind;
 
 use clap::Arg;
 use clap::ArgEnum;
@@ -24,7 +22,7 @@ pub const ENVIRONMENT_VARIABLE_NAME_PREFIX: &str = "ENSO_BUILD";
 pub const DEFAULT_REMOTE_REPOSITORY_FALLBACK: &str = "enso-org/enso";
 
 pub fn default_repo_path() -> Option<PathBuf> {
-    crate::repo::deduce_repository_path()
+    enso_build::repo::deduce_repository_path()
 }
 
 pub fn default_repo_remote() -> RepoContext {
@@ -75,7 +73,7 @@ pub trait IsTargetSource {
 #[macro_export]
 macro_rules! source_args_hlp {
     ($target:ty, $prefix:literal, $inputs:ty) => {
-        impl $crate::cli::arg::IsTargetSource for $target {
+        impl $crate::arg::IsTargetSource for $target {
             const SOURCE_NAME: &'static str = concat!($prefix, "-", "source");
             const PATH_NAME: &'static str = concat!($prefix, "-", "path");
             const OUTPUT_PATH_NAME: &'static str = concat!($prefix, "-", "output-path");
@@ -132,8 +130,8 @@ pub struct Cli {
     pub repo_remote: RepoContext,
 
     /// The build kind. Affects the default version generation.
-    #[clap(long, arg_enum, default_value_t = BuildKind::Dev, enso_env())]
-    pub build_kind: BuildKind,
+    #[clap(long, arg_enum, default_value_t = enso_build::BuildKind::Dev, enso_env())]
+    pub build_kind: enso_build::BuildKind,
 
     /// Platform to target. Currently cross-compilation is enabled only for GUI/IDE (without
     /// Project Manager) on platforms where Electron Builder supports this.

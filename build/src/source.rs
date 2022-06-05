@@ -32,7 +32,7 @@ pub enum Source<Target: IsTarget> {
 
 #[derive(Clone, Debug)]
 pub struct OngoingCiRunSource {
-    pub artifact_name: Option<String>,
+    pub artifact_name: String,
 }
 
 #[derive(Clone, Derivative)]
@@ -44,7 +44,7 @@ pub struct CiRunSource {
     pub repository:    RepoContext,
     #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub run_id:        RunId,
-    pub artifact_name: Option<String>,
+    pub artifact_name: String,
 }
 
 #[derive(Clone, Derivative)]

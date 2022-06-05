@@ -10,10 +10,9 @@ use crate::project::IsTarget;
 use crate::project::IsWatchable;
 
 use anyhow::Context;
-use async_compression::tokio::bufread::GzipEncoder;
-use async_compression::Level;
 use derivative::Derivative;
 use ide_ci::env::Variable;
+use ide_ci::fs::compressed_size;
 use ide_ci::programs::cargo;
 use ide_ci::programs::wasm_pack;
 use ide_ci::programs::Cargo;
@@ -28,6 +27,8 @@ pub mod js_patcher;
 pub mod test;
 
 pub const DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT: Duration = Duration::from_secs(300);
+
+pub const INTEGRATION_TESTS_CRATE_NAME: &str = "enso-integration-test";
 
 pub const OUTPUT_NAME: &str = "ide";
 
@@ -174,27 +175,6 @@ impl IsTarget for Wasm {
     }
 }
 
-pub fn check_if_identical(source: impl AsRef<Path>, target: impl AsRef<Path>) -> bool {
-    (|| -> Result<bool> {
-        if ide_ci::fs::metadata(&source)?.len() == ide_ci::fs::metadata(&target)?.len() {
-            Ok(true)
-        } else if ide_ci::fs::read(&source)? == ide_ci::fs::read(&target)? {
-            // TODO: Not good for large files, should process them chunk by chunk.
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    })()
-    .unwrap_or(false)
-}
-
-pub fn copy_if_different(source: impl AsRef<Path>, target: impl AsRef<Path>) -> Result {
-    if !check_if_identical(&source, &target) {
-        ide_ci::fs::copy(&source, &target)?;
-    }
-    Ok(())
-}
-
 impl IsWatchable for Wasm {
     type Watcher = crate::project::Watcher<Self, Child>;
 
@@ -288,7 +268,7 @@ impl Wasm {
             .cmd()?
             .apply(&cargo::Command::Check)
             .apply(&cargo::Options::Workspace)
-            .apply(&cargo::Options::Package("enso-integration-test".into()))
+            .apply(&cargo::Options::Package(INTEGRATION_TESTS_CRATE_NAME.into()))
             .apply(&cargo::Options::AllTargets)
             .run_ok()
             .await
@@ -355,13 +335,6 @@ impl Wasm {
             .await
         // PM will be automatically killed by dropping the handle.
     }
-}
-
-/// Get the size of a file after gzip compression.
-pub async fn compressed_size(path: impl AsRef<Path>) -> Result<byte_unit::Byte> {
-    let file = tokio::io::BufReader::new(ide_ci::fs::tokio::open(&path).await?);
-    let encoded_stream = GzipEncoder::with_quality(file, Level::Best);
-    ide_ci::io::read_length(encoded_stream).await.map(into)
 }
 
 #[cfg(test)]

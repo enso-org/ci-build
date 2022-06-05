@@ -102,19 +102,15 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         let this = self.clone();
         let span = info_span!("Getting artifact from an external source");
         match source {
-            ExternalSource::OngoingCiRun(OngoingCiRunSource { artifact_name }) => {
-                let artifact_name =
-                    artifact_name.unwrap_or_else(|| self.artifact_name().to_string());
-                async move {
-                    ide_ci::actions::artifacts::retrieve_compressed_directory(
-                        artifact_name,
-                        &destination,
-                    )
-                    .await?;
-                    this.adapt_artifact(destination).await
-                }
-                .boxed()
+            ExternalSource::OngoingCiRun(OngoingCiRunSource { artifact_name }) => async move {
+                ide_ci::actions::artifacts::retrieve_compressed_directory(
+                    artifact_name,
+                    &destination,
+                )
+                .await?;
+                this.adapt_artifact(destination).await
             }
+            .boxed(),
             ExternalSource::CiRun(ci_run) => self.download_artifact(ci_run, destination, cache),
             ExternalSource::LocalFile(source_path) => async move {
                 ide_ci::fs::mirror_directory(source_path, &destination).await?;
@@ -150,7 +146,6 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         cache: Cache,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let CiRunSource { run_id, artifact_name, repository, octocrab } = ci_run;
-        let artifact_name = artifact_name.unwrap_or_else(|| self.artifact_name().to_string());
         let span = info_span!("Downloading CI Artifact.", %artifact_name, %repository, target = output_path.as_str());
         let this = self.clone();
         async move {

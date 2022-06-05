@@ -7,6 +7,8 @@ pub mod wrappers;
 
 pub use wrappers::*;
 
+use async_compression::tokio::bufread::GzipEncoder;
+use async_compression::Level;
 use std::fs::File;
 
 /////////////////////////////
@@ -223,5 +225,33 @@ pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
 #[context("Failed to update permissions on `{}`", path.as_ref().display())]
 pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
     // No-op on Windows.
+    Ok(())
+}
+
+/// Get the size of a file after gzip compression.
+pub async fn compressed_size(path: impl AsRef<Path>) -> Result<byte_unit::Byte> {
+    let file = ::tokio::io::BufReader::new(crate::fs::tokio::open(&path).await?);
+    let encoded_stream = GzipEncoder::with_quality(file, Level::Best);
+    crate::io::read_length(encoded_stream).await.map(into)
+}
+
+pub fn check_if_identical(source: impl AsRef<Path>, target: impl AsRef<Path>) -> bool {
+    (|| -> Result<bool> {
+        if crate::fs::metadata(&source)?.len() == crate::fs::metadata(&target)?.len() {
+            Ok(true)
+        } else if crate::fs::read(&source)? == crate::fs::read(&target)? {
+            // TODO: Not good for large files, should process them chunk by chunk.
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    })()
+    .unwrap_or(false)
+}
+
+pub fn copy_if_different(source: impl AsRef<Path>, target: impl AsRef<Path>) -> Result {
+    if !check_if_identical(&source, &target) {
+        crate::fs::copy(&source, &target)?;
+    }
     Ok(())
 }
