@@ -45,7 +45,6 @@ jobs:
       ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
-      - name: Prepare release
       - run: enso-build-cli release --kind nightly publish
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.ARTEFACT_S3_ACCESS_KEY_ID }}
