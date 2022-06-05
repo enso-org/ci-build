@@ -19,6 +19,7 @@ jobs:
       ENSO_RELEASE_ID: ${{ steps.prepare-step.outputs.ENSO_RELEASE_ID }}
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
+      - run: enso-build-cli --help
       - run: enso-build-cli release --kind nightly create-draft
         id: prepare-step
 
