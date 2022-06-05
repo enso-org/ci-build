@@ -25,9 +25,7 @@ use ide_ci::models::config::RepoContext;
 pub enum WhatToDo {
     Build(Build),
     // Three release-related commands below.
-    Create(CreateRelease),
     Upload(UploadAsset),
-    Publish(PublishRelease),
     // Utilities
     Run(Run),
 }
@@ -37,9 +35,7 @@ impl TryFrom<WhatToDo> for ReleaseCommand {
 
     fn try_from(value: WhatToDo) -> Result<Self> {
         Ok(match value {
-            WhatToDo::Create(_) => ReleaseCommand::Create,
             WhatToDo::Upload(_) => ReleaseCommand::Upload,
-            WhatToDo::Publish(_) => ReleaseCommand::Publish,
             _ => bail!("Not a release command: {}", value),
         })
     }
@@ -50,9 +46,7 @@ impl WhatToDo {
         use WhatToDo::*;
         // Not using matches! to force manual check when extending enum.
         match self {
-            Create(_) => true,
             Upload(_) => true,
-            Publish(_) => true,
             Build(_) | Run(_) => false,
         }
     }
@@ -95,7 +89,7 @@ pub fn parse_repo_context(value: &str) -> std::result::Result<Option<RepoContext
     RepoContext::from_str(value).map(Some).map_err(|e| e.to_string())
 }
 
-/// Build, test and packave Enso Engine.
+/// Build, test and package Enso Engine.
 #[derive(Clone, Debug, Parser)]
 pub struct Arguments {
     /// build kind (dev/nightly)
@@ -144,8 +138,7 @@ impl Arguments {
 
 
         let operation = match &self.command {
-            WhatToDo::Create(_) | WhatToDo::Upload(_) | WhatToDo::Publish(_) =>
-                Operation::Release(self.release_operation()?),
+            WhatToDo::Upload(_) => Operation::Release(self.release_operation()?),
             WhatToDo::Run(Run { command_pieces }) =>
                 Operation::Run(RunOperation { command_pieces: command_pieces.clone() }),
             WhatToDo::Build(Build {}) => Operation::Build(BuildOperation {}),

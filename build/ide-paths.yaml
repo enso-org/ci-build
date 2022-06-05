@@ -35,7 +35,11 @@
     init:
     build-init:
     build.json:
+  distribution/:
+    editions/:
+      <edition>.yaml:
   run:
+  CHANGELOG.md:
 
 project-manager/:
   bin/:

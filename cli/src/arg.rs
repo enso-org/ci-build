@@ -5,6 +5,7 @@ pub mod engine;
 pub mod gui;
 pub mod ide;
 pub mod project_manager;
+pub mod release;
 pub mod wasm;
 
 use clap::Arg;
@@ -19,7 +20,7 @@ use octocrab::models::RunId;
 /// The prefix that will be used when reading the build script arguments from environment.
 pub const ENVIRONMENT_VARIABLE_NAME_PREFIX: &str = "ENSO_BUILD";
 
-pub const DEFAULT_REMOTE_REPOSITORY_FALLBACK: &str = "enso-org/enso";
+pub const DEFAULT_REMOTE_REPOSITORY_FALLBACK: &str = "enso-org/ci-build";
 
 pub fn default_repo_path() -> Option<PathBuf> {
     enso_build::repo::deduce_repository_path()
@@ -108,6 +109,8 @@ pub enum Target {
     Lint,
     /// Apply automatic formatters on the repository.
     Fmt,
+    /// Release-related subcommand.
+    Release(release::Target),
 }
 
 /// Build, test and package Enso Engine.

@@ -137,51 +137,6 @@ impl RunContext {
         Ok(())
     }
 
-    /// Create a new draft release on the GitHub repository.
-    ///
-    /// Emits its ID into environment, so other build steps can use it.
-    pub async fn create_release(
-        &self,
-        repo: &RepoContext,
-    ) -> Result<octocrab::models::repos::Release> {
-        let versions = &self.paths.triple.versions;
-        let commit = ide_ci::actions::env::GITHUB_SHA.get()?;
-
-        let changelog_contents = ide_ci::fs::read_to_string(self.paths.changelog())?;
-        let latest_changelog_body =
-            crate::changelog::Changelog(&changelog_contents).top_release_notes()?;
-
-        debug!("Preparing release {} for commit {}", versions.version, commit);
-        let release = repo
-            .repos(&self.octocrab)
-            .releases()
-            .create(&versions.tag())
-            .target_commitish(&commit)
-            .name(&versions.pretty_name())
-            .body(&latest_changelog_body.contents)
-            .prerelease(true)
-            .draft(true)
-            .send()
-            .await?;
-
-        crate::env::ReleaseId.emit(&release.id)?;
-        Ok(release)
-    }
-
-    pub async fn publish_release(&self, repo: &RepoContext) -> Result {
-        let release_id = crate::env::ReleaseId.fetch()?;
-        debug!("Looking for release with id {release_id} on github.");
-        let release = repo.repos(&self.octocrab).releases().get_by_id(release_id).await?;
-        debug!("Found the target release, will publish it.");
-        repo.repos(&self.octocrab).releases().update(release.id.0).draft(false).send().await?;
-        debug!("Done. Release URL: {}", release.url);
-
-        self.paths.download_edition_file_artifact().await?;
-        debug!("Updating edition in the AWS S3.");
-        crate::aws::update_manifest(repo, &self.paths).await?;
-        Ok(())
-    }
-
     pub async fn build(&self) -> Result<BuiltArtifacts> {
         let mut ret = BuiltArtifacts::default();
 
@@ -433,12 +388,6 @@ impl RunContext {
     pub async fn execute(&self) -> Result {
         match &self.operation {
             Operation::Release(ReleaseOperation { command, repo }) => match command {
-                ReleaseCommand::Create => {
-                    self.create_release(repo).await?;
-                }
-                ReleaseCommand::Publish => {
-                    self.publish_release(repo).await?;
-                }
                 ReleaseCommand::Upload => {
                     let artifacts = self.build().await?;
 

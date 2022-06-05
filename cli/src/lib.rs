@@ -28,6 +28,7 @@ impl Variable for BuildKind {
 // #![feature(adt_const_params)]
 
 
+use crate::arg::release::Action;
 use crate::arg::Cli;
 use crate::arg::IsTargetSource;
 use crate::arg::OutputPath;
@@ -35,7 +36,7 @@ use crate::arg::Target;
 use anyhow::Context;
 use clap::Parser;
 use derivative::Derivative;
-use enso_build::paths::generated::RepoRoot;
+use enso_build::context::BuildContext;
 use enso_build::paths::TargetTriple;
 use enso_build::prettier;
 use enso_build::project::backend;
@@ -65,7 +66,6 @@ use ide_ci::actions::workflow::is_in_env;
 use ide_ci::cache::Cache;
 use ide_ci::global;
 use ide_ci::log::setup_logging;
-use ide_ci::models::config::RepoContext;
 use ide_ci::programs::cargo;
 use ide_ci::programs::rustc;
 use ide_ci::programs::Cargo;
@@ -83,43 +83,31 @@ fn resolve_artifact_name(input: Option<String>, project: &impl IsTarget) -> Stri
 /// The basic, common information available in this application.
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
-pub struct BuildContext {
-    /// GitHub API client.
-    ///
-    /// If authorized, it will count API rate limits against our identity and allow operations like
-    /// managing releases or downloading CI run artifacts.
-    #[derivative(Debug = "ignore")]
-    pub octocrab: Octocrab,
-
-    /// Version to be built.
-    ///
-    /// Note that this affects only targets that are being built. If project parts are provided by
-    /// other means, their version might be different.
-    pub triple: TargetTriple,
-
-    /// Directory being an `enso` repository's working copy.
-    ///
-    /// The directory is not required to be a git repository. It is allowed to use source tarballs
-    /// as well.
-    pub source_root: PathBuf,
-
-    /// Remote repository is used for release-related operations. This also includes deducing a new
-    /// version number.
-    pub remote_repo: RepoContext,
-
-    /// Stores things like downloaded release assets to save time.
-    pub cache: Cache,
+pub struct Processor {
+    pub context: BuildContext,
 }
 
-impl BuildContext {
+impl Deref for Processor {
+    type Target = BuildContext;
+
+    fn deref(&self) -> &Self::Target {
+        &self.context
+    }
+}
+
+impl Processor {
     /// Setup common build environment information based on command line input and local
     /// environment.
     pub async fn new(cli: &Cli) -> Result<Self> {
+        let build_kind = match &cli.target {
+            Target::Release(release) => release.kind,
+            _ => enso_build::BuildKind::Dev,
+        };
         let absolute_repo_path = cli.repo_path.absolutize()?;
         let octocrab = setup_octocrab().await?;
         let versions = enso_build::version::deduce_versions(
             &octocrab,
-            enso_build::BuildKind::Dev,
+            build_kind,
             Ok(&cli.repo_remote),
             &absolute_repo_path,
         )
@@ -127,13 +115,14 @@ impl BuildContext {
         let mut triple = TargetTriple::new(versions);
         triple.os = cli.target_os;
         triple.versions.publish()?;
-        Ok(Self {
+        let context = BuildContext {
             octocrab,
             triple,
             source_root: absolute_repo_path.into(),
             remote_repo: cli.repo_remote.clone(),
             cache: Cache::new(&cli.cache_path).await?,
-        })
+        };
+        Ok(Self { context })
     }
 
     pub fn resolve<T: IsTargetSource + IsTarget>(
@@ -222,17 +211,6 @@ impl BuildContext {
         .boxed()
     }
 
-    pub fn commit(&self) -> BoxFuture<'static, Result<String>> {
-        let root = self.source_root.clone();
-        async move {
-            match ide_ci::actions::env::GITHUB_SHA.get() {
-                Ok(commit) => Ok(commit),
-                Err(_e) => Git::new(root).head_hash().await,
-            }
-        }
-        .boxed()
-    }
-
     pub fn js_build_info(&self) -> BoxFuture<'static, Result<gui::BuildInfo>> {
         let triple = self.triple.clone();
         let commit = self.commit();
@@ -274,10 +252,6 @@ impl BuildContext {
         let get_task = self.target().map(|target| self.resolve(target, target_source));
         let cache = self.cache.clone();
         async move { get_resolved(target?, cache, get_task?.await?).await }.boxed()
-    }
-
-    pub fn repo_root(&self) -> RepoRoot {
-        RepoRoot::new(&self.source_root, &self.triple.to_string())
     }
 
     pub fn build_locally<Target: Resolvable>(
@@ -496,21 +470,21 @@ impl BuildContext {
 }
 
 pub trait Resolvable: IsTarget + IsTargetSource + Clone {
-    fn prepare_target(context: &BuildContext) -> Result<Self>;
+    fn prepare_target(context: &Processor) -> Result<Self>;
 
     fn resolve(
-        ctx: &BuildContext,
+        ctx: &Processor,
         from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput>;
 }
 
 impl Resolvable for Wasm {
-    fn prepare_target(_context: &BuildContext) -> Result<Self> {
+    fn prepare_target(_context: &Processor) -> Result<Self> {
         Ok(Wasm {})
     }
 
     fn resolve(
-        ctx: &BuildContext,
+        ctx: &Processor,
         from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
         let arg::wasm::BuildInputs {
@@ -532,12 +506,12 @@ impl Resolvable for Wasm {
 }
 
 impl Resolvable for Gui {
-    fn prepare_target(_context: &BuildContext) -> Result<Self> {
+    fn prepare_target(_context: &Processor) -> Result<Self> {
         Ok(Gui {})
     }
 
     fn resolve(
-        ctx: &BuildContext,
+        ctx: &Processor,
         from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
         Ok(gui::BuildInput {
@@ -549,12 +523,12 @@ impl Resolvable for Gui {
 }
 
 impl Resolvable for Backend {
-    fn prepare_target(context: &BuildContext) -> Result<Self> {
+    fn prepare_target(context: &Processor) -> Result<Self> {
         Ok(Backend { target_os: context.triple.os })
     }
 
     fn resolve(
-        ctx: &BuildContext,
+        ctx: &Processor,
         _from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
         Ok(backend::BuildInput {
@@ -566,12 +540,12 @@ impl Resolvable for Backend {
 }
 
 impl Resolvable for ProjectManager {
-    fn prepare_target(_context: &BuildContext) -> Result<Self> {
+    fn prepare_target(_context: &Processor) -> Result<Self> {
         Ok(ProjectManager)
     }
 
     fn resolve(
-        ctx: &BuildContext,
+        ctx: &Processor,
         _from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
         Ok(project_manager::BuildInput {
@@ -583,12 +557,12 @@ impl Resolvable for ProjectManager {
 }
 
 impl Resolvable for Engine {
-    fn prepare_target(_context: &BuildContext) -> Result<Self> {
+    fn prepare_target(_context: &Processor) -> Result<Self> {
         Ok(Engine)
     }
 
     fn resolve(
-        ctx: &BuildContext,
+        ctx: &Processor,
         _from: <Self as IsTargetSource>::BuildInput,
     ) -> Result<<Self as IsTarget>::BuildInput> {
         Ok(engine::BuildInput {
@@ -644,7 +618,7 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
         config.check_programs().await?;
     }
 
-    let ctx = BuildContext::new(&cli).instrument(info_span!("Building context.")).await?;
+    let ctx = Processor::new(&cli).instrument(info_span!("Building context.")).await?;
     match cli.target {
         Target::Wasm(wasm) => ctx.handle_wasm(wasm).await?,
         Target::Gui(gui) => ctx.handle_gui(gui).await?,
@@ -683,6 +657,14 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
             prettier::write(&ctx.repo_root()).await?;
             Cargo.cmd()?.current_dir(ctx.repo_root()).arg("fmt").run_ok().await?;
         }
+        Target::Release(release) => match release.action {
+            Action::CreateDraft => {
+                enso_build::release::create_release(&*ctx).await?;
+            }
+            Action::Publish => {
+                enso_build::release::publish_release(&*ctx).await?;
+            }
+        },
     };
     info!("Completed main job.");
     global::complete_tasks().await?;
@@ -702,6 +684,7 @@ pub fn lib_main(config: enso_build::config::Config) -> Result {
 mod tests {
     use super::*;
     use enso_build::version::Versions;
+    use ide_ci::models::config::RepoContext;
 
     #[tokio::test]
     async fn resolving_release() -> Result {

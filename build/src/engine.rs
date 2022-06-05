@@ -156,9 +156,7 @@ pub const NIGHTLY: BuildConfigurationFlags = BuildConfigurationFlags {
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ReleaseCommand {
-    Create,
     Upload,
-    Publish,
 }
 
 #[derive(Clone, PartialEq, Debug)]

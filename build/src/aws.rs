@@ -1,12 +1,12 @@
-use crate::paths::Paths;
 use crate::prelude::*;
-use ide_ci::models::config::RepoContext;
 
+use anyhow::Context;
 use aws_sdk_s3::model::ObjectCannedAcl;
 use aws_sdk_s3::output::PutObjectOutput;
 use aws_sdk_s3::types::ByteStream;
 use aws_sdk_s3::Client;
 use bytes::Buf;
+use ide_ci::models::config::RepoContext;
 use serde::de::DeserializeOwned;
 
 /// The upper limit on number of nightly editions that are stored in the bucket.
@@ -121,7 +121,7 @@ impl BucketContext {
     }
 }
 
-pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Result {
+pub async fn update_manifest(repo_context: &RepoContext, edition_file: &Path) -> Result {
     let bucket_context = BucketContext {
         client:     Client::new(&aws_config::load_from_env().await),
         bucket:     EDITIONS_BUCKET_NAME.to_string(),
@@ -129,13 +129,14 @@ pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Resul
         key_prefix: repo_context.name.clone(),
     };
 
-    let new_edition_name = Edition(paths.edition_name());
-    let new_edition_path = paths.edition_file();
-    ensure!(
-        new_edition_path.exists(),
-        "The edition file {} does not exist.",
-        new_edition_path.display()
+    let new_edition_name = Edition(
+        edition_file
+            .file_stem()
+            .context("Edition file path is missing filename stem!")?
+            .as_str()
+            .to_string(),
     );
+    ide_ci::fs::expect_file(&edition_file)?;
 
     let manifest = bucket_context.get_yaml::<Manifest>(MANIFEST_FILENAME).await?;
     debug!("Got manifest index from S3: {:#?}", manifest);
@@ -147,11 +148,13 @@ pub async fn update_manifest(repo_context: &RepoContext, paths: &Paths) -> Resul
         debug!("Should remove {}", nightly_to_remove);
     }
 
-    let new_edition_filename = new_edition_path.file_name().unwrap().to_str().unwrap();
+    let new_edition_filename = edition_file
+        .file_name()
+        .context("Edition file path is missing filename!")?
+        .to_str()
+        .unwrap();
 
-    bucket_context
-        .put(new_edition_filename, ByteStream::from_path(&new_edition_path).await?)
-        .await?;
+    bucket_context.put(new_edition_filename, ByteStream::from_path(&edition_file).await?).await?;
 
     bucket_context.put_yaml("manifest.yaml", &new_manifest).await?;
     Ok(())

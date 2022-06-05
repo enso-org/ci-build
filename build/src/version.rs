@@ -107,10 +107,8 @@ impl Versions {
             })
             .collect::<BTreeSet<_>>();
 
-
-        // relevant_nightly_versions.last();
-
-
+        // Generate subsequent tonight nightly subreleases, until a free one is found.
+        // Should happen rarely.
         for index in 0.. {
             let pre = generate_ith(index)?;
             if !relevant_nightly_versions.contains(&pre) {
