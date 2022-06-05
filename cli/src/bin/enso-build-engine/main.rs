@@ -1,6 +1,7 @@
 use enso_build::prelude::*;
 
-use enso_build_cli::args::Args;
+use clap::Parser;
+use enso_build_cli::args::Arguments;
 use ide_ci::log::setup_logging;
 
 #[tokio::main]
@@ -9,7 +10,7 @@ async fn main() -> Result {
 
     // We want arg parsing to be before any other logs, so if user types wrong arguments, the
     // error diagnostics will be first and only thing that is output.
-    let args: Args = argh::from_env();
+    let args = Arguments::parse();
 
     debug!("Initial environment:");
     for (key, value) in std::env::vars() {

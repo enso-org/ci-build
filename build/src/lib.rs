@@ -25,7 +25,6 @@ use regex::Regex;
 use strum::EnumString;
 
 pub mod prelude {
-    pub use argh::FromArgs;
     pub use ide_ci::prelude::*;
 }
 

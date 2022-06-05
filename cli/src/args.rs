@@ -1,5 +1,8 @@
-use enso_build::prelude::*;
+use crate::prelude::*;
 
+use clap::Args;
+use clap::Parser;
+use clap::Subcommand;
 use enso_build::engine::BuildConfigurationResolved;
 use enso_build::engine::BuildOperation;
 use enso_build::engine::Operation;
@@ -18,14 +21,13 @@ use ide_ci::env::Variable;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::models::config::RepoContext;
 
-#[derive(FromArgs, Clone, PartialEq, Debug, strum::Display)]
-#[argh(subcommand)]
+#[derive(Subcommand, Clone, PartialEq, Debug, strum::Display)]
 pub enum WhatToDo {
     Build(Build),
     // Three release-related commands below.
-    Create(Create),
-    Upload(Upload),
-    Publish(Publish),
+    Create(CreateRelease),
+    Upload(UploadAsset),
+    Publish(PublishRelease),
     // Utilities
     Run(Run),
 }
@@ -57,32 +59,27 @@ impl WhatToDo {
 }
 
 /// Just build the packages.
-#[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "build")]
+#[derive(Args, Clone, PartialEq, Debug)]
 pub struct Build {}
 
 /// Create a new draft release on GitHub and emit relevant information to the CI environment.
-#[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "create-release")]
-pub struct Create {}
+#[derive(Args, Clone, PartialEq, Debug)]
+pub struct CreateRelease {}
 
 /// Build all the release packages and bundles and upload them to GitHub release. Must run with
 /// environment adjusted by the `prepare` command.
-#[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "upload-asset")]
-pub struct Upload {}
+#[derive(Args, Clone, PartialEq, Debug)]
+pub struct UploadAsset {}
 
 /// Publish the release.  Must run with environment adjusted by the `prepare` command. Typically
 /// called once after platform-specific `upload` commands are done.
-#[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "publish-release")]
-pub struct Publish {}
+#[derive(Args, Clone, PartialEq, Debug)]
+pub struct PublishRelease {}
 
 /// Run an arbitrary command with the build environment set (like `PATH`).
-#[derive(FromArgs, Clone, PartialEq, Debug)]
-#[argh(subcommand, name = "run")]
+#[derive(Args, Clone, PartialEq, Debug)]
 pub struct Run {
-    #[argh(positional)]
+    #[clap(last = true)]
     pub command_pieces: Vec<OsString>,
 }
 
@@ -99,30 +96,28 @@ pub fn parse_repo_context(value: &str) -> std::result::Result<Option<RepoContext
 }
 
 /// Build, test and packave Enso Engine.
-#[derive(Clone, Debug, FromArgs)]
-pub struct Args {
+#[derive(Clone, Debug, Parser)]
+pub struct Arguments {
     /// build kind (dev/nightly)
-    #[argh(option, default = "default_kind()")]
+    #[clap(long, arg_enum, default_value_t = default_kind())]
     pub kind:       BuildKind,
     /// path to the local copy of the Enso Engine repository
-    #[argh(positional)]
+    #[clap(long)]
     pub target:     PathBuf,
     /// identifier of the release to be targeted (necessary for `upload` and `finish` commands)
-    #[argh(option)]
+    #[clap(long)]
     pub release_id: Option<u64>,
     /// whether create bundles with Project Manager and Launcher
-    #[argh(option)]
+    #[clap(long)]
     pub bundle:     Option<bool>,
     /// repository that will be targeted for the release info purposes
-    #[argh(option, from_str_fn(parse_repo_context), default = "default_repo()")]
-    pub repo:       Option<RepoContext>,
-    #[argh(subcommand)]
+    #[clap(long, default_value_t = crate::arg::default_repo_remote(), enso_env())]
+    pub repo:       RepoContext,
+    #[clap(subcommand)]
     pub command:    WhatToDo,
-    /* #[argh(subcommand)]
-     * pub task:       Vec<Task>, */
 }
 
-impl Args {
+impl Arguments {
     pub fn build_configuration(&self) -> BuildConfigurationResolved {
         let mut config = match self.kind {
             BuildKind::Dev => DEV,
@@ -172,11 +167,7 @@ impl Args {
 
     pub fn release_operation(&self) -> Result<ReleaseOperation> {
         let command = self.command.clone().try_into()?;
-        let repo = match self.repo.clone() {
-            Some(repo) => repo,
-            None => ide_ci::actions::env::GITHUB_REPOSITORY.get()?,
-        };
-
+        let repo = self.repo.clone();
         Ok(ReleaseOperation { command, repo })
     }
 }

@@ -4,11 +4,15 @@
 
 pub mod arg;
 pub mod args;
-pub use enso_build::prelude;
 
-use enso_build::prelude::*;
+pub mod prelude {
+    pub use crate::arg::ArgExt as _;
+    pub use enso_build::prelude::*;
+}
+
+use crate::prelude::*;
+
 use ide_ci::env::Variable;
-
 
 pub struct BuildKind;
 impl Variable for BuildKind {
