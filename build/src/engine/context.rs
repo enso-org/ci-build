@@ -17,7 +17,6 @@ use crate::engine::PARALLEL_ENSO_TESTS;
 use crate::get_graal_version;
 use crate::get_java_major_version;
 use crate::paths::cache_directory;
-use crate::paths::ComponentPaths;
 use crate::paths::Paths;
 use crate::project::ProcessWrapper;
 use crate::retrieve_github_access_token;

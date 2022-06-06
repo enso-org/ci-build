@@ -166,8 +166,8 @@ impl Processor {
                 let designator = source
                     .release
                     .context(format!("Missing {} argument.", T::RELEASE_DESIGNATOR_NAME));
-                let resolved = designator
-                    .map(|designator| self.resolve_release_designator(target, designator));
+                let resolved =
+                    designator.map(|designator| self.resolve_release_source(target, designator));
                 async move { Ok(Source::External(ExternalSource::Release(resolved?.await?))) }
                     .boxed()
             }
@@ -178,21 +178,16 @@ impl Processor {
     }
 
     #[tracing::instrument]
-    pub fn resolve_release_designator<T: IsTarget>(
+    pub fn resolve_release_source<T: IsTarget>(
         &self,
         target: T,
         designator: String,
     ) -> BoxFuture<'static, Result<ReleaseSource>> {
+        let release = self.deref().resolve_release_designator(designator);
         let repository = self.remote_repo.clone();
         let octocrab = self.octocrab.clone();
-        let designator_cp = designator.clone();
         async move {
-            let release = match designator.as_str() {
-                "latest" => repository.latest_release(&octocrab).await?,
-                "nightly" =>
-                    enso_build::version::latest_nightly_release(&octocrab, &repository).await?,
-                tag => repository.find_release_by_text(&octocrab, tag).await?,
-            };
+            let release = release.await?;
             Ok(ReleaseSource {
                 octocrab,
                 repository,
@@ -205,9 +200,6 @@ impl Processor {
                     .id,
             })
         }
-        .map_err(move |e: anyhow::Error| {
-            e.context(format!("Failed to resolve release designator `{designator_cp}`."))
-        })
         .boxed()
     }
 
@@ -690,18 +682,18 @@ mod tests {
     async fn resolving_release() -> Result {
         setup_logging()?;
         let octocrab = Octocrab::default();
-        let context = BuildContext {
-            remote_repo: RepoContext::from_str("enso-org/enso")?,
-            triple: TargetTriple::new(Versions::new(Version::new(2022, 1, 1))),
-            source_root: r"H:/NBO/enso5".into(),
-            octocrab,
-            cache: Cache::new_default().await?,
+        let context = Processor {
+            context: BuildContext {
+                remote_repo: RepoContext::from_str("enso-org/enso")?,
+                triple: TargetTriple::new(Versions::new(Version::new(2022, 1, 1))),
+                source_root: r"H:/NBO/enso5".into(),
+                octocrab,
+                cache: Cache::new_default().await?,
+            },
         };
 
         dbg!(
-            context
-                .resolve_release_designator(Backend { target_os: TARGET_OS }, "latest".into())
-                .await
+            context.resolve_release_source(Backend { target_os: TARGET_OS }, "latest".into()).await
         )?;
 
         Ok(())
