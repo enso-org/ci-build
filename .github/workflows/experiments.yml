@@ -35,6 +35,8 @@ jobs:
       matrix:
         os:
           - [mwu-deluxe]
+          - [self-hosted, Windows]
+          - [macos-latest]
       fail-fast: false
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
@@ -65,6 +67,8 @@ jobs:
       matrix:
         os:
           - [mwu-deluxe]
+          - [self-hosted, Windows]
+          - [macos-latest]
       fail-fast: false
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
