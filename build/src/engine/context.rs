@@ -29,7 +29,6 @@ use crate::enso::IrCaches;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies;
 use ide_ci::goodies::graalvm;
-use ide_ci::models::config::RepoContext;
 use ide_ci::platform::DEFAULT_SHELL;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::graal;

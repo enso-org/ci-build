@@ -96,8 +96,8 @@ pub struct Arguments {
     #[clap(long, arg_enum, default_value_t = default_kind())]
     pub kind:       BuildKind,
     /// path to the local copy of the Enso Engine repository
-    #[clap(long)]
-    pub target:     PathBuf,
+    #[clap(long, maybe_default_os = crate::arg::default_repo_path(), enso_env())]
+    pub repo_path:  PathBuf,
     /// identifier of the release to be targeted (necessary for `upload` and `finish` commands)
     #[clap(long)]
     pub release_id: Option<u64>,
@@ -131,9 +131,9 @@ impl Arguments {
         // Get default build configuration for a given build kind.
         let config = self.build_configuration();
         let octocrab = setup_octocrab().await?;
-        let enso_root = self.target.clone();
+        let enso_root = self.repo_path.clone();
         debug!("Received target location: {}", enso_root.display());
-        let enso_root = self.target.absolutize()?.to_path_buf();
+        let enso_root = self.repo_path.absolutize()?.to_path_buf();
         debug!("Absolute target location: {}", enso_root.display());
 
 
