@@ -152,6 +152,7 @@ impl IsTarget for Backend {
                 self.matches_platform(name)
                     && is_archive_name(name)
                     && name.contains("project-manager")
+                    && (name.contains("bundle") || asset.size > 200_000_000)
             })
             .context("Failed to find release asset with Enso Project Manager bundle.")
     }
