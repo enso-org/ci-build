@@ -55,7 +55,7 @@ impl Artifact {
         }
     }
 
-    pub async fn upload(&self) -> Result {
+    pub async fn upload_as_ci_artifact(&self) -> Result {
         if is_in_env() {
             upload_compressed_directory(&self.unpacked, format!("ide-unpacked-{}", TARGET_OS))
                 .await?;

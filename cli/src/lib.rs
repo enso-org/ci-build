@@ -64,6 +64,7 @@ use enso_build::source::Source;
 use futures_util::future::try_join;
 use ide_ci::actions::workflow::is_in_env;
 use ide_ci::cache::Cache;
+use ide_ci::github::release::upload_asset;
 use ide_ci::global;
 use ide_ci::log::setup_logging;
 use ide_ci::programs::cargo;
@@ -348,13 +349,16 @@ impl Processor {
 
     pub fn handle_ide(&self, ide: arg::ide::Target) -> BoxFuture<'static, Result> {
         match ide.command {
-            arg::ide::Command::Build { params } => {
+            arg::ide::Command::Build { params } => self.build_ide(params).void_ok().boxed(),
+            arg::ide::Command::Upload { params, release_id } => {
                 let build_job = self.build_ide(params);
+                let remote_repo = self.remote_repo.clone();
+                let client = self.octocrab.client.clone();
                 async move {
                     let artifacts = build_job.await?;
-                    if is_in_env() {
-                        artifacts.upload().await?;
-                    }
+                    upload_asset(&remote_repo, &client, release_id, &artifacts.image).await?;
+                    upload_asset(&remote_repo, &client, release_id, &artifacts.image_checksum)
+                        .await?;
                     Ok(())
                 }
                 .boxed()
@@ -453,7 +457,15 @@ impl Processor {
             version:         self.triple.versions.version.clone(),
         };
         let target = Ide { target_os: self.triple.os, target_arch: self.triple.arch };
-        target.build(input, output_path)
+        let build_job = target.build(input, output_path);
+        async move {
+            let artifacts = build_job.await?;
+            if is_in_env() {
+                artifacts.upload_as_ci_artifact().await?;
+            }
+            Ok(artifacts)
+        }
+        .boxed()
     }
 
     pub fn target<Target: Resolvable>(&self) -> Result<Target> {

@@ -7,6 +7,7 @@ on:
   push:
 
 env:
+  ENSO_BUILD_KIND: nightly
   ENSO_BUILD_REPO_PATH: enso
   ENSO_BUILD_REPO_REMOTE: enso-org/ci-build
   GITHUB_TOKEN: ${{ github.token }}
@@ -21,7 +22,7 @@ jobs:
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
       - run: enso-build-cli --help
-      - run: enso-build-cli release --kind nightly create-draft
+      - run: enso-build-cli release create-draft
         id: prepare-step
 
   build-engine:
@@ -37,7 +38,7 @@ jobs:
       fail-fast: false
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
-      - run: enso-build-engine --kind nightly upload
+      - run: enso-build-engine upload
 
   build-wasm:
     needs: prepare
@@ -67,7 +68,8 @@ jobs:
       fail-fast: false
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
-      - run: enso-build-cli ide build --wasm-source current-ci-run --project-manager-source release --project-manager-release ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
+      - run: enso-build-cli --help
+      - run: enso-build-cli ide upload --wasm-source current-ci-run --backend release --backend-release ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
 
   finish:
     runs-on: [mwu-deluxe]
@@ -77,7 +79,7 @@ jobs:
       ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
-      - run: enso-build-cli release --kind nightly publish
+      - run: enso-build-cli release publish
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.ARTEFACT_S3_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.ARTEFACT_S3_SECRET_ACCESS_KEY }}

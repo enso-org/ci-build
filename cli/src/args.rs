@@ -93,13 +93,13 @@ pub fn parse_repo_context(value: &str) -> std::result::Result<Option<RepoContext
 #[derive(Clone, Debug, Parser)]
 pub struct Arguments {
     /// build kind (dev/nightly)
-    #[clap(long, arg_enum, default_value_t = default_kind())]
+    #[clap(long, arg_enum, default_value_t = default_kind(), enso_env())]
     pub kind:       BuildKind,
     /// path to the local copy of the Enso Engine repository
     #[clap(long, maybe_default_os = crate::arg::default_repo_path(), enso_env())]
     pub repo_path:  PathBuf,
     /// identifier of the release to be targeted (necessary for `upload` and `finish` commands)
-    #[clap(long)]
+    #[clap(long, env = enso_build::env::ReleaseId::NAME)]
     pub release_id: Option<u64>,
     /// whether create bundles with Project Manager and Launcher
     #[clap(long)]

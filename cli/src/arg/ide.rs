@@ -9,6 +9,7 @@ use enso_build::project::wasm::DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT;
 
 use clap::Args;
 use clap::Subcommand;
+use octocrab::models::ReleaseId;
 
 source_args_hlp!(Target, "ide", BuildInput);
 
@@ -29,6 +30,12 @@ pub enum Command {
     Build {
         #[clap(flatten)]
         params: BuildInput,
+    },
+    Upload {
+        #[clap(flatten)]
+        params:     BuildInput,
+        #[clap(long, env = enso_build::env::ReleaseId::NAME)]
+        release_id: ReleaseId,
     },
     /// Like `Build` but automatically starts the IDE.
     Start {
