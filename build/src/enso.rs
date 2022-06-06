@@ -9,6 +9,10 @@ use crate::postgres;
 use crate::postgres::EndpointConfiguration;
 use crate::postgres::Postgresql;
 
+ide_ci::define_env_var! {
+    ENSO_JVM_OPTS, String
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum IrCaches {
     Yes,
@@ -43,7 +47,13 @@ impl BuiltEnso {
     pub fn run_test(&self, test: impl AsRef<Path>, ir_caches: IrCaches) -> Result<Command> {
         let test_path = self.paths.stdlib_test(test);
         let mut command = self.cmd()?;
-        command.arg(ir_caches).arg("--run").arg(test_path);
+        command
+            .arg(ir_caches)
+            .arg("--run")
+            .arg(test_path)
+            // This flag enables assertions in the JVM. Some of our stdlib tests had in the past
+            // failed on Graal/Truffle assertions, so we want to have them triggered.
+            .set_env(ENSO_JVM_OPTS, &ide_ci::programs::java::Option::EnableAssertions.as_ref())?;
         Ok(command)
     }
 
