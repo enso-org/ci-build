@@ -37,7 +37,7 @@ jobs:
       fail-fast: false
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
-      - run: enso-build-engine --kind nightly upload-asset
+      - run: enso-build-engine --kind nightly upload
 
   finish:
     runs-on: [mwu-deluxe]
