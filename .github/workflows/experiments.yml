@@ -35,6 +35,8 @@ jobs:
       matrix:
         os:
           - [mwu-deluxe]
+          - [self-hosted, Windows]
+          - [macos-latest]
       fail-fast: false
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
@@ -65,11 +67,13 @@ jobs:
       matrix:
         os:
           - [mwu-deluxe]
+          - [self-hosted, Windows]
+          - [macos-latest]
       fail-fast: false
     steps:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
       - run: enso-build-cli --help
-      - run: enso-build-cli ide upload --wasm-source current-ci-run --backend release --backend-release ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
+      - run: enso-build-cli ide upload --wasm-source current-ci-run --backend-source release --backend-release ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
 
   finish:
     runs-on: [mwu-deluxe]
