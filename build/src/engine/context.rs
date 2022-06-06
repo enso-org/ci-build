@@ -17,6 +17,7 @@ use crate::engine::PARALLEL_ENSO_TESTS;
 use crate::get_graal_version;
 use crate::get_java_major_version;
 use crate::paths::cache_directory;
+use crate::paths::ComponentPaths;
 use crate::paths::Paths;
 use crate::project::ProcessWrapper;
 use crate::retrieve_github_access_token;
@@ -352,10 +353,6 @@ impl RunContext {
         }
 
         if self.config.build_engine_package {
-            // Compress the built artifacts for upload
-            // The artifacts are compressed before upload to work around an error with long path
-            // handling in the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
-            self.paths.engine.pack().await?;
             if TARGET_OS == OS::Linux && ide_ci::ci::run_in_ci() {
                 self.paths.upload_edition_file_artifact().await?;
             }
@@ -393,21 +390,24 @@ impl RunContext {
                     // Make packages.
                     let release_id = crate::env::ReleaseId.fetch()?;
                     let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
+
                     for package in artifacts.packages.iter() {
+                        package.pack().await?;
                         ide_ci::github::release::upload_asset(
                             repo,
                             &client,
                             release_id,
-                            &package.dir,
+                            &package.artifact_archive,
                         )
                         .await?;
                     }
                     for bundle in artifacts.bundles.iter() {
+                        bundle.pack().await?;
                         ide_ci::github::release::upload_asset(
                             repo,
                             &client,
                             release_id,
-                            &bundle.dir,
+                            &bundle.artifact_archive,
                         )
                         .await?;
                     }

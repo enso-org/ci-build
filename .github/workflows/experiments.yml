@@ -24,7 +24,7 @@ jobs:
       - run: enso-build-cli release --kind nightly create-draft
         id: prepare-step
 
-  build:
+  build-engine:
     needs: prepare
     env:
       ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
@@ -39,9 +39,39 @@ jobs:
       - uses: enso-org/ci-build/actions/install@wip/mwu/engine
       - run: enso-build-engine --kind nightly upload
 
+  build-wasm:
+    needs: prepare
+    env:
+      ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
+      ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [mwu-deluxe]
+      fail-fast: false
+    steps:
+      - uses: enso-org/ci-build/actions/install@wip/mwu/engine
+      - run: enso-build-cli wasm build
+
+  build-ide:
+    needs: [prepare, build-engine, build-wasm]
+    env:
+      ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
+      ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [mwu-deluxe]
+      fail-fast: false
+    steps:
+      - uses: enso-org/ci-build/actions/install@wip/mwu/engine
+      - run: enso-build-cli ide build --wasm-source current-ci-run --project-manager-source release --project-manager-release ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
+
   finish:
     runs-on: [mwu-deluxe]
-    needs: [prepare, build]
+    needs: [prepare, build-engine, build-wasm, build-ide]
     env:
       ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
       ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
