@@ -17,7 +17,7 @@ use ide_ci::env::Variable;
 pub struct BuildKind;
 impl Variable for BuildKind {
     const NAME: &'static str = "ENSO_BUILD_KIND";
-    type Value = enso_build::BuildKind;
+    type Value = enso_build::version::BuildKind;
 }
 
 // #![feature(explicit_generic_args_with_impl_trait)]
@@ -102,7 +102,7 @@ impl Processor {
     pub async fn new(cli: &Cli) -> Result<Self> {
         let build_kind = match &cli.target {
             Target::Release(release) => release.kind,
-            _ => enso_build::BuildKind::Dev,
+            _ => enso_build::version::BuildKind::Dev,
         };
         let absolute_repo_path = cli.repo_path.absolutize()?;
         let octocrab = setup_octocrab().await?;

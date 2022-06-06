@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+use crate::version::BuildKind;
 use anyhow::Context;
 use aws_sdk_s3::model::ObjectCannedAcl;
 use aws_sdk_s3::output::PutObjectOutput;
@@ -39,7 +40,7 @@ impl Edition {
         self.0.contains("nightly")
             || ide_ci::program::version::find_in_text(self)
                 .as_ref()
-                .map_or(false, crate::version::is_nightly)
+                .map_or(false, |version| BuildKind::Nightly.matches(version))
     }
 }
 

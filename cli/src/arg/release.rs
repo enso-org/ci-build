@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use clap::Args;
 use clap::Subcommand;
-use enso_build::BuildKind;
+use enso_build::version::BuildKind;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Action {

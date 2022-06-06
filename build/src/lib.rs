@@ -22,7 +22,6 @@ use crate::prelude::*;
 use anyhow::Context;
 use ide_ci::programs::java;
 use regex::Regex;
-use strum::EnumString;
 
 pub mod prelude {
     pub use ide_ci::prelude::*;
@@ -183,11 +182,4 @@ val stdLibVersion       = defaultDevEnsoVersion
         assert_eq!(version.patch, 0);
         Ok(())
     }
-}
-
-#[derive(clap::ArgEnum, Clone, Copy, PartialEq, Debug, EnumString)]
-#[strum(serialize_all = "kebab-case")]
-pub enum BuildKind {
-    Dev,
-    Nightly,
 }

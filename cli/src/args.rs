@@ -14,7 +14,7 @@ use enso_build::engine::DEV;
 use enso_build::engine::NIGHTLY;
 use enso_build::setup_octocrab;
 use enso_build::version::deduce_versions;
-use enso_build::BuildKind;
+use enso_build::version::BuildKind;
 
 use enso_build::paths::Paths;
 use ide_ci::env::Variable;

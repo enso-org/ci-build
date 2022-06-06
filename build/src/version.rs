@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-use crate::BuildKind;
 use anyhow::Context;
 use chrono::Datelike;
 use derivative::Derivative;
@@ -10,6 +9,9 @@ use ide_ci::models::config::RepoContext;
 use octocrab::models::repos::Release;
 use semver::Prerelease;
 use std::collections::BTreeSet;
+use strum::EnumIter;
+use strum::EnumString;
+use strum::IntoEnumIterator;
 
 // Variable that stores Enso Engine version.
 define_env_var!(ENSO_VERSION, Version);
@@ -23,10 +25,6 @@ pub fn default_dev_version() -> Version {
     let mut ret = Version::new(0, 0, 0);
     ret.pre = Prerelease::new(LOCAL_BUILD_PREFIX).unwrap();
     ret
-}
-
-pub fn is_nightly(version: &Version) -> bool {
-    version.pre.as_str().starts_with(NIGHTLY_BUILD_PREFIX)
 }
 
 pub fn is_nightly_release(release: &Release) -> bool {
@@ -129,19 +127,11 @@ impl Versions {
         ENSO_RELEASE_MODE.emit_to_workflow(&self.release_mode)?;
         Ok(())
     }
-
-    pub fn is_nightly(&self) -> bool {
-        is_nightly(&self.version)
-    }
-}
-
-pub fn version_from_env() -> Result<Version> {
-    ENSO_VERSION.get()
 }
 
 #[context("Deducing version using changelog file: {}", changelog_path.as_ref().display())]
 pub fn base_version(changelog_path: impl AsRef<Path>) -> Result<Version> {
-    if let Ok(from_env) = version_from_env() {
+    if let Ok(from_env) = ENSO_VERSION.get() {
         return Ok(from_env);
     }
 
@@ -179,6 +169,29 @@ pub fn suggest_next_version(previous: &Version) -> Version {
     }
 }
 
+pub fn versions_from_env(expected_build_kind: Option<BuildKind>) -> Result<Option<Versions>> {
+    if let Ok(version) = ENSO_VERSION.get() {
+        // The currently adopted version scheme uses same string for version and edition name,
+        // so we enforce it here. There are no fundamental reasons for this requirement.
+        if let Ok(edition) = ENSO_EDITION.get() {
+            ensure!(
+                version.to_string() == edition,
+                "Inconsistent {} and {} variable values.",
+                ENSO_VERSION.name,
+                ENSO_EDITION.name
+            );
+        }
+        if let Some(expected_build_kind) = expected_build_kind {
+            let found_build_kind = BuildKind::deduce(&version)?;
+            ensure!(found_build_kind == expected_build_kind, "Build kind mismatch.")
+        }
+        let versions = Versions::new(version);
+        Ok(Some(versions))
+    } else {
+        Ok(None)
+    }
+}
+
 pub async fn deduce_versions(
     octocrab: &Octocrab,
     build_kind: BuildKind,
@@ -186,15 +199,19 @@ pub async fn deduce_versions(
     root_path: impl AsRef<Path>,
 ) -> Result<Versions> {
     debug!("Deciding on version to target.");
-    let changelog_path = crate::paths::root_to_changelog(&root_path);
-    let version = Version {
-        pre: match build_kind {
-            BuildKind::Dev => Versions::local_prerelease()?,
-            BuildKind::Nightly => Versions::nightly_prerelease(octocrab, target_repo?).await?,
-        },
-        ..crate::version::base_version(&changelog_path)?
-    };
-    Ok(Versions::new(version))
+    if let Some(versions) = versions_from_env(Some(build_kind))? {
+        Ok(versions)
+    } else {
+        let changelog_path = crate::paths::root_to_changelog(&root_path);
+        let version = Version {
+            pre: match build_kind {
+                BuildKind::Dev => Versions::local_prerelease()?,
+                BuildKind::Nightly => Versions::nightly_prerelease(octocrab, target_repo?).await?,
+            },
+            ..crate::version::base_version(&changelog_path)?
+        };
+        Ok(Versions::new(version))
+    }
 }
 
 #[cfg(test)]
@@ -203,8 +220,7 @@ mod tests {
 
     #[test]
     fn is_nightly_test() {
-        let is_nightly = |text: &str| is_nightly(&Version::parse(text).unwrap());
-
+        let is_nightly = |text: &str| BuildKind::Dev.matches(&Version::parse(text).unwrap());
         assert!(is_nightly("2022.01.01-nightly.2022.01.01"));
         assert!(is_nightly("2022.01.01-nightly"));
         assert!(is_nightly("2022.01.01-nightly.2022.01.01"));
@@ -216,5 +232,31 @@ mod tests {
     fn iii() -> Result {
         dbg!(base_version(r"H:\nbo\enso\app\gui\changelog.md")?);
         Ok(())
+    }
+}
+
+#[derive(clap::ArgEnum, Clone, Copy, PartialEq, Debug, EnumString, EnumIter)]
+#[strum(serialize_all = "kebab-case")]
+pub enum BuildKind {
+    Dev,
+    Nightly,
+}
+
+impl BuildKind {
+    pub fn prerelease_prefix(self) -> &'static str {
+        match self {
+            BuildKind::Dev => LOCAL_BUILD_PREFIX,
+            BuildKind::Nightly => NIGHTLY_BUILD_PREFIX,
+        }
+    }
+
+    pub fn matches(self, version: &Version) -> bool {
+        version.pre.as_str().starts_with(self.prerelease_prefix())
+    }
+
+    pub fn deduce(version: &Version) -> Result<Self> {
+        BuildKind::iter()
+            .find(|kind| kind.matches(version))
+            .context(format!("Failed to deduce build kind for version {version}"))
     }
 }
