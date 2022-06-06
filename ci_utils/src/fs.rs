@@ -200,7 +200,7 @@ pub fn expect_dir(path: impl AsRef<Path>) -> Result {
 #[context("Failed because the path does not point to a regular file: {}", path.as_ref().display())]
 pub fn expect_file(path: impl AsRef<Path>) -> Result {
     let filetype = metadata(&path)?.file_type();
-    if filetype.is_dir() {
+    if filetype.is_file() {
         Ok(())
     } else {
         bail!("File is not a regular file, its type is: {filetype:?}")
