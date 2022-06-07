@@ -2,6 +2,7 @@ use crate::prelude::*;
 
 use crate::engine::BuildConfigurationFlags;
 use crate::engine::BuildOperation;
+use crate::engine::Operation;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::version::Versions;
@@ -25,6 +26,24 @@ pub struct BuildInput {
     /// likely do better.
     #[derivative(Debug = "ignore")]
     pub octocrab:  Octocrab,
+}
+
+impl BuildInput {
+    pub fn prepare_context(
+        &self,
+        operation: Operation,
+        config: BuildConfigurationFlags,
+    ) -> Result<crate::engine::RunContext> {
+        let paths = crate::paths::Paths::new_versions(&self.repo_root, self.versions.clone())?;
+        let context = crate::engine::context::RunContext {
+            operation,
+            goodies: GoodieDatabase::new()?,
+            config: config.into(),
+            octocrab: self.octocrab.clone(),
+            paths,
+        };
+        Ok(context)
+    }
 }
 
 #[derive(Clone, Derivative)]
@@ -70,7 +89,7 @@ pub async fn bundled_engine_versions(
     Ok(ret)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Backend {
     pub target_os: OS,
 }
@@ -120,20 +139,13 @@ impl IsTarget for Backend {
                 target_os == TARGET_OS,
                 "Enso Project Manager cannot be built on '{target_os}' for target '{TARGET_OS}'.",
             );
-            let paths =
-                crate::paths::Paths::new_versions(&input.repo_root, input.versions.clone())?;
-            let context = crate::engine::context::RunContext {
-                operation: crate::engine::Operation::Build(BuildOperation {}),
-                goodies: GoodieDatabase::new()?,
-                config: BuildConfigurationFlags {
-                    clean_repo: false,
-                    build_project_manager_bundle: true,
-                    ..crate::engine::NIGHTLY
-                }
-                .into(),
-                octocrab: input.octocrab.clone(),
-                paths,
+            let operation = crate::engine::Operation::Build(BuildOperation {});
+            let config = BuildConfigurationFlags {
+                clean_repo: false,
+                build_project_manager_bundle: true,
+                ..crate::engine::NIGHTLY
             };
+            let context = input.prepare_context(operation, config)?;
             let artifacts = context.build().await?;
             let project_manager =
                 artifacts.bundles.project_manager.context("Missing project manager bundle!")?;

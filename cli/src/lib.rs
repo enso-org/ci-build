@@ -37,6 +37,9 @@ use anyhow::Context;
 use clap::Parser;
 use derivative::Derivative;
 use enso_build::context::BuildContext;
+use enso_build::engine::BuildConfigurationFlags;
+use enso_build::engine::ReleaseCommand;
+use enso_build::engine::ReleaseOperation;
 use enso_build::paths::TargetTriple;
 use enso_build::prettier;
 use enso_build::project::backend;
@@ -66,6 +69,7 @@ use ide_ci::actions::workflow::is_in_env;
 use ide_ci::cache::Cache;
 use ide_ci::github::release::upload_asset;
 use ide_ci::global;
+use ide_ci::goodie::GoodieDatabase;
 use ide_ci::log::setup_logging;
 use ide_ci::programs::cargo;
 use ide_ci::programs::rustc;
@@ -339,12 +343,34 @@ impl Processor {
         .boxed()
     }
 
-    pub fn handle_backend(
-        &self,
-        project_manager: arg::backend::Target,
-    ) -> BoxFuture<'static, Result> {
-        let job = self.get(project_manager.source);
-        job.void_ok().boxed()
+    pub fn handle_backend(&self, backend: arg::backend::Target) -> BoxFuture<'static, Result> {
+        match backend.command {
+            arg::backend::Command::Get { source } => self.get(source).void_ok().boxed(),
+            arg::backend::Command::Upload { input } => {
+                let context = (|| {
+                    let input = enso_build::project::Backend::resolve(self, input)?;
+                    let operation = enso_build::engine::Operation::Release(
+                        enso_build::engine::ReleaseOperation {
+                            repo:    self.remote_repo.clone(),
+                            command: enso_build::engine::ReleaseCommand::Upload,
+                        },
+                    );
+                    let config = enso_build::engine::BuildConfigurationFlags {
+                        build_engine_package: true,
+                        build_launcher_bundle: true,
+                        build_project_manager_bundle: true,
+                        ..enso_build::engine::NIGHTLY
+                    };
+                    let context = input.prepare_context(operation, config)?;
+                    Result::Ok(context)
+                })();
+                async move {
+                    context?.build().await?;
+                    Ok(())
+                }
+                .boxed()
+            }
+        }
     }
 
     pub fn handle_ide(&self, ide: arg::ide::Target) -> BoxFuture<'static, Result> {

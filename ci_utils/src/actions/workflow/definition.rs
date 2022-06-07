@@ -2,6 +2,7 @@ use crate::prelude::*;
 
 use heck::ToKebabCase;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 pub fn is_github_hosted() -> String {
     "startsWith(runner.name, 'GitHub Actions') || startsWith(runner.name, 'Hosted Agent')".into()
@@ -49,27 +50,22 @@ pub fn setup_artifact_api() -> Step {
     }
 }
 
-pub fn run(os: OS, command_line: impl AsRef<str>) -> Step {
-    let bash_step = Step {
-        run: Some(format!("./run {}", command_line.as_ref())),
-        // r#if: Some("runner.os != 'Windows'".into()),
-        shell: Some(Shell::Bash),
+pub fn shell_os(os: OS, command_line: impl Into<String>) -> Step {
+    Step {
+        run: Some(command_line.into()),
         env: once(github_token_env()).collect(),
+        r#if: Some(format!("runner.os {} 'Windows'", if os == OS::Windows { "==" } else { "!=" })),
+        shell: Some(if os == OS::Windows { Shell::Pwsh } else { Shell::Bash }),
         ..default()
-    };
-
-    let cmd_step = Step {
-        run: Some(format!(r".\run.cmd {}", command_line.as_ref())),
-        // r#if: Some("runner.os == 'Windows'".into()),
-        shell: Some(Shell::Cmd),
-        env: once(github_token_env()).collect(),
-        ..default()
-    };
-    if os == OS::Windows {
-        cmd_step
-    } else {
-        bash_step
     }
+}
+
+pub fn shell(command_line: impl AsRef<str>) -> Vec<Step> {
+    vec![shell_os(OS::Windows, command_line.as_ref()), shell_os(OS::Linux, command_line.as_ref())]
+}
+
+pub fn run(run_args: impl AsRef<str>) -> Vec<Step> {
+    shell(format!("./run {}", run_args.as_ref()))
 }
 
 pub fn cancel_workflow_action() -> Step {
@@ -95,9 +91,23 @@ pub struct Workflow {
     pub description: Option<String>,
     pub on:          Event,
     pub jobs:        BTreeMap<String, Job>,
+    pub env:         BTreeMap<String, String>,
 }
 
 impl Workflow {
+    pub fn expose_outputs(&self, source_job_id: impl Borrow<str>, consumer_job: &mut Job) {
+        let source_job = self.jobs.get(source_job_id.borrow()).unwrap();
+        consumer_job.use_job_outputs(source_job_id.borrow(), source_job);
+    }
+}
+
+impl Workflow {
+    pub fn add_job(&mut self, job: Job) -> String {
+        let key = job.name.to_kebab_case();
+        self.jobs.insert(key.clone(), job);
+        key
+    }
+
     pub fn add<J: JobArchetype>(&mut self, os: OS) -> String {
         self.add_customized::<J>(os, |_| {})
     }
@@ -107,6 +117,10 @@ impl Workflow {
         f(&mut job);
         self.jobs.insert(key.clone(), job);
         key
+    }
+
+    pub fn env(&mut self, var_name: impl Into<String>, var_value: impl Into<String>) {
+        self.env.insert(var_name.into(), var_value.into());
     }
 }
 
@@ -149,11 +163,53 @@ pub struct Event {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Job {
-    pub name:    String,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub needs:   Vec<String>,
-    pub runs_on: Vec<RunnerLabel>,
-    pub steps:   Vec<Step>,
+    pub name:     String,
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub needs:    BTreeSet<String>,
+    pub runs_on:  Vec<RunnerLabel>,
+    pub steps:    Vec<Step>,
+    pub outputs:  BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy: Option<Strategy>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub env:      BTreeMap<String, String>,
+}
+
+impl Job {
+    pub fn expose_output(&mut self, step_id: impl AsRef<str>, output_name: impl Into<String>) {
+        let step = step_id.as_ref();
+        let output = output_name.into();
+        let value = format!("${{{{ steps.{step}.outputs.{output} }}}}");
+        self.outputs.insert(output, value);
+    }
+
+    pub fn use_job_outputs(&mut self, job_id: impl Into<String>, job: &Job) {
+        let job_id = job_id.into();
+        for (output_name, _) in &job.outputs {
+            let reference = format!("${{{{needs.{}.outputs.{}}}}}", job_id, output_name);
+            self.env.insert(output_name.into(), reference);
+        }
+        self.needs.insert(job_id);
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct Strategy {
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub matrix:    BTreeMap<String, serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fail_fast: Option<bool>,
+}
+
+impl Strategy {
+    pub fn new_os(labels: impl Serialize) -> Strategy {
+        let oses = serde_json::to_value(labels).unwrap();
+        Strategy {
+            fail_fast: Some(false),
+            matrix:    [("os".to_string(), oses)].into_iter().collect(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -238,6 +294,10 @@ pub enum RunnerLabel {
     WindowsLatest,
     #[serde(rename = "X64")]
     X64,
+    #[serde(rename = "mwu-deluxe")]
+    MwuDeluxe,
+    #[serde(rename = "${{ matrix.os }}")]
+    MatrixOs,
 }
 
 pub fn runs_on(os: OS) -> Vec<RunnerLabel> {
@@ -258,29 +318,69 @@ pub fn checkout_repo_step() -> Step {
     }
 }
 
-pub fn plain_job(os: OS, name: impl AsRef<str>, command_line: impl AsRef<str>) -> Job {
-    let checkout_repo_step = checkout_repo_step();
-    let run_step = run(os, command_line);
+pub fn setup_script_steps() -> Vec<Step> {
+    let mut ret =
+        vec![setup_conda(), setup_wasm_pack_step(), setup_artifact_api(), checkout_repo_step()];
+    ret.extend(run("--help"));
+    ret
+}
+
+pub fn setup_script_and_steps(command_line: impl AsRef<str>) -> Vec<Step> {
     let list_everything_on_failure = Step {
         name: Some("List files if failed".into()),
         r#if: Some("failure()".into()),
         run: Some("ls -R".into()),
         ..default()
     };
+    let mut steps = setup_script_steps();
+    steps.extend(run(command_line));
+    steps.push(list_everything_on_failure);
+    steps
+}
 
-    let name = format!("{} ({})", name.as_ref(), os);
-    let steps = vec![
-        setup_conda(),
-        setup_wasm_pack_step(),
-        setup_artifact_api(),
-        checkout_repo_step,
-        // We don't care about help but this compiles the script as a single step.
-        run(os, "--help"),
-        run_step,
-        list_everything_on_failure,
-    ];
-    let runs_on = runs_on(os);
-    Job { name, runs_on, steps, ..default() }
+pub fn plain_job(
+    runs_on_info: &impl RunsOn,
+    name: impl AsRef<str>,
+    command_line: impl AsRef<str>,
+) -> Job {
+    let name = if let Some(os_name) = runs_on_info.os_name() {
+        format!("{} ({})", name.as_ref(), os_name)
+    } else {
+        name.as_ref().to_string()
+    };
+    let steps = setup_script_and_steps(command_line);
+    let runs_on = runs_on_info.runs_on();
+    let strategy = runs_on_info.strategy();
+    Job { name, runs_on, steps, strategy, ..default() }
+}
+
+pub trait RunsOn {
+    fn strategy(&self) -> Option<Strategy> {
+        None
+    }
+    fn runs_on(&self) -> Vec<RunnerLabel>;
+    fn os_name(&self) -> Option<String> {
+        None
+    }
+}
+
+impl RunsOn for OS {
+    fn runs_on(&self) -> Vec<RunnerLabel> {
+        runs_on(*self)
+    }
+    fn os_name(&self) -> Option<String> {
+        Some(self.to_string())
+    }
+}
+
+impl RunsOn for Strategy {
+    fn strategy(&self) -> Option<Strategy> {
+        Some(self.clone())
+    }
+
+    fn runs_on(&self) -> Vec<RunnerLabel> {
+        vec![RunnerLabel::MatrixOs]
+    }
 }
 
 pub trait JobArchetype {
@@ -362,21 +462,21 @@ echo "::set-output name=list::'$list'"
     pub struct Lint;
     impl JobArchetype for Lint {
         fn job(os: OS) -> Job {
-            plain_job(os, "Lint", "lint")
+            plain_job(&os, "Lint", "lint")
         }
     }
 
     pub struct NativeTest;
     impl JobArchetype for NativeTest {
         fn job(os: OS) -> Job {
-            plain_job(os, "Native GUI tests", "wasm test --no-wasm")
+            plain_job(&os, "Native GUI tests", "wasm test --no-wasm")
         }
     }
 
     pub struct WasmTest;
     impl JobArchetype for WasmTest {
         fn job(os: OS) -> Job {
-            plain_job(os, "WASM GUI tests", "wasm test --no-native")
+            plain_job(&os, "WASM GUI tests", "wasm test --no-native")
         }
     }
 
@@ -384,7 +484,7 @@ echo "::set-output name=list::'$list'"
     impl JobArchetype for IntegrationTest {
         fn job(os: OS) -> Job {
             plain_job(
-                os,
+                &os,
                 "IDE integration tests",
                 "ide integration-test --project-manager-source current-ci-run",
             )
@@ -394,14 +494,14 @@ echo "::set-output name=list::'$list'"
     pub struct BuildWasm;
     impl JobArchetype for BuildWasm {
         fn job(os: OS) -> Job {
-            plain_job(os, "Build GUI (WASM)", "wasm build")
+            plain_job(&os, "Build GUI (WASM)", "wasm build")
         }
     }
 
     pub struct BuildProjectManager;
     impl JobArchetype for BuildProjectManager {
         fn job(os: OS) -> Job {
-            plain_job(os, "Build Project Manager", "project-manager")
+            plain_job(&os, "Build Project Manager", "project-manager")
         }
     }
 
@@ -409,7 +509,7 @@ echo "::set-output name=list::'$list'"
     impl JobArchetype for PackageIde {
         fn job(os: OS) -> Job {
             plain_job(
-                os,
+                &os,
                 "Package IDE",
                 "ide build --wasm-source current-ci-run --project-manager-source current-ci-run",
             )
@@ -420,6 +520,86 @@ echo "::set-output name=list::'$list'"
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    pub struct DeluxeRunner;
+
+    impl RunsOn for DeluxeRunner {
+        fn runs_on(&self) -> Vec<RunnerLabel> {
+            vec![RunnerLabel::MwuDeluxe]
+        }
+
+        fn os_name(&self) -> Option<String> {
+            None
+        }
+    }
+
+    #[test]
+    fn generate_nightly_ci() -> Result {
+        let on = Event {
+            workflow_dispatch: Some(WorkflowDispatch {}),
+            push: Some(Push { ..default() }),
+            ..default()
+        };
+
+        let prepare_outputs = ["ENSO_VERSION", "ENSO_RELEASE_ID"];
+
+        let prepare = {
+            let name = "Prepare release".into();
+            let runs_on = vec![RunnerLabel::Linux, RunnerLabel::MwuDeluxe];
+
+            let prepare_step_id = "prepare";
+            let mut prepare = shell_os(OS::Linux, "./run release create-draft");
+            prepare.id = Some(prepare_step_id.into());
+
+            let mut steps = setup_script_steps();
+            steps.push(prepare);
+
+            let mut ret = Job { name, runs_on, steps, ..default() };
+            for output in prepare_outputs {
+                ret.expose_output(prepare_step_id, output);
+            }
+            ret
+        };
+
+
+        let mut workflow = Workflow { name: "Nightly Release".into(), on, ..default() };
+        let prepare_job_id = workflow.add_job(prepare);
+
+
+        let platform_specific_strategy = Strategy::new_os([[RunnerLabel::MwuDeluxe]]);
+
+
+        let build_wasm: Job = {
+            let mut ret = plain_job(&platform_specific_strategy, "Build WASM", "wasm build");
+            ret
+        };
+        let build_wasm_job_id = workflow.add_job(build_wasm);
+
+        let build_engine: Job = {
+            let mut ret = plain_job(&platform_specific_strategy, "Build backend", "backend upload");
+            ret
+        };
+        let build_engine_job_id = workflow.add_job(build_engine);
+
+
+
+        let global_env = [
+            ("ENSO_BUILD_KIND", "nightly"),
+            ("ENSO_BUILD_REPO_PATH", "enso"),
+            ("ENSO_BUILD_REPO_REMOTE", "enso-org/ci-build"),
+            ("RUST_BACKTRACE", "full"),
+        ];
+        for (var_name, value) in global_env {
+            workflow.env(var_name, value);
+        }
+
+
+        let yaml = serde_yaml::to_string(&workflow)?;
+        println!("{yaml}");
+        let path = r"H:\NBO\enso-staging\.github\workflows\nightly.yml";
+        crate::fs::write(path, yaml)?;
+        Ok(())
+    }
 
     #[test]
     fn generate_gui_ci() -> Result {
@@ -439,15 +619,15 @@ mod tests {
         workflow.add::<job::WasmTest>(primary_os);
         workflow.add::<job::NativeTest>(primary_os);
         workflow.add_customized::<job::IntegrationTest>(primary_os, |job| {
-            job.needs.push(job::BuildProjectManager::key(primary_os));
+            job.needs.insert(job::BuildProjectManager::key(primary_os));
         });
 
         for os in [OS::Windows, OS::Linux, OS::MacOS] {
             let wasm_job = workflow.add::<job::BuildWasm>(os);
             let project_manager_job = workflow.add::<job::BuildProjectManager>(os);
             workflow.add_customized::<job::PackageIde>(os, |job| {
-                job.needs.push(wasm_job);
-                job.needs.push(project_manager_job);
+                job.needs.insert(wasm_job);
+                job.needs.insert(project_manager_job);
             });
         }
 
