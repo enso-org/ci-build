@@ -73,7 +73,7 @@ tempfile = "3.2.0"
 tokio = { version = "1.19.0", features = ["full", "tracing"] }
 tokio-util = {version = "0.7.2", features = ["full"] }
 tracing = "0.1.32"
-tracing-subscriber = "0.3.11"
+tracing-subscriber = { version = "0.3.11", features = ["env-filter"] }
 unicase = "2.6.0"
 url = "2.2.2"
 uuid = { version = "1.1.0", features= ["v4", "serde"] }
