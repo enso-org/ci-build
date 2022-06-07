@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 use strum::EnumIter;
 use strum::EnumString;
 use strum::IntoEnumIterator;
+use tracing::instrument;
 
 // Variable that stores Enso Engine version.
 define_env_var!(ENSO_VERSION, Version);
@@ -169,6 +170,7 @@ pub fn suggest_next_version(previous: &Version) -> Version {
     }
 }
 
+#[instrument(ret)]
 pub fn versions_from_env(expected_build_kind: Option<BuildKind>) -> Result<Option<Versions>> {
     if let Ok(version) = ENSO_VERSION.get() {
         // The currently adopted version scheme uses same string for version and edition name,
@@ -183,7 +185,12 @@ pub fn versions_from_env(expected_build_kind: Option<BuildKind>) -> Result<Optio
         }
         if let Some(expected_build_kind) = expected_build_kind {
             let found_build_kind = BuildKind::deduce(&version)?;
-            ensure!(found_build_kind == expected_build_kind, "Build kind mismatch.")
+            ensure!(
+                found_build_kind == expected_build_kind,
+                "Build kind mismatch. Found: {}, expected: {}.",
+                found_build_kind,
+                expected_build_kind
+            )
         }
         let versions = Versions::new(version);
         Ok(Some(versions))
@@ -192,6 +199,7 @@ pub fn versions_from_env(expected_build_kind: Option<BuildKind>) -> Result<Optio
     }
 }
 
+#[instrument(skip_all, ret)]
 pub async fn deduce_versions(
     octocrab: &Octocrab,
     build_kind: BuildKind,
@@ -220,11 +228,14 @@ mod tests {
 
     #[test]
     fn is_nightly_test() {
-        let is_nightly = |text: &str| BuildKind::Dev.matches(&Version::parse(text).unwrap());
-        assert!(is_nightly("2022.01.01-nightly.2022.01.01"));
-        assert!(is_nightly("2022.01.01-nightly"));
-        assert!(is_nightly("2022.01.01-nightly.2022.01.01"));
-        assert!(is_nightly("2022.01.01-nightly.2022.01.01"));
+        let is_nightly = |text: &str| BuildKind::Nightly.matches(&Version::parse(text).unwrap());
+        assert!(is_nightly("2022.1.1-nightly.2022.1.1"));
+        assert!(is_nightly("2022.1.1-nightly"));
+        assert!(is_nightly("2022.1.1-nightly.2022.1.1"));
+        assert!(is_nightly("2022.1.1-nightly.2022.1.1"));
+
+        let version = Version::parse("2022.1.1-nightly.2022-06-06.3").unwrap();
+        assert!(BuildKind::deduce(&version).contains(&BuildKind::Nightly));
     }
 
     #[test]
@@ -235,7 +246,7 @@ mod tests {
     }
 }
 
-#[derive(clap::ArgEnum, Clone, Copy, PartialEq, Debug, EnumString, EnumIter)]
+#[derive(clap::ArgEnum, Clone, Copy, PartialEq, Debug, EnumString, EnumIter, strum::Display)]
 #[strum(serialize_all = "kebab-case")]
 pub enum BuildKind {
     Dev,

@@ -422,7 +422,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn generate() -> Result {
+    fn generate_gui_ci() -> Result {
         let on = Event {
             pull_request:      Some(PullRequest {}),
             workflow_dispatch: Some(WorkflowDispatch {}),
@@ -432,7 +432,6 @@ mod tests {
             }),
         };
         let mut workflow = Workflow { name: "GUI CI".into(), on, ..default() };
-
         let primary_os = OS::Linux;
         workflow.add::<job::AssertChangelog>(primary_os);
         workflow.add::<job::CancelWorkflow>(primary_os);
