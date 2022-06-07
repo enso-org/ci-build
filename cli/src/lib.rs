@@ -100,15 +100,15 @@ impl Processor {
     /// Setup common build environment information based on command line input and local
     /// environment.
     pub async fn new(cli: &Cli) -> Result<Self> {
-        let build_kind = match &cli.target {
-            Target::Release(release) => release.kind,
-            _ => enso_build::version::BuildKind::Dev,
-        };
+        // let build_kind = match &cli.target {
+        //     Target::Release(release) => release.kind,
+        //     _ => enso_build::version::BuildKind::Dev,
+        // };
         let absolute_repo_path = cli.repo_path.absolutize()?;
         let octocrab = setup_octocrab().await?;
         let versions = enso_build::version::deduce_versions(
             &octocrab,
-            build_kind,
+            cli.build_kind,
             Ok(&cli.repo_remote),
             &absolute_repo_path,
         )
