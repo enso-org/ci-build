@@ -133,7 +133,7 @@ pub struct Cli {
     pub repo_remote: RepoContext,
 
     /// The build kind. Affects the default version generation.
-    #[clap(long, arg_enum, default_value_t = enso_build::version::BuildKind::Dev, enso_env())]
+    #[clap(long, arg_enum, default_value_t = enso_build::version::BuildKind::Dev, env = crate::BuildKind::NAME)]
     pub build_kind: enso_build::version::BuildKind,
 
     /// Platform to target. Currently cross-compilation is enabled only for GUI/IDE (without
