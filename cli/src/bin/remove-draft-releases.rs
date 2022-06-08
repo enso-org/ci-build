@@ -7,7 +7,7 @@ use ide_ci::models::config::RepoContext;
 #[tokio::main]
 async fn main() -> Result {
     setup_logging()?;
-    let repo = RepoContext::from_str("enso-org/ci-build")?;
+    let repo = RepoContext::from_str("enso-org/enso-staging")?;
     let octo = setup_octocrab().await?;
 
     let releases = repo.all_releases(&octo).await?;

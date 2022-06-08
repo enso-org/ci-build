@@ -355,6 +355,7 @@ impl Processor {
                         build_engine_package: true,
                         build_launcher_bundle: true,
                         build_project_manager_bundle: true,
+                        clean_repo: false,
                         ..enso_build::engine::NIGHTLY
                     };
                     let context = input.prepare_context(operation, config)?;

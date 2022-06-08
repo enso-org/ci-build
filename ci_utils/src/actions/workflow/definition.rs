@@ -315,7 +315,7 @@ pub enum RunnerLabel {
 pub fn runs_on(os: OS) -> Vec<RunnerLabel> {
     match os {
         OS::Windows => vec![RunnerLabel::SelfHosted, RunnerLabel::Windows, RunnerLabel::Engine],
-        OS::Linux => vec![RunnerLabel::SelfHosted, RunnerLabel::Linux, RunnerLabel::Engine],
+        OS::Linux => vec![RunnerLabel::SelfHosted, RunnerLabel::Linux, RunnerLabel::MwuDeluxe],
         OS::MacOS => vec![RunnerLabel::MacOSLatest],
         _ => todo!("Not supported"),
     }
@@ -555,6 +555,13 @@ mod tests {
             ..default()
         };
 
+
+        let all_platforms = Strategy::new_os(
+            [OS::Windows, OS::Linux, OS::MacOS].into_iter().map(|os| runs_on(os)).collect_vec(),
+        );
+        let linux_only = OS::Linux;
+
+
         let prepare_outputs = ["ENSO_VERSION", "ENSO_RELEASE_ID"];
 
         let prepare = {
@@ -562,7 +569,7 @@ mod tests {
             let runs_on = vec![RunnerLabel::Linux, RunnerLabel::MwuDeluxe];
 
             let prepare_step_id = "prepare";
-            let mut prepare = shell_os(OS::Linux, "./run release create-draft");
+            let mut prepare = shell_os(linux_only, "./run release create-draft");
             prepare.id = Some(prepare_step_id.into());
 
             let mut steps = setup_script_steps();
@@ -580,25 +587,23 @@ mod tests {
         let prepare_job_id = workflow.add_job(prepare);
 
 
-        let platform_specific_strategy = Strategy::new_os([[RunnerLabel::MwuDeluxe]]);
-
 
         let build_wasm: Job = {
-            let mut ret = plain_job(&platform_specific_strategy, "Build WASM", "wasm build");
+            let mut ret = plain_job(&linux_only, "Build WASM", "wasm build");
             workflow.expose_outputs(&prepare_job_id, &mut ret);
             ret
         };
         let build_wasm_job_id = workflow.add_job(build_wasm);
 
         let build_engine: Job = {
-            let mut ret = plain_job(&platform_specific_strategy, "Build Backend", "backend upload");
+            let mut ret = plain_job(&all_platforms, "Build Backend", "backend upload");
             workflow.expose_outputs(&prepare_job_id, &mut ret);
             ret
         };
         let build_engine_job_id = workflow.add_job(build_engine);
 
         let build_ide: Job = {
-            let mut ret = plain_job(&platform_specific_strategy, "Build IDE", "ide upload --wasm-source current-ci-run --backend-source release --backend-release ${{env.ENSO_RELEASE_ID}}");
+            let mut ret = plain_job(&all_platforms, "Build IDE", "ide upload --wasm-source current-ci-run --backend-source release --backend-release ${{env.ENSO_RELEASE_ID}}");
             workflow.expose_outputs(&prepare_job_id, &mut ret);
             ret.needs(&build_wasm_job_id);
             ret.needs(&build_engine_job_id);
@@ -608,8 +613,7 @@ mod tests {
 
 
         let publish: Job = {
-            let mut ret =
-                plain_job(&platform_specific_strategy, "Publish release", "release publish");
+            let mut ret = plain_job(&linux_only, "Publish release", "release publish");
             workflow.expose_outputs(&prepare_job_id, &mut ret);
             ret.needs(&build_wasm_job_id);
             ret.needs(&build_engine_job_id);
