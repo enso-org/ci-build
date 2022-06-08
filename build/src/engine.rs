@@ -229,6 +229,16 @@ impl BuiltBundleArtifacts {
     }
 }
 
+impl IntoIterator for BuiltBundleArtifacts {
+    type Item = ComponentPaths;
+    type IntoIter =
+        std::iter::Flatten<std::array::IntoIter<std::option::Option<ComponentPaths>, 2_usize>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        [self.launcher, self.project_manager].into_iter().flatten()
+    }
+}
+
 pub async fn create_packages(paths: &Paths) -> Result<Vec<PathBuf>> {
     let mut ret = Vec::new();
     if paths.launcher.root.exists() {

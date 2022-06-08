@@ -400,16 +400,16 @@ impl RunContext {
                         )
                         .await?;
                     }
-                    // for bundle in artifacts.bundles.iter() {
-                    //     bundle.pack().await?;
-                    //     ide_ci::github::release::upload_asset(
-                    //         repo,
-                    //         &client,
-                    //         release_id,
-                    //         &bundle.artifact_archive,
-                    //     )
-                    //     .await?;
-                    // }
+                    for bundle in artifacts.bundles.into_iter() {
+                        bundle.pack().await?;
+                        ide_ci::github::release::upload_asset(
+                            repo,
+                            &client,
+                            release_id,
+                            bundle.artifact_archive,
+                        )
+                        .await?;
+                    }
                 }
             },
             Operation::Run(run) => {
