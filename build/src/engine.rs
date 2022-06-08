@@ -207,6 +207,16 @@ impl BuiltPackageArtifacts {
     }
 }
 
+impl IntoIterator for BuiltPackageArtifacts {
+    type Item = ComponentPaths;
+    type IntoIter =
+        std::iter::Flatten<std::array::IntoIter<std::option::Option<ComponentPaths>, 3_usize>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        [self.engine, self.launcher, self.project_manager].into_iter().flatten()
+    }
+}
+
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct BuiltBundleArtifacts {
     pub launcher:        Option<ComponentPaths>,

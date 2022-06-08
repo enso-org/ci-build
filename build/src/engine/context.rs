@@ -390,26 +390,26 @@ impl RunContext {
                     let release_id = crate::env::ReleaseId.fetch()?;
                     let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
 
-                    for package in artifacts.packages.iter() {
+                    for package in artifacts.packages.into_iter() {
                         package.pack().await?;
                         ide_ci::github::release::upload_asset(
                             repo,
                             &client,
                             release_id,
-                            &package.artifact_archive,
+                            package.artifact_archive,
                         )
                         .await?;
                     }
-                    for bundle in artifacts.bundles.iter() {
-                        bundle.pack().await?;
-                        ide_ci::github::release::upload_asset(
-                            repo,
-                            &client,
-                            release_id,
-                            &bundle.artifact_archive,
-                        )
-                        .await?;
-                    }
+                    // for bundle in artifacts.bundles.iter() {
+                    //     bundle.pack().await?;
+                    //     ide_ci::github::release::upload_asset(
+                    //         repo,
+                    //         &client,
+                    //         release_id,
+                    //         &bundle.artifact_archive,
+                    //     )
+                    //     .await?;
+                    // }
                 }
             },
             Operation::Run(run) => {

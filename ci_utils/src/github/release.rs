@@ -7,10 +7,10 @@ use tracing::instrument;
 #[context("Failed to upload the asset {}", asset.as_ref().display())]
 #[instrument(skip_all, fields(source = %asset.as_ref().display(), %repo, %release))]
 pub async fn upload_asset(
-    repo: &impl RepoPointer,
+    repo: &(impl RepoPointer + Send + Sync + 'static),
     client: &reqwest::Client,
     release: ReleaseId,
-    asset: impl AsRef<Path>,
+    asset: impl AsRef<Path> + Send + Sync,
 ) -> Result {
     let upload_url = format!(
         "https://uploads.github.com/repos/{}/{}/releases/{}/assets",
