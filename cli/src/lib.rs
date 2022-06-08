@@ -365,7 +365,7 @@ impl Processor {
                     Result::Ok(context)
                 })();
                 async move {
-                    context?.build().await?;
+                    context?.execute().await?;
                     Ok(())
                 }
                 .boxed()

@@ -110,7 +110,7 @@ impl RunContext {
 
 
         // Setup GraalVM
-        let build_sbt_content = std::fs::read_to_string(self.paths.build_sbt())?;
+        let build_sbt_content = ide_ci::fs::read_to_string(self.paths.build_sbt())?;
         let graalvm = graalvm::GraalVM {
             client:        &self.octocrab,
             graal_version: get_graal_version(&build_sbt_content)?,

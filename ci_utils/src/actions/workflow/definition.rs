@@ -95,9 +95,9 @@ pub struct Workflow {
 }
 
 impl Workflow {
-    pub fn expose_outputs(&self, source_job_id: impl Borrow<str>, consumer_job: &mut Job) {
-        let source_job = self.jobs.get(source_job_id.borrow()).unwrap();
-        consumer_job.use_job_outputs(source_job_id.borrow(), source_job);
+    pub fn expose_outputs(&self, source_job_id: impl AsRef<str>, consumer_job: &mut Job) {
+        let source_job = self.jobs.get(source_job_id.as_ref()).unwrap();
+        consumer_job.use_job_outputs(source_job_id.as_ref(), source_job);
     }
 }
 
@@ -183,13 +183,25 @@ impl Job {
         self.outputs.insert(output, value);
     }
 
+    pub fn env(&mut self, name: impl Into<String>, value: impl Into<String>) {
+        self.env.insert(name.into(), value.into());
+    }
+
+    pub fn expose_secret_as(&mut self, secret: impl AsRef<str>, given_name: impl Into<String>) {
+        self.env(given_name, format!("${{{{ secrets.{} }}}}", secret.as_ref()));
+    }
+
     pub fn use_job_outputs(&mut self, job_id: impl Into<String>, job: &Job) {
         let job_id = job_id.into();
         for (output_name, _) in &job.outputs {
             let reference = format!("${{{{needs.{}.outputs.{}}}}}", job_id, output_name);
             self.env.insert(output_name.into(), reference);
         }
-        self.needs.insert(job_id);
+        self.needs(job_id);
+    }
+
+    pub fn needs(&mut self, job_id: impl Into<String>) {
+        self.needs.insert(job_id.into());
     }
 }
 
@@ -517,6 +529,8 @@ echo "::set-output name=list::'$list'"
     }
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -571,22 +585,47 @@ mod tests {
 
         let build_wasm: Job = {
             let mut ret = plain_job(&platform_specific_strategy, "Build WASM", "wasm build");
+            workflow.expose_outputs(&prepare_job_id, &mut ret);
             ret
         };
         let build_wasm_job_id = workflow.add_job(build_wasm);
 
         let build_engine: Job = {
-            let mut ret = plain_job(&platform_specific_strategy, "Build backend", "backend upload");
+            let mut ret = plain_job(&platform_specific_strategy, "Build Backend", "backend upload");
+            workflow.expose_outputs(&prepare_job_id, &mut ret);
             ret
         };
         let build_engine_job_id = workflow.add_job(build_engine);
+
+        let build_ide: Job = {
+            let mut ret = plain_job(&platform_specific_strategy, "Build IDE", "ide upload --wasm-source current-ci-run --backend-source release --backend-release ${{env.ENSO_RELEASE_ID}}");
+            workflow.expose_outputs(&prepare_job_id, &mut ret);
+            ret.needs(&build_wasm_job_id);
+            ret.needs(&build_engine_job_id);
+            ret
+        };
+        let build_ide_job_id = workflow.add_job(build_ide);
+
+
+        let publish: Job = {
+            let mut ret =
+                plain_job(&platform_specific_strategy, "Publish release", "release publish");
+            workflow.expose_outputs(&prepare_job_id, &mut ret);
+            ret.needs(&build_wasm_job_id);
+            ret.needs(&build_engine_job_id);
+            ret.needs(&build_ide_job_id);
+            ret.expose_secret_as("ARTEFACT_S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID");
+            ret.expose_secret_as("ARTEFACT_S3_SECRET_ACCESS_KEY ", "AWS_SECRET_ACCESS_KEY");
+            ret.env("AWS_REGION", "us-west-1");
+            ret
+        };
+        let _publish_job_id = workflow.add_job(publish);
 
 
 
         let global_env = [
             ("ENSO_BUILD_KIND", "nightly"),
-            ("ENSO_BUILD_REPO_PATH", "enso"),
-            ("ENSO_BUILD_REPO_REMOTE", "enso-org/ci-build"),
+            ("ENSO_BUILD_REPO_REMOTE", "enso-org/enso-staging"),
             ("RUST_BACKTRACE", "full"),
         ];
         for (var_name, value) in global_env {

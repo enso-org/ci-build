@@ -136,7 +136,7 @@ pub fn base_version(changelog_path: impl AsRef<Path>) -> Result<Version> {
         return Ok(from_env);
     }
 
-    let changelog_contents = std::fs::read_to_string(changelog_path.as_ref())?;
+    let changelog_contents = ide_ci::fs::read_to_string(changelog_path.as_ref())?;
     let mut headers = crate::changelog::Changelog(&changelog_contents)
         .iterate_headers()
         .map(|h| ide_ci::program::version::find_in_text(h.text));
