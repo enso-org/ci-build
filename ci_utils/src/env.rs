@@ -195,6 +195,30 @@ pub mod new {
             self.set(&paths)
         }
     }
+
+    /// Environment variable consisting of string separated by a given separator.
+    pub struct Separated {
+        pub name:      &'static str,
+        pub separator: &'static str,
+    }
+
+    impl RawVariable for Separated {
+        fn name(&self) -> &str {
+            self.name
+        }
+    }
+
+    impl TypedVariable for Separated {
+        type Value = Vec<String>;
+
+        fn parse(&self, value: &str) -> Result<Self::Value> {
+            Ok(value.split(self.separator).map(ToString::to_string).collect())
+        }
+
+        fn generate(&self, value: &Self::Borrowed) -> Result<String> {
+            Ok(value.join(self.separator))
+        }
+    }
 }
 
 //
@@ -303,9 +327,11 @@ pub fn expect_var_os(name: impl AsRef<OsStr>) -> Result<OsString> {
 }
 
 pub fn prepend_to_path(path: impl Into<PathBuf>) -> Result {
+    let path = path.into();
+    trace!("Prepending {} to {PATH_ENVIRONMENT_NAME}.", path.display());
     let old_value = std::env::var_os(PATH_ENVIRONMENT_NAME);
     let old_pieces = old_value.iter().map(split_paths).flatten();
-    let new_pieces = once(path.into()).chain(old_pieces);
+    let new_pieces = once(path).chain(old_pieces);
     let new_value = join_paths(new_pieces)?;
     std::env::set_var(PATH_ENVIRONMENT_NAME, new_value);
     Ok(())

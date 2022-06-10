@@ -139,6 +139,7 @@ pub mod prelude {
     pub use crate::program::ProgramExt;
     pub use crate::program::Shell;
 
+    pub use crate::cache::goodie::GoodieExt as _;
     pub use crate::env::new::RawVariable as _;
     pub use crate::env::new::TypedVariable as _;
     pub use crate::extensions::clap::ArgExt as _;

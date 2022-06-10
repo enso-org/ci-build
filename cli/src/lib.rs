@@ -528,6 +528,7 @@ impl Resolvable for Wasm {
             profile: wasm_profile.into(),
             profiling_level: profiling_level.map(into),
             wasm_size_limit: wasm_size_limit.filter(|size_limit| size_limit.get_bytes() > 0),
+            cache: ctx.cache.clone(),
         })
     }
 }

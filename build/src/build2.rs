@@ -79,7 +79,10 @@ pub trait BuildContext: Clone + Send + Sync + 'static {
         async move {
             let ReleaseSource { asset_id, octocrab, repository } = &source;
             let archive_source = repository.download_asset_job(octocrab, *asset_id);
-            let extract_job = cache::archive::ExtractedArchive { archive_source };
+            let extract_job = cache::archive::ExtractedArchive {
+                archive_source,
+                path_to_extract: crate::project::path_to_extract(),
+            };
             let directory = cache.get(extract_job).await?;
             ide_ci::fs::remove_if_exists(&destination)?;
             ide_ci::fs::symlink_auto(&directory, &destination)?;

@@ -127,8 +127,10 @@ impl Program for BuiltEnso {
         ide_ci::platform::DEFAULT_SHELL.run_script(self.wrapper_script_path())
     }
 
-    async fn version_string(&self) -> Result<String> {
-        self.cmd()?.args(["version", "--json", "--only-launcher"]).run_stdout().await
+    fn version_string(&self) -> BoxFuture<'static, Result<String>> {
+        let command = self.cmd();
+        async move { command?.args(["version", "--json", "--only-launcher"]).run_stdout().await }
+            .boxed()
     }
 
     async fn version(&self) -> Result<Version> {

@@ -3,7 +3,6 @@ use crate::source_args_hlp;
 use clap::Args;
 use clap::Subcommand;
 use enso_build::prelude::*;
-use enso_build::project;
 use enso_build::project::backend::Backend;
 
 #[derive(Args, Clone, Debug, PartialEq)]

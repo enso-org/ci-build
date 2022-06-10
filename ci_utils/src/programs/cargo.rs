@@ -1,9 +1,17 @@
+use crate::env::new::Separated;
 use crate::prelude::*;
 
 use crate::program::command::Manipulator;
 
 pub mod clippy;
 
+/// Extra flags that Cargo invokes rustc with.
+///
+/// See: https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-reads
+pub const CARGO_ENCODED_RUSTFLAGS: Separated =
+    Separated { separator: "\x1F", name: "CARGO_ENCODED_RUSTFLAGS" };
+
+pub const RUSTFLAGS: Separated = Separated { separator: " ", name: "RUSTFLAGS" };
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Cargo;

@@ -28,6 +28,11 @@ pub use ide::Ide;
 pub use project_manager::ProjectManager;
 pub use wasm::Wasm;
 
+// FIXME: this works for Project Manager bundle-style archives only, not all.
+pub fn path_to_extract() -> Option<PathBuf> {
+    Some("enso".into())
+}
+
 /// A built target, contained under a single directory.
 ///
 /// The `AsRef<Path>` trait must return that directory path.
@@ -184,7 +189,10 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         async move {
             let ReleaseSource { asset_id, octocrab, repository } = &source;
             let archive_source = repository.download_asset_job(octocrab, *asset_id);
-            let extract_job = cache::archive::ExtractedArchive { archive_source };
+            let extract_job = cache::archive::ExtractedArchive {
+                archive_source,
+                path_to_extract: path_to_extract(),
+            };
             let directory = cache.get(extract_job).await?;
             ide_ci::fs::remove_if_exists(&destination)?;
             ide_ci::fs::symlink_auto(&directory, &destination)?;

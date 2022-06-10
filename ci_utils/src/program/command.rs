@@ -65,6 +65,12 @@ pub trait MyCommand<P: Program>: BorrowMut<Command> + From<Command> + Into<Comma
 pub trait IsCommandWrapper {
     fn borrow_mut_command(&mut self) -> &mut tokio::process::Command;
 
+    fn with_applied<M: Manipulator>(mut self, manipulator: &M) -> Self
+    where Self: Sized {
+        manipulator.apply(&mut self);
+        self
+    }
+
     fn apply<M: Manipulator>(&mut self, manipulator: &M) -> &mut Self {
         manipulator.apply(self);
         self

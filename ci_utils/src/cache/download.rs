@@ -52,12 +52,6 @@ impl DownloadFile {
     }
 }
 
-impl Borrow<Key> for DownloadFile {
-    fn borrow(&self) -> &Key {
-        &self.key
-    }
-}
-
 impl Storable for DownloadFile {
     type Metadata = PathBuf;
     type Output = PathBuf;
@@ -90,5 +84,9 @@ impl Storable for DownloadFile {
         metadata: Self::Metadata,
     ) -> BoxFuture<'static, Result<Self::Output>> {
         ready(Ok(store.join(metadata))).boxed()
+    }
+
+    fn key(&self) -> Self::Key {
+        self.key.clone()
     }
 }

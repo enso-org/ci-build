@@ -3,42 +3,37 @@ use crate::prelude::*;
 use crate::cache::Cache;
 use crate::cache::Storable;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Key<S> {
+    pub archive_source_key: S,
+    pub path_to_extract:    Option<PathBuf>,
+}
 
 #[derive(Clone, Debug)]
 pub struct ExtractedArchive<S> {
-    pub archive_source: S,
-}
-
-// Unfortunately this impl cannot be simplified to just:
-// impl<S: Storable> Borrow<S::Key> for ExtractedArchive<S>
-// See: https://stackoverflow.com/questions/53021939/how-can-i-implement-borrow-for-a-generic-container-in-the-case-of-the-use-of-ass
-// See: https://github.com/rust-lang/rust/issues/50237
-// Because of that we must introduce spurious `K` type parameter and repeat Key's constraint.
-impl<S, K> Borrow<K> for ExtractedArchive<S>
-where
-    S: Storable<Key = K>,
-    K: Clone + Debug + Serialize + DeserializeOwned + 'static,
-{
-    fn borrow(&self) -> &K {
-        self.archive_source.borrow()
-    }
+    pub archive_source:  S,
+    pub path_to_extract: Option<PathBuf>,
 }
 
 impl<S: Storable<Output = PathBuf> + Clone> Storable for ExtractedArchive<S> {
     type Metadata = ();
     type Output = PathBuf;
-    type Key = S::Key;
+    type Key = Key<S::Key>;
 
     fn generate(
         &self,
         cache: Cache,
         store: PathBuf,
     ) -> BoxFuture<'static, crate::Result<Self::Metadata>> {
-        let get_archive_job = cache.get(self.archive_source.clone());
+        let Self { path_to_extract, archive_source } = self.clone();
+        let get_archive_job = cache.get(archive_source);
         async move {
             let archive_path = get_archive_job.await?;
-            // // FIXME: hardcoded bundle directory name
-            crate::archive::extract_item(&archive_path, "enso", &store).await
+            if let Some(path_to_extract) = path_to_extract {
+                crate::archive::extract_item(&archive_path, path_to_extract, &store).await
+            } else {
+                crate::archive::extract_to(&archive_path, &store).await
+            }
         }
         .boxed()
     }
@@ -49,5 +44,12 @@ impl<S: Storable<Output = PathBuf> + Clone> Storable for ExtractedArchive<S> {
         _: Self::Metadata,
     ) -> BoxFuture<'static, crate::Result<Self::Output>> {
         async move { Ok(cache) }.boxed()
+    }
+
+    fn key(&self) -> Self::Key {
+        Key {
+            archive_source_key: self.archive_source.key(),
+            path_to_extract:    self.path_to_extract.clone(),
+        }
     }
 }

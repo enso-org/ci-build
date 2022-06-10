@@ -4,13 +4,14 @@ use crate::arg::ArgExt;
 use crate::arg::OutputPath;
 use crate::arg::Source;
 use crate::source_args_hlp;
-use enso_build::project::wasm::Wasm;
 
 use clap::ArgEnum;
 use clap::Args;
 use clap::Subcommand;
-use ide_ci::programs::wasm_pack;
+use enso_build::project::wasm::Wasm;
 use std::lazy::SyncOnceCell;
+
+pub use enso_build::project::wasm::Profile;
 
 source_args_hlp!(Wasm, "wasm", BuildInputs);
 
@@ -20,23 +21,6 @@ pub fn initialize_default_wasm_size_limit(limit: byte_unit::Byte) -> Result {
     DEFAULT_WASM_SIZE_LIMIT
         .set(limit.get_appropriate_unit(true).to_string())
         .map_err(|e| anyhow!("WASM size limit was already set to {e}."))
-}
-
-#[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
-pub enum Profile {
-    Dev,
-    Profile,
-    Release,
-}
-
-impl From<Profile> for wasm_pack::Profile {
-    fn from(profile: Profile) -> Self {
-        match profile {
-            Profile::Dev => Self::Dev,
-            Profile::Profile => Self::Profile,
-            Profile::Release => Self::Release,
-        }
-    }
 }
 
 // Follows hierarchy defined in  lib/rust/profiler/src/lib.rs
