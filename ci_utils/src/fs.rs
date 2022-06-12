@@ -249,9 +249,31 @@ pub fn check_if_identical(source: impl AsRef<Path>, target: impl AsRef<Path>) ->
     .unwrap_or(false)
 }
 
-pub fn copy_if_different(source: impl AsRef<Path>, target: impl AsRef<Path>) -> Result {
+pub fn copy_file_if_different(source: impl AsRef<Path>, target: impl AsRef<Path>) -> Result {
     if !check_if_identical(&source, &target) {
+        trace!(
+            "Modified, will copy {} to {}.",
+            source.as_ref().display(),
+            target.as_ref().display()
+        );
         crate::fs::copy(&source, &target)?;
+    } else {
+        trace!("No changes, skipping {}.", source.as_ref().display())
     }
     Ok(())
+}
+
+#[tracing::instrument(skip_all, fields(
+    src  = %source.as_ref().display(),
+    dest = %target.as_ref().display()),
+    err)]
+pub async fn copy_if_different(source: impl AsRef<Path>, target: impl AsRef<Path>) -> Result {
+    if tokio::metadata(&source).await?.is_file() {
+        return copy_file_if_different(source, target);
+    }
+
+    let walkdir = walkdir::WalkDir::new(&source);
+    let entries = walkdir.into_iter().collect_result()?;
+
+    todo!()
 }

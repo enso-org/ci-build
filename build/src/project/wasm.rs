@@ -5,14 +5,15 @@ use crate::prelude::*;
 use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
 use crate::project::wasm::js_patcher::patch_js_glue_in_place;
+use crate::project::Context;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
-
-use anyhow::Context;
+use crate::source::BuildTargetJob;
+use crate::source::WatchTargetJob;
+use crate::source::WithDestination;
 use derivative::Derivative;
 use ide_ci::cache;
-use ide_ci::cache::Cache;
 use ide_ci::env::Variable;
 use ide_ci::fs::compressed_size;
 use ide_ci::programs::cargo;
@@ -119,7 +120,6 @@ pub struct BuildInput {
     pub profile:             Profile,
     pub profiling_level:     Option<ProfilingLevel>,
     pub wasm_size_limit:     Option<byte_unit::Byte>,
-    pub cache:               Cache,
 }
 
 impl BuildInput {
@@ -168,19 +168,20 @@ impl IsTarget for Wasm {
 
     fn build_locally(
         &self,
-        input: Self::BuildInput,
-        output_path: impl AsRef<Path> + Send + Sync + 'static,
+        context: Context,
+        job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        let Context { octocrab: _, cache } = context;
+        let WithDestination { inner, destination } = job;
         let span = info_span!("Building WASM.",
-            repo = %input.repo_root.display(),
-            crate = %input.crate_path.display(),
-            cargo_opts = ?input.extra_cargo_options
+            repo = %inner.repo_root.display(),
+            crate = %inner.crate_path.display(),
+            cargo_opts = ?inner.extra_cargo_options
         );
         async move {
             // Old wasm-pack does not pass trailing `build` command arguments to the Cargo.
             // We want to be able to pass --profile this way.
             WasmPack.require_present_that(&VersionReq::parse(">=0.10.1")?).await?;
-
 
             let BuildInput {
                 repo_root,
@@ -189,14 +190,11 @@ impl IsTarget for Wasm {
                 profile,
                 profiling_level,
                 wasm_size_limit: _wasm_size_limit,
-                cache,
-            } = &input;
-
+            } = &inner;
 
             cache::goodie::binaryen::Binaryen { version: BINARYEN_VERSION_TO_INSTALL }
                 .install_if_missing(&cache, WasmOpt)
                 .await?;
-
 
             info!("Building wasm.");
             let temp_dir = tempdir()?;
@@ -235,12 +233,12 @@ impl IsTarget for Wasm {
             // ide_ci::fs::rename(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
             patch_js_glue_in_place(&temp_dist.wasm_glue)?;
 
-            ide_ci::fs::create_dir_if_missing(&output_path)?;
-            let ret = RepoRootDistWasm::new(output_path.as_ref());
+            ide_ci::fs::create_dir_if_missing(&destination)?;
+            let ret = RepoRootDistWasm::new(&destination);
             ide_ci::fs::copy(&temp_dist, &ret)?;
             // copy_if_different(&temp_dist.wasm_glue, &ret.wasm_glue)?;
             // copy_if_different(&temp_dist.wasm_main_raw, &ret.wasm_main)?;
-            input.perhaps_check_size(&ret.wasm_main).await?;
+            inner.perhaps_check_size(&ret.wasm_main).await?;
             Ok(Artifact(ret))
         }
         .instrument(span)
@@ -248,18 +246,26 @@ impl IsTarget for Wasm {
     }
 }
 
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
+pub struct WatchInput {
+    pub cargo_watch_flags: Vec<String>,
+}
+
 impl IsWatchable for Wasm {
     type Watcher = crate::project::Watcher<Self, Child>;
+    type WatchInput = WatchInput;
 
-    fn setup_watcher(
+    fn watch(
         &self,
-        input: Self::BuildInput,
-        output_path: impl AsRef<Path> + Send + Sync + 'static,
+        _context: Context,
+        job: WatchTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Watcher>> {
-        // TODO
-        // This is not nice, as this module should not be aware of the CLI parsing/generation.
-        // Rather than using `cargo watch` this should be implemented directly in Rust.
         async move {
+            let WatchTargetJob {
+                watch_input: WatchInput { cargo_watch_flags },
+                build: WithDestination { inner, destination },
+            } = job;
             let BuildInput {
                 repo_root,
                 crate_path,
@@ -267,8 +273,7 @@ impl IsWatchable for Wasm {
                 profile,
                 profiling_level,
                 wasm_size_limit,
-                cache: _,
-            } = input;
+            } = inner;
 
             let current_exe = std::env::current_exe()?;
             // Cargo watch apparently cannot handle verbatim path prefix. We remove it and hope for
@@ -283,14 +288,18 @@ impl IsWatchable for Wasm {
                 .current_dir(&repo_root)
                 .arg("watch")
                 .args(["--ignore", "README.md"])
+                .args(cargo_watch_flags)
                 .arg("--")
-                // FIXME: does not play nice for use as a library
+                // TODO [mwu]
+                // This is not nice, as this module should not be aware of the CLI
+                // parsing/generation. Rather than using `cargo watch` this should
+                // be implemented directly in Rust.
                 .arg(current_exe)
                 .args(["--repo-path", repo_root.as_str()])
                 .arg("wasm")
                 .arg("build")
                 .args(["--crate-path", crate_path.as_str()])
-                .args(["--wasm-output-path", output_path.as_str()])
+                .args(["--wasm-output-path", destination.as_str()])
                 .args(["--wasm-profile", profile.as_ref()]);
             if let Some(profiling_level) = profiling_level {
                 watch_cmd.args(["--profiling-level", profiling_level.to_string().as_str()]);
@@ -301,7 +310,7 @@ impl IsWatchable for Wasm {
             watch_cmd.arg("--").args(extra_cargo_options);
 
             let watch_process = watch_cmd.spawn_intercepting()?;
-            let artifact = Artifact(RepoRootDistWasm::new(output_path.as_ref()));
+            let artifact = Artifact(RepoRootDistWasm::new(&destination));
             Ok(Self::Watcher { artifact, watch_process })
         }
         .boxed()

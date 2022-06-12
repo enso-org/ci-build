@@ -29,16 +29,19 @@ impl Variable for BuildKind {
 
 
 use crate::arg::release::Action;
+use crate::arg::BuildJob;
 use crate::arg::Cli;
 use crate::arg::IsTargetSource;
-use crate::arg::OutputPath;
+use crate::arg::IsWatchableSource;
 use crate::arg::Target;
+use crate::arg::WatchJob;
 use anyhow::Context;
 use clap::Parser;
 use derivative::Derivative;
 use enso_build::context::BuildContext;
 use enso_build::paths::TargetTriple;
 use enso_build::prettier;
+use enso_build::project;
 use enso_build::project::backend;
 use enso_build::project::backend::Backend;
 use enso_build::project::engine;
@@ -54,19 +57,23 @@ use enso_build::project::wasm::Wasm;
 use enso_build::project::IsTarget;
 use enso_build::project::IsWatchable;
 use enso_build::project::IsWatcher;
+use enso_build::project::ProcessWrapper;
 use enso_build::setup_octocrab;
+use enso_build::source::BuildTargetJob;
 use enso_build::source::CiRunSource;
 use enso_build::source::ExternalSource;
 use enso_build::source::GetTargetJob;
 use enso_build::source::OngoingCiRunSource;
 use enso_build::source::ReleaseSource;
 use enso_build::source::Source;
-use futures_util::future::try_join;
+use enso_build::source::WatchTargetJob;
+use enso_build::source::WithDestination;
 use ide_ci::actions::workflow::is_in_env;
 use ide_ci::cache::Cache;
 use ide_ci::github::release::upload_asset;
 use ide_ci::global;
 use ide_ci::log::setup_logging;
+use ide_ci::ok_ready_boxed;
 use ide_ci::programs::cargo;
 use ide_ci::programs::rustc;
 use ide_ci::programs::Cargo;
@@ -126,6 +133,10 @@ impl Processor {
         Ok(Self { context })
     }
 
+    pub fn context(&self) -> project::Context {
+        project::Context { octocrab: self.octocrab.clone(), cache: self.cache.clone() }
+    }
+
     pub fn resolve<T: IsTargetSource + IsTarget>(
         &self,
         target: T,
@@ -139,7 +150,7 @@ impl Processor {
         let source = match source.source {
             arg::SourceKind::Build => {
                 let resolved = T::resolve(self, source.build_args);
-                ready(resolved.map(Source::BuildLocally)).boxed()
+                async move { Ok(Source::BuildLocally(resolved.await?)) }.boxed()
             }
             arg::SourceKind::Local =>
                 ready(Ok(Source::External(ExternalSource::LocalFile(source.path.clone())))).boxed(),
@@ -150,7 +161,6 @@ impl Processor {
                 ));
                 ready(run_id.map(|run_id| {
                     Source::External(ExternalSource::CiRun(CiRunSource {
-                        octocrab: self.octocrab.clone(),
                         run_id,
                         repository: self.remote_repo.clone(),
                         artifact_name: resolve_artifact_name(source.artifact_name.clone(), &target),
@@ -173,7 +183,7 @@ impl Processor {
                     .boxed()
             }
         };
-        async move { Ok(GetTargetJob { source: source.await?, destination }) }
+        async move { Ok(GetTargetJob { inner: source.await?, destination }) }
             .instrument(span.clone())
             .boxed()
     }
@@ -186,11 +196,9 @@ impl Processor {
     ) -> BoxFuture<'static, Result<ReleaseSource>> {
         let release = self.deref().resolve_release_designator(designator);
         let repository = self.remote_repo.clone();
-        let octocrab = self.octocrab.clone();
         async move {
             let release = release.await?;
             Ok(ReleaseSource {
-                octocrab,
                 repository,
                 asset_id: target
                     .find_asset(release.assets)
@@ -229,8 +237,55 @@ impl Processor {
     pub fn resolve_inputs<T: Resolvable>(
         &self,
         inputs: <T as IsTargetSource>::BuildInput,
-    ) -> Result<<T as IsTarget>::BuildInput> {
+    ) -> BoxFuture<'static, Result<<T as IsTarget>::BuildInput>> {
         T::resolve(self, inputs)
+    }
+
+    pub fn resolve_watch_inputs<T: WatchResolvable>(
+        &self,
+        inputs: <T as IsWatchableSource>::WatchInput,
+    ) -> Result<<T as IsWatchable>::WatchInput> {
+        T::resolve_watch(self, inputs)
+    }
+
+    pub fn resolve_build_job<T: Resolvable>(
+        &self,
+        job: arg::BuildJob<T>,
+    ) -> BoxFuture<'static, Result<BuildTargetJob<T>>> {
+        let arg::BuildJob { input, output_path } = job;
+        let input = self.resolve_inputs::<T>(input);
+        async move {
+            Ok(WithDestination { destination: output_path.output_path, inner: input.await? })
+        }
+        .boxed()
+    }
+
+    pub fn resolve_watch_job<T: WatchResolvable>(
+        &self,
+        job: arg::WatchJob<T>,
+    ) -> BoxFuture<'static, Result<WatchTargetJob<T>>> {
+        let arg::WatchJob { build, watch_input } = job;
+        let build = self.resolve_build_job(build);
+        let watch_input = self.resolve_watch_inputs::<T>(watch_input);
+        async move { Ok(WatchTargetJob { watch_input: watch_input?, build: build.await? }) }.boxed()
+    }
+
+    pub fn watch<Target: WatchResolvable>(
+        &self,
+        job: WatchJob<Target>,
+    ) -> BoxFuture<'static, Result<Target::Watcher>> {
+        let context = self.context();
+        let job = self.resolve_watch_job(job);
+        let target = self.target::<Target>();
+        async move { target?.watch(context, job.await?).await }.boxed()
+    }
+
+    pub fn watch_and_wait<Target: WatchResolvable>(
+        &self,
+        job: WatchJob<Target>,
+    ) -> BoxFuture<'static, Result> {
+        let watcher = self.watch(job);
+        async move { watcher.await?.wait_for_finish().await }.boxed()
     }
 
     pub fn get<Target>(
@@ -243,55 +298,33 @@ impl Processor {
     {
         let target = self.target();
         let get_task = self.target().map(|target| self.resolve(target, target_source));
-        let cache = self.cache.clone();
-        async move { get_resolved(target?, cache, get_task?.await?).await }.boxed()
+        let context = self.context();
+        async move { get_resolved(target?, context, get_task?.await?).await }.boxed()
     }
 
     pub fn build_locally<Target: Resolvable>(
         &self,
-        input: <Target as IsTargetSource>::BuildInput,
-        output_path: OutputPath<Target>,
+        job: BuildJob<Target>,
     ) -> BoxFuture<'static, Result> {
-        let job = self.resolve_inputs::<Target>(input).and_then(|input| {
-            self.target().map(|target: Target| target.build_locally(input, output_path))
-        });
-        async move { job?.await }.void_ok().boxed()
+        let context = self.context();
+        let target = self.target::<Target>();
+        let job = self.resolve_build_job(job);
+        async move {
+            let job = job.await?;
+            target?.build_locally(context, job).await
+        }
+        .void_ok()
+        .boxed()
     }
 
     pub fn handle_wasm(&self, wasm: arg::wasm::Target) -> BoxFuture<'static, Result> {
         match wasm.command {
-            arg::wasm::Command::Watch { params, output_path } => {
-                let inputs = self.resolve_inputs::<Wasm>(params);
-                async move {
-                    let mut watcher = Wasm.setup_watcher(inputs?, output_path.output_path).await?;
-                    watcher.wait_ok().await
-                }
-                .boxed()
-            }
-            arg::wasm::Command::Build { params, output_path } => {
-                let inputs = self.resolve_inputs::<Wasm>(params);
-                let cache = self.cache.clone();
-                async move {
-                    let source = enso_build::source::Source::BuildLocally(inputs?);
-                    let job = GetTargetJob { source, destination: output_path.output_path };
-                    get_resolved(Wasm, cache, job).await?;
-                    Ok(())
-                }
-                .boxed()
-            }
+            arg::wasm::Command::Watch(job) => self.watch_and_wait(job),
+            arg::wasm::Command::Build(job) => self.build_locally(job).void_ok().boxed(),
             arg::wasm::Command::Check => Wasm.check().boxed(),
             arg::wasm::Command::Test { no_wasm, no_native } =>
                 Wasm.test(self.repo_root().path, !no_wasm, !no_native).boxed(),
-            arg::wasm::Command::Get { source } => {
-                let target = Wasm;
-                let source = self.resolve(target, source);
-                let cache = self.cache.clone();
-                async move {
-                    target.get(source.await?, cache).await?;
-                    Ok(())
-                }
-                .boxed()
-            }
+            arg::wasm::Command::Get(source) => self.get(source).void_ok().boxed(),
         }
     }
 
@@ -308,46 +341,24 @@ impl Processor {
 
     pub fn handle_gui(&self, gui: arg::gui::Target) -> BoxFuture<'static, Result> {
         match gui.command {
-            arg::gui::Command::Build { input, output_path } =>
-                self.build_locally(input, output_path),
-            arg::gui::Command::Get { source } => {
-                let job = self.get(source);
-                job.void_ok().boxed()
-            }
-            arg::gui::Command::Watch { input } => self.watch_gui(input),
+            arg::gui::Command::Build(job) => self.build_locally(job),
+            arg::gui::Command::Get(source) => self.get(source).void_ok().boxed(),
+            arg::gui::Command::Watch(job) => self.watch_and_wait(job),
         }
-    }
-
-    pub fn watch_gui(&self, input: arg::gui::WatchInput) -> BoxFuture<'static, Result> {
-        let wasm_target = Wasm;
-        let arg::gui::WatchInput { wasm, output_path } = input;
-        let source = self.resolve(wasm_target, wasm);
-        let repo_root = self.repo_root();
-        let build_info = self.js_build_info();
-        let cache = self.cache.clone();
-        async move {
-            let source = source.await?;
-            let mut wasm_watcher = wasm_target.watch(source, cache).await?;
-            let input = gui::BuildInput {
-                repo_root,
-                build_info,
-                wasm: ready(Ok(wasm_watcher.as_ref().clone())).boxed(),
-            };
-            let mut gui_watcher = Gui.setup_watcher(input, output_path).await?;
-            try_join(wasm_watcher.wait_ok(), gui_watcher.wait_ok()).void_ok().await
-        }
-        .boxed()
     }
 
     pub fn handle_backend(&self, backend: arg::backend::Target) -> BoxFuture<'static, Result> {
         match backend.command {
             arg::backend::Command::Get { source } => self.get(source).void_ok().boxed(),
             arg::backend::Command::Upload { input } => {
-                let context = (|| {
-                    let input = enso_build::project::Backend::resolve(self, input)?;
+                let input = enso_build::project::Backend::resolve(self, input);
+                let repo = self.remote_repo.clone();
+
+                async move {
+                    let input = input.await?;
                     let operation = enso_build::engine::Operation::Release(
                         enso_build::engine::ReleaseOperation {
-                            repo:    self.remote_repo.clone(),
+                            repo,
                             command: enso_build::engine::ReleaseCommand::Upload,
                         },
                     );
@@ -359,10 +370,7 @@ impl Processor {
                         ..enso_build::engine::NIGHTLY
                     };
                     let context = input.prepare_context(operation, config)?;
-                    Result::Ok(context)
-                })();
-                async move {
-                    context?.execute().await?;
+                    context.execute().await?;
                     Ok(())
                 }
                 .boxed()
@@ -396,8 +404,7 @@ impl Processor {
                 .boxed()
             }
             arg::ide::Command::Watch { project_manager, gui } => {
-                use enso_build::project::ProcessWrapper;
-                let gui_watcher = self.watch_gui(gui);
+                let gui_watcher = self.watch(gui);
                 let project_manager = self.spawn_project_manager(project_manager, None);
 
                 async move {
@@ -502,7 +509,7 @@ pub trait Resolvable: IsTarget + IsTargetSource + Clone {
     fn resolve(
         ctx: &Processor,
         from: <Self as IsTargetSource>::BuildInput,
-    ) -> Result<<Self as IsTarget>::BuildInput>;
+    ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>>;
 }
 
 impl Resolvable for Wasm {
@@ -513,22 +520,21 @@ impl Resolvable for Wasm {
     fn resolve(
         ctx: &Processor,
         from: <Self as IsTargetSource>::BuildInput,
-    ) -> Result<<Self as IsTarget>::BuildInput> {
-        let arg::wasm::BuildInputs {
+    ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
+        let arg::wasm::BuildInput {
             crate_path,
             wasm_profile,
             cargo_options,
             profiling_level,
             wasm_size_limit,
         } = from;
-        Ok(wasm::BuildInput {
+        ok_ready_boxed(wasm::BuildInput {
             repo_root: ctx.repo_root(),
             crate_path,
             extra_cargo_options: cargo_options,
             profile: wasm_profile.into(),
             profiling_level: profiling_level.map(into),
             wasm_size_limit: wasm_size_limit.filter(|size_limit| size_limit.get_bytes() > 0),
-            cache: ctx.cache.clone(),
         })
     }
 }
@@ -541,12 +547,12 @@ impl Resolvable for Gui {
     fn resolve(
         ctx: &Processor,
         from: <Self as IsTargetSource>::BuildInput,
-    ) -> Result<<Self as IsTarget>::BuildInput> {
-        Ok(gui::BuildInput {
-            wasm:       ctx.get(from.wasm),
-            repo_root:  ctx.repo_root(),
-            build_info: ctx.js_build_info(),
-        })
+    ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
+        let wasm_source = ctx.resolve(Wasm, from.wasm);
+        let repo_root = ctx.repo_root();
+        let build_info = ctx.js_build_info();
+        async move { Ok(gui::BuildInput { wasm: wasm_source.await?, repo_root, build_info }) }
+            .boxed()
     }
 }
 
@@ -558,8 +564,8 @@ impl Resolvable for Backend {
     fn resolve(
         ctx: &Processor,
         _from: <Self as IsTargetSource>::BuildInput,
-    ) -> Result<<Self as IsTarget>::BuildInput> {
-        Ok(backend::BuildInput {
+    ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
+        ok_ready_boxed(backend::BuildInput {
             repo_root: ctx.repo_root().path,
             octocrab:  ctx.octocrab.clone(),
             versions:  ctx.triple.versions.clone(),
@@ -575,8 +581,8 @@ impl Resolvable for ProjectManager {
     fn resolve(
         ctx: &Processor,
         _from: <Self as IsTargetSource>::BuildInput,
-    ) -> Result<<Self as IsTarget>::BuildInput> {
-        Ok(project_manager::BuildInput {
+    ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
+        ok_ready_boxed(project_manager::BuildInput {
             repo_root: ctx.repo_root().path,
             octocrab:  ctx.octocrab.clone(),
             versions:  ctx.triple.versions.clone(),
@@ -592,8 +598,8 @@ impl Resolvable for Engine {
     fn resolve(
         ctx: &Processor,
         _from: <Self as IsTargetSource>::BuildInput,
-    ) -> Result<<Self as IsTarget>::BuildInput> {
-        Ok(engine::BuildInput {
+    ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
+        ok_ready_boxed(engine::BuildInput {
             repo_root: ctx.repo_root().path,
             octocrab:  ctx.octocrab.clone(),
             versions:  ctx.triple.versions.clone(),
@@ -601,10 +607,35 @@ impl Resolvable for Engine {
     }
 }
 
+pub trait WatchResolvable: Resolvable + IsWatchableSource + IsWatchable {
+    fn resolve_watch(
+        ctx: &Processor,
+        from: <Self as IsWatchableSource>::WatchInput,
+    ) -> Result<<Self as IsWatchable>::WatchInput>;
+}
+
+impl WatchResolvable for Wasm {
+    fn resolve_watch(
+        _ctx: &Processor,
+        from: <Self as IsWatchableSource>::WatchInput,
+    ) -> Result<<Self as IsWatchable>::WatchInput> {
+        Ok(wasm::WatchInput { cargo_watch_flags: from.cargo_watch_options })
+    }
+}
+
+impl WatchResolvable for Gui {
+    fn resolve_watch(
+        ctx: &Processor,
+        from: <Self as IsWatchableSource>::WatchInput,
+    ) -> Result<<Self as IsWatchable>::WatchInput> {
+        Wasm::resolve_watch(ctx, from)
+    }
+}
+
 #[tracing::instrument(skip_all, fields(?target, ?get_task), err)]
 pub async fn get_resolved<Target>(
     target: Target,
-    cache: Cache,
+    context: project::Context,
     get_task: GetTargetJob<Target>,
 ) -> Result<Target::Artifact>
 where
@@ -612,8 +643,8 @@ where
 {
     // We upload only built artifacts. There would be no point in uploading something that
     // we've just downloaded.
-    let should_upload_artifact = matches!(get_task.source, Source::BuildLocally(_)) && is_in_env();
-    let artifact = target.get(get_task, cache).await?;
+    let should_upload_artifact = matches!(get_task.inner, Source::BuildLocally(_)) && is_in_env();
+    let artifact = target.get(context, get_task).await?;
     info!(
         "Got target {}, should it be uploaded? {}",
         type_name::<Target>(),

@@ -7,12 +7,16 @@ use ide_ci::cache::Cache;
 use octocrab::models::repos::Asset;
 use tokio::process::Child;
 
+use crate::source::BuildTargetJob;
 use crate::source::CiRunSource;
 use crate::source::ExternalSource;
+use crate::source::FetchTargetJob;
 use crate::source::GetTargetJob;
 use crate::source::OngoingCiRunSource;
 use crate::source::ReleaseSource;
 use crate::source::Source;
+use crate::source::WatchTargetJob;
+use crate::source::WithDestination;
 
 pub mod backend;
 pub mod engine;
@@ -68,6 +72,15 @@ impl<T> PlainArtifact<T> {
     }
 }
 
+/// State available to all project-related operations.
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
+pub struct Context {
+    pub cache:    Cache,
+    #[derivative(Debug = "ignore")]
+    pub octocrab: Octocrab,
+}
+
 /// Build targets, like GUI or Project Manager.
 ///
 /// Built target generates artifacts that can be stored as a release asset or CI run artifacts.
@@ -88,22 +101,25 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
 
     fn get(
         &self,
+        context: Context,
         job: GetTargetJob<Self>,
-        cache: Cache,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        match job.source {
-            Source::BuildLocally(inputs) => self.build_locally(inputs, job.destination),
-            Source::External(external) => self.get_external(external, job.destination, cache),
+        let GetTargetJob { destination, inner } = job;
+        match inner {
+            Source::BuildLocally(inputs) =>
+                self.build_locally(context, WithDestination { inner: inputs, destination }),
+            Source::External(external) =>
+                self.get_external(context, WithDestination { inner: external, destination }),
         }
     }
 
     /// Produce an artifact from the external resource reference.
     fn get_external(
         &self,
-        source: ExternalSource,
-        destination: PathBuf,
-        cache: Cache,
+        context: Context,
+        job: FetchTargetJob,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        let FetchTargetJob { inner: source, destination } = job;
         let this = self.clone();
         let span = info_span!("Getting artifact from an external source");
         match source {
@@ -116,13 +132,13 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
                 this.adapt_artifact(destination).await
             }
             .boxed(),
-            ExternalSource::CiRun(ci_run) => self.download_artifact(ci_run, destination, cache),
+            ExternalSource::CiRun(ci_run) => self.download_artifact(context, ci_run, destination),
             ExternalSource::LocalFile(source_path) => async move {
                 ide_ci::fs::mirror_directory(source_path, &destination).await?;
                 this.adapt_artifact(destination).await
             }
             .boxed(),
-            ExternalSource::Release(release) => self.download_asset(release, destination, cache),
+            ExternalSource::Release(release) => self.download_asset(context, release, destination),
         }
         .instrument(span)
         .boxed()
@@ -131,8 +147,8 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
     /// Produce an artifact from build inputs.
     fn build_locally(
         &self,
-        input: Self::BuildInput,
-        output_path: impl AsRef<Path> + Send + Sync + 'static,
+        context: Context,
+        job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>>;
 
     /// Upload artifact to the current GitHub Actions run.
@@ -146,11 +162,12 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
 
     fn download_artifact(
         &self,
+        context: Context,
         ci_run: CiRunSource,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
-        cache: Cache,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let CiRunSource { run_id, artifact_name, repository, octocrab } = ci_run;
+        let Context { octocrab, cache } = context;
+        let CiRunSource { run_id, artifact_name, repository } = ci_run;
         let span = info_span!("Downloading CI Artifact.", %artifact_name, %repository, target = output_path.as_str());
         let this = self.clone();
         async move {
@@ -177,18 +194,18 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
 
     fn download_asset(
         &self,
+        context: Context,
         source: ReleaseSource,
         destination: PathBuf,
-        cache: Cache,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        // source.asset_id
+        let Context { octocrab, cache } = context;
         let span = info_span!("Downloading built target from a release asset.",
             asset_id = source.asset_id.0,
             repo = %source.repository);
         let this = self.clone();
         async move {
-            let ReleaseSource { asset_id, octocrab, repository } = &source;
-            let archive_source = repository.download_asset_job(octocrab, *asset_id);
+            let ReleaseSource { asset_id, repository } = &source;
+            let archive_source = repository.download_asset_job(&octocrab, *asset_id);
             let extract_job = cache::archive::ExtractedArchive {
                 archive_source,
                 path_to_extract: path_to_extract(),
@@ -221,7 +238,7 @@ impl<T: IsWatchable> AsRef<T::Artifact> for PerhapsWatched<T> {
 impl<T: IsWatchable> PerhapsWatched<T> {
     pub async fn wait_ok(&mut self) -> Result {
         match self {
-            PerhapsWatched::Watched(watcher) => watcher.wait_ok().await,
+            PerhapsWatched::Watched(watcher) => watcher.wait_for_finish().await,
             PerhapsWatched::Static(_) => Ok(()),
         }
     }
@@ -267,42 +284,38 @@ impl<Target: IsWatchable, Proc> AsRef<Target::Artifact> for Watcher<Target, Proc
     }
 }
 
-impl<Target: IsWatchable, Proc: ProcessWrapper> IsWatcher<Target> for Watcher<Target, Proc> {
-    fn wait_ok(&mut self) -> BoxFuture<Result> {
+impl<Target: IsWatchable, Proc: ProcessWrapper + Send> IsWatcher<Target> for Watcher<Target, Proc> {
+    fn wait_for_finish(&mut self) -> BoxFuture<Result> {
         self.watch_process.wait_ok()
     }
 }
 
 
-pub trait IsWatcher<Target: IsTarget>: AsRef<Target::Artifact> {
-    fn wait_ok(&mut self) -> BoxFuture<Result>;
+pub trait IsWatcher<Target: IsTarget>: AsRef<Target::Artifact> + Send {
+    fn wait_for_finish(&mut self) -> BoxFuture<Result>;
 }
 
 pub trait IsWatchable: IsTarget {
     type Watcher: IsWatcher<Self>;
+    type WatchInput: Clone + Debug + Send;
 
-    fn setup_watcher(
-        &self,
-        input: Self::BuildInput,
-        output_path: impl AsRef<Path> + Send + Sync + 'static,
-    ) -> BoxFuture<'static, Result<Self::Watcher>>;
+    // fn setup_watcher(
+    //     &self,
+    //     build_input: Self::BuildInput,
+    //     watch_input: Self::WatchInput,
+    //     output_path: impl AsRef<Path> + Send + Sync + 'static,
+    // ) -> BoxFuture<'static, Result<Self::Watcher>>;
 
     fn watch(
         &self,
-        job: GetTargetJob<Self>,
-        cache: Cache,
-    ) -> BoxFuture<'static, Result<PerhapsWatched<Self>>> {
-        match job.source {
-            Source::BuildLocally(input) => {
-                let watcher = self.setup_watcher(input, job.destination);
-                watcher.map_ok(PerhapsWatched::Watched).boxed()
-            }
-            Source::External(external) => self
-                .get_external(external, job.destination, cache)
-                .map_ok(PerhapsWatched::Static)
-                .boxed(),
-        }
-    }
+        context: Context,
+        job: WatchTargetJob<Self>,
+    ) -> BoxFuture<'static, Result<Self::Watcher>>;
+    // {
+    //     let WatchTargetJob { build, watch_input } = job;
+    //     let watcher = self.setup_watcher(build.input, watch_input, build.destination);
+    //     watcher.map_ok(PerhapsWatched::Watched).boxed()
+    // }
 }
 
 #[cfg(test)]
@@ -312,20 +325,20 @@ mod tests {
     use ide_ci::log::setup_logging;
     use ide_ci::models::config::RepoContext;
 
-    #[tokio::test]
-    async fn download_release() -> Result {
-        setup_logging()?;
-        let source = ExternalSource::Release(ReleaseSource {
-            repository: RepoContext::from_str("enso-org/enso")?,
-            // release: 64573522.into(),
-            asset_id:   62731588.into(),
-            // asset_id:   62731653.into(),
-            octocrab:   Default::default(),
-        });
-
-        Backend { target_os: TARGET_OS }
-            .get_external(source, r"C:\temp\pm".into(), Cache::new_default().await?)
-            .await?;
-        Ok(())
-    }
+    // #[tokio::test]
+    // async fn download_release() -> Result {
+    //     setup_logging()?;
+    //     let source = ExternalSource::Release(ReleaseSource {
+    //         repository: RepoContext::from_str("enso-org/enso")?,
+    //         // release: 64573522.into(),
+    //         asset_id:   62731588.into(),
+    //         // asset_id:   62731653.into(),
+    //         octocrab:   Default::default(),
+    //     });
+    //
+    //     Backend { target_os: TARGET_OS }
+    //         .get_external(source, r"C:\temp\pm".into(), Cache::new_default().await?)
+    //         .await?;
+    //     Ok(())
+    // }
 }

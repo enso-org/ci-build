@@ -1085,6 +1085,7 @@ dependencies = [
  "clap",
  "console-subscriber",
  "derivative",
+ "derive_more",
  "dirs",
  "filetime",
  "flate2",

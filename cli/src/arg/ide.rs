@@ -2,6 +2,7 @@ use enso_build::prelude::*;
 
 use crate::arg::OutputPath;
 use crate::arg::Source;
+use crate::arg::WatchJob;
 use crate::source_args_hlp;
 use enso_build::project::backend::Backend;
 use enso_build::project::gui::Gui;
@@ -13,7 +14,7 @@ use octocrab::models::ReleaseId;
 
 source_args_hlp!(Target, "ide", BuildInput);
 
-#[derive(Args, Clone, Debug)]
+#[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInput {
     #[clap(flatten)]
     pub gui:             Source<Gui>,
@@ -46,7 +47,7 @@ pub enum Command {
     /// webpack's dev server.
     Watch {
         #[clap(flatten)]
-        gui:             crate::arg::gui::WatchInput,
+        gui:             WatchJob<Gui>,
         #[clap(flatten)]
         project_manager: Source<Backend>,
     },

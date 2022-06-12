@@ -3,12 +3,14 @@ use crate::prelude::*;
 use crate::engine::BuildConfigurationFlags;
 use crate::engine::BuildOperation;
 use crate::engine::Operation;
+use crate::project::Context;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::version::Versions;
 
 use crate::paths::pretty_print_arch;
-use anyhow::Context;
+use crate::source::BuildTargetJob;
+use crate::source::WithDestination;
 use derivative::Derivative;
 use ide_ci::archive::is_archive_name;
 use ide_ci::extensions::os::OsExt;
@@ -129,9 +131,10 @@ impl IsTarget for Backend {
 
     fn build_locally(
         &self,
-        input: Self::BuildInput,
-        output_path: impl AsRef<Path> + Send + Sync + 'static,
+        _context: Context,
+        job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        let WithDestination { inner, destination } = job;
         let target_os = self.target_os;
         let this = self.clone();
         async move {
@@ -145,12 +148,12 @@ impl IsTarget for Backend {
                 build_project_manager_bundle: true,
                 ..crate::engine::NIGHTLY
             };
-            let context = input.prepare_context(operation, config)?;
+            let context = inner.prepare_context(operation, config)?;
             let artifacts = context.build().await?;
             let project_manager =
                 artifacts.bundles.project_manager.context("Missing project manager bundle!")?;
-            ide_ci::fs::mirror_directory(&project_manager.dir, &output_path).await?;
-            this.adapt_artifact(output_path).await
+            ide_ci::fs::mirror_directory(&project_manager.dir, &destination).await?;
+            this.adapt_artifact(destination).await
             // Artifact::from_existing(output_path.as_ref()).await
         }
         .boxed()

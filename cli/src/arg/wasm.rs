@@ -1,9 +1,11 @@
 use enso_build::prelude::*;
 
 use crate::arg::ArgExt;
-use crate::arg::OutputPath;
 use crate::arg::Source;
+use crate::arg::WatchJob;
 use crate::source_args_hlp;
+use crate::BuildJob;
+use crate::IsWatchableSource;
 
 use clap::ArgEnum;
 use clap::Args;
@@ -13,7 +15,11 @@ use std::lazy::SyncOnceCell;
 
 pub use enso_build::project::wasm::Profile;
 
-source_args_hlp!(Wasm, "wasm", BuildInputs);
+source_args_hlp!(Wasm, "wasm", BuildInput);
+
+impl IsWatchableSource for Wasm {
+    type WatchInput = WatchInput;
+}
 
 static DEFAULT_WASM_SIZE_LIMIT: SyncOnceCell<String> = SyncOnceCell::new();
 
@@ -44,7 +50,7 @@ impl From<ProfilingLevel> for enso_build::project::wasm::ProfilingLevel {
 }
 
 #[derive(Args, Clone, Debug, PartialEq)]
-pub struct BuildInputs {
+pub struct BuildInput {
     /// Which crate should be treated as a WASM entry point. Relative path from source root.
     #[clap(default_value = enso_build::project::wasm::DEFAULT_TARGET_CRATE, long, enso_env())]
     pub crate_path: PathBuf,
@@ -67,29 +73,23 @@ pub struct BuildInputs {
     pub wasm_size_limit: Option<byte_unit::Byte>,
 }
 
+#[derive(Args, Clone, Debug, PartialEq)]
+pub struct WatchInput {
+    /// Additional options to be passed to Cargo.
+    #[clap(last = true, enso_env())]
+    pub cargo_watch_options: Vec<String>,
+}
+
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
     /// Build the WASM package.
-    Build {
-        #[clap(flatten)]
-        params:      BuildInputs,
-        #[clap(flatten)]
-        output_path: OutputPath<Wasm>,
-    },
+    Build(BuildJob<Wasm>),
     /// Lint the coodebase.
     Check,
     /// Get the WASM artifacts from arbitrary source (e.g. release).
-    Get {
-        #[clap(flatten)]
-        source: Source<Wasm>,
-    },
+    Get(Source<Wasm>),
     /// Start an ongoing watch process that rebuilds WASM when its sources are touched.
-    Watch {
-        #[clap(flatten)]
-        params:      BuildInputs,
-        #[clap(flatten)]
-        output_path: OutputPath<Wasm>,
-    },
+    Watch(WatchJob<Wasm>),
     /// Run the unit tests.
     Test {
         /// Skip the native (non-WASM) Rust tests.

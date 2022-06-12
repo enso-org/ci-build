@@ -2,14 +2,16 @@ use crate::prelude::*;
 
 use crate::engine::BuildConfigurationFlags;
 use crate::engine::BuildOperation;
+use crate::project::Context;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 
-use anyhow::Context;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::ok_ready_boxed;
 
 pub use crate::project::backend::BuildInput;
+use crate::source::BuildTargetJob;
+use crate::source::WithDestination;
 
 #[derive(Clone, Debug)]
 pub struct Artifact {
@@ -42,12 +44,14 @@ impl IsTarget for Engine {
 
     fn build_locally(
         &self,
-        input: Self::BuildInput,
-        output_path: impl AsRef<Path> + Send + Sync + 'static,
+        context: Context,
+        job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        let Context { octocrab, cache } = context;
+        let WithDestination { inner, destination } = job;
         let this = self.clone();
         async move {
-            let paths = crate::paths::Paths::new_versions(&input.repo_root, input.versions)?;
+            let paths = crate::paths::Paths::new_versions(&inner.repo_root, inner.versions)?;
             let context = crate::engine::context::RunContext {
                 operation: crate::engine::Operation::Build(BuildOperation {}),
                 goodies: GoodieDatabase::new()?,
@@ -57,14 +61,14 @@ impl IsTarget for Engine {
                     ..crate::engine::NIGHTLY
                 }
                 .into(),
-                octocrab: input.octocrab.clone(),
+                octocrab,
                 paths,
             };
             let artifacts = context.build().await?;
             let engine_distribution =
                 artifacts.packages.engine.context("Missing Engine Distribution!")?;
-            ide_ci::fs::mirror_directory(&engine_distribution.dir, &output_path).await?;
-            this.adapt_artifact(output_path).await
+            ide_ci::fs::mirror_directory(&engine_distribution.dir, &destination).await?;
+            this.adapt_artifact(destination).await
         }
         .boxed()
     }
@@ -77,18 +81,18 @@ mod tests {
     use crate::version::Versions;
     use ide_ci::log::setup_logging;
 
-    #[tokio::test]
-    async fn build_engine() -> Result {
-        setup_logging()?;
-        let engine = Engine;
-        let input = BuildInput {
-            versions:  Versions::default(),
-            repo_root: r"H:\NBO\enso".into(),
-            octocrab:  setup_octocrab().await?,
-        };
-        let output_path = r"C:\temp\engine-build";
-        let result = engine.build_locally(input, output_path).await?;
-        dbg!(&result);
-        Ok(())
-    }
+    // #[tokio::test]
+    // async fn build_engine() -> Result {
+    //     setup_logging()?;
+    //     let engine = Engine;
+    //     let input = BuildInput {
+    //         versions:  Versions::default(),
+    //         repo_root: r"H:\NBO\enso".into(),
+    //         octocrab:  setup_octocrab().await?,
+    //     };
+    //     let output_path = r"C:\temp\engine-build";
+    //     let result = engine.build_locally(input, output_path).await?;
+    //     dbg!(&result);
+    //     Ok(())
+    // }
 }

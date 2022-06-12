@@ -13,7 +13,9 @@ use clap::ArgEnum;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
+use derivative::Derivative;
 use ide_ci::cache;
+use ide_ci::extensions::path::display_fmt;
 use ide_ci::models::config::RepoContext;
 use octocrab::models::RunId;
 
@@ -68,7 +70,11 @@ pub trait IsTargetSource {
     const ARTIFACT_NAME_NAME: &'static str;
     const DEFAULT_OUTPUT_PATH: &'static str;
 
-    type BuildInput: Debug + Args + Send + Sync;
+    type BuildInput: Clone + Debug + PartialEq + Args + Send + Sync;
+}
+
+pub trait IsWatchableSource: IsTargetSource {
+    type WatchInput: Clone + Debug + PartialEq + Args + Send + Sync;
 }
 
 #[macro_export]
@@ -204,24 +210,39 @@ pub enum SourceKind {
 }
 
 /// Strongly typed argument for an output directory of a given build target.
-#[derive(Args, Clone, PartialEq)]
+#[derive(Args, Clone, Derivative)]
+#[derivative(Debug, PartialEq)]
 pub struct OutputPath<Target: IsTargetSource> {
     /// Directory where artifacts should be placed.
+    #[derivative(Debug(format_with = "display_fmt"))]
     #[clap(name = Target::OUTPUT_PATH_NAME, long, parse(try_from_str=normalize_path), default_value = Target::DEFAULT_OUTPUT_PATH, enso_env())]
     pub output_path: PathBuf,
+    #[derivative(Debug = "ignore", PartialEq(bound = ""))]
     #[allow(missing_docs)]
     #[clap(skip)]
     pub phantom:     PhantomData<Target>,
-}
-
-impl<Target: IsTargetSource> Debug for OutputPath<Target> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.output_path.fmt(f)
-    }
 }
 
 impl<Target: IsTargetSource> AsRef<Path> for OutputPath<Target> {
     fn as_ref(&self) -> &Path {
         self.output_path.as_path()
     }
+}
+
+#[derive(Args, Clone, PartialEq, Derivative)]
+#[derivative(Debug)]
+pub struct BuildJob<Target: IsTargetSource> {
+    #[clap(flatten)]
+    pub input:       Target::BuildInput,
+    #[clap(flatten)]
+    pub output_path: OutputPath<Target>,
+}
+
+#[derive(Args, Clone, PartialEq, Derivative)]
+#[derivative(Debug)]
+pub struct WatchJob<Target: IsWatchableSource> {
+    #[clap(flatten)]
+    pub build:       BuildJob<Target>,
+    #[clap(flatten)]
+    pub watch_input: Target::WatchInput,
 }

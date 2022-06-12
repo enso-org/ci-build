@@ -91,6 +91,7 @@ pub struct Workflow {
     pub description: Option<String>,
     pub on:          Event,
     pub jobs:        BTreeMap<String, Job>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub env:         BTreeMap<String, String>,
 }
 
@@ -168,6 +169,7 @@ pub struct Job {
     pub needs:    BTreeSet<String>,
     pub runs_on:  Vec<RunnerLabel>,
     pub steps:    Vec<Step>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub outputs:  BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub strategy: Option<Strategy>,
@@ -315,7 +317,7 @@ pub enum RunnerLabel {
 pub fn runs_on(os: OS) -> Vec<RunnerLabel> {
     match os {
         OS::Windows => vec![RunnerLabel::SelfHosted, RunnerLabel::Windows, RunnerLabel::Engine],
-        OS::Linux => vec![RunnerLabel::SelfHosted, RunnerLabel::Linux, RunnerLabel::MwuDeluxe],
+        OS::Linux => vec![RunnerLabel::SelfHosted, RunnerLabel::Linux, RunnerLabel::Engine],
         OS::MacOS => vec![RunnerLabel::MacOSLatest],
         _ => todo!("Not supported"),
     }
@@ -498,7 +500,7 @@ echo "::set-output name=list::'$list'"
             plain_job(
                 &os,
                 "IDE integration tests",
-                "ide integration-test --project-manager-source current-ci-run",
+                "ide integration-test --backend-source current-ci-run",
             )
         }
     }
@@ -513,7 +515,7 @@ echo "::set-output name=list::'$list'"
     pub struct BuildProjectManager;
     impl JobArchetype for BuildProjectManager {
         fn job(os: OS) -> Job {
-            plain_job(&os, "Build Project Manager", "project-manager")
+            plain_job(&os, "Build Project Manager", "backend get")
         }
     }
 
@@ -523,7 +525,7 @@ echo "::set-output name=list::'$list'"
             plain_job(
                 &os,
                 "Package IDE",
-                "ide build --wasm-source current-ci-run --project-manager-source current-ci-run",
+                "ide build --wasm-source current-ci-run --backend-source current-ci-run",
             )
         }
     }
@@ -655,6 +657,7 @@ mod tests {
             }),
         };
         let mut workflow = Workflow { name: "GUI CI".into(), on, ..default() };
+        workflow.env("ENSO_BUILD_SKIP_VERSION_CHECK", "true");
         let primary_os = OS::Linux;
         workflow.add::<job::AssertChangelog>(primary_os);
         workflow.add::<job::CancelWorkflow>(primary_os);
@@ -676,7 +679,7 @@ mod tests {
 
         let yaml = serde_yaml::to_string(&workflow)?;
         println!("{yaml}");
-        let path = r"H:\NBO\enso4\.github\workflows\gui.yml";
+        let path = r"H:\NBO\enso5\.github\workflows\gui.yml";
         crate::fs::write(path, yaml)?;
         Ok(())
     }

@@ -54,6 +54,7 @@ pub mod prelude {
     pub use anyhow::anyhow;
     pub use anyhow::bail;
     pub use anyhow::ensure;
+    pub use anyhow::Context as _;
     pub use async_trait::async_trait;
     pub use bytes::Bytes;
     pub use derive_more::Display;
@@ -190,6 +191,10 @@ pub fn get_free_port() -> Result<u16> {
 
 pub fn ok_ready_boxed<'a, T: 'a + Send>(t: T) -> BoxFuture<'a, Result<T>> {
     ready(Ok(t)).boxed()
+}
+
+pub fn ready_boxed<'a, T: 'a + Send>(t: T) -> BoxFuture<'a, T> {
+    ready(t).boxed()
 }
 
 #[cfg(test)]
