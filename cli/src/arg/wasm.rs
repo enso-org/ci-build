@@ -76,7 +76,7 @@ pub struct BuildInput {
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct WatchInput {
     /// Additional options to be passed to Cargo.
-    #[clap(last = true, enso_env())]
+    #[clap(long, enso_env())]
     pub cargo_watch_options: Vec<String>,
 }
 

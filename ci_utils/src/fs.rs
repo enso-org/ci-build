@@ -159,7 +159,7 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
             options.content_only = true;
             fs_extra::dir::copy(source_file, destination_file, &options)?;
         } else {
-            std::fs::copy(source_file, destination_file)?;
+            wrappers::copy(source_file, destination_file)?;
         }
     } else {
         bail!("Cannot copy to the root path: {}", destination_file.display());
@@ -274,6 +274,25 @@ pub async fn copy_if_different(source: impl AsRef<Path>, target: impl AsRef<Path
 
     let walkdir = walkdir::WalkDir::new(&source);
     let entries = walkdir.into_iter().collect_result()?;
+    for entry in entries.into_iter().filter(|e| e.file_type().is_file()) {
+        let entry_path = entry.path();
+        let relative_path = pathdiff::diff_paths(entry_path, &source)
+            .context(format!("Failed to relativize path {}.", entry_path.display()))?;
+        copy_file_if_different(entry_path, target.as_ref().join(relative_path))?;
+    }
+    Ok(())
+}
 
-    todo!()
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::log::setup_logging;
+    use ::tokio;
+
+    #[tokio::test]
+    async fn copy_if_different_test() -> Result {
+        setup_logging()?;
+        copy_if_different(".", r"C:\temp\out").await?;
+        Ok(())
+    }
 }

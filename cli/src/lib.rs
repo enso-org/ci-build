@@ -409,7 +409,9 @@ impl Processor {
 
                 async move {
                     let mut project_manager = project_manager.await?;
-                    gui_watcher.await?;
+                    let mut gui_watcher = gui_watcher.await?;
+                    gui_watcher.wait_for_finish();
+                    debug!("GUI watcher has finished, ending Project Manager process.");
                     project_manager.stdin.take(); // dropping stdin handle should make PM finish
                     project_manager.wait_ok().await?;
                     Ok(())
