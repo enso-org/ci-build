@@ -22,7 +22,7 @@ use octocrab::models::RunId;
 /// The prefix that will be used when reading the build script arguments from environment.
 pub const ENVIRONMENT_VARIABLE_NAME_PREFIX: &str = "ENSO_BUILD";
 
-pub const DEFAULT_REMOTE_REPOSITORY_FALLBACK: &str = "enso-org/ci-build";
+pub const DEFAULT_REMOTE_REPOSITORY_FALLBACK: &str = "enso-org/enso";
 
 pub fn default_repo_path() -> Option<PathBuf> {
     enso_build::repo::deduce_repository_path()
