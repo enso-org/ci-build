@@ -16,6 +16,8 @@ use derivative::Derivative;
 use ide_ci::cache;
 use ide_ci::env::Variable;
 use ide_ci::fs::compressed_size;
+use ide_ci::fs::copy_file_if_different;
+use ide_ci::fs::copy_if_different;
 use ide_ci::programs::cargo;
 use ide_ci::programs::wasm_opt;
 use ide_ci::programs::wasm_opt::WasmOpt;
@@ -227,7 +229,8 @@ impl IsTarget for Wasm {
                     .run_ok()
                     .await?;
             } else {
-                debug!("Skipping wasm-opt invocation, as it is not part of profile {profile}.")
+                debug!("Skipping wasm-opt invocation, as it is not part of profile {profile}.");
+                copy_file_if_different(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
             }
 
             // ide_ci::fs::rename(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
@@ -236,7 +239,7 @@ impl IsTarget for Wasm {
             ide_ci::fs::create_dir_if_missing(&destination)?;
             let ret = RepoRootDistWasm::new(&destination);
             ide_ci::fs::copy(&temp_dist, &ret)?;
-            // copy_if_different(&temp_dist.wasm_glue, &ret.wasm_glue)?;
+            // copy_if_different(&temp_dist, &ret).await?;
             // copy_if_different(&temp_dist.wasm_main_raw, &ret.wasm_main)?;
             inner.perhaps_check_size(&ret.wasm_main).await?;
             Ok(Artifact(ret))
