@@ -410,7 +410,7 @@ impl Processor {
                 async move {
                     let mut project_manager = project_manager.await?;
                     let mut gui_watcher = gui_watcher.await?;
-                    gui_watcher.wait_for_finish();
+                    gui_watcher.wait_for_finish().await?;
                     debug!("GUI watcher has finished, ending Project Manager process.");
                     project_manager.stdin.take(); // dropping stdin handle should make PM finish
                     project_manager.wait_ok().await?;
@@ -621,7 +621,7 @@ impl WatchResolvable for Wasm {
         _ctx: &Processor,
         from: <Self as IsWatchableSource>::WatchInput,
     ) -> Result<<Self as IsWatchable>::WatchInput> {
-        Ok(wasm::WatchInput { cargo_watch_flags: from.cargo_watch_options })
+        Ok(wasm::WatchInput { cargo_watch_options: from.cargo_watch_option })
     }
 }
 

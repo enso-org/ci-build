@@ -290,7 +290,6 @@ impl<Target: IsWatchable, Proc: ProcessWrapper + Send> IsWatcher<Target> for Wat
     }
 }
 
-
 pub trait IsWatcher<Target: IsTarget>: AsRef<Target::Artifact> + Send {
     fn wait_for_finish(&mut self) -> BoxFuture<Result>;
 }
@@ -299,46 +298,9 @@ pub trait IsWatchable: IsTarget {
     type Watcher: IsWatcher<Self>;
     type WatchInput: Clone + Debug + Send;
 
-    // fn setup_watcher(
-    //     &self,
-    //     build_input: Self::BuildInput,
-    //     watch_input: Self::WatchInput,
-    //     output_path: impl AsRef<Path> + Send + Sync + 'static,
-    // ) -> BoxFuture<'static, Result<Self::Watcher>>;
-
     fn watch(
         &self,
         context: Context,
         job: WatchTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Watcher>>;
-    // {
-    //     let WatchTargetJob { build, watch_input } = job;
-    //     let watcher = self.setup_watcher(build.input, watch_input, build.destination);
-    //     watcher.map_ok(PerhapsWatched::Watched).boxed()
-    // }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::project::backend::Backend;
-    use ide_ci::log::setup_logging;
-    use ide_ci::models::config::RepoContext;
-
-    // #[tokio::test]
-    // async fn download_release() -> Result {
-    //     setup_logging()?;
-    //     let source = ExternalSource::Release(ReleaseSource {
-    //         repository: RepoContext::from_str("enso-org/enso")?,
-    //         // release: 64573522.into(),
-    //         asset_id:   62731588.into(),
-    //         // asset_id:   62731653.into(),
-    //         octocrab:   Default::default(),
-    //     });
-    //
-    //     Backend { target_os: TARGET_OS }
-    //         .get_external(source, r"C:\temp\pm".into(), Cache::new_default().await?)
-    //         .await?;
-    //     Ok(())
-    // }
 }

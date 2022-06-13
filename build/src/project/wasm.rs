@@ -17,7 +17,6 @@ use ide_ci::cache;
 use ide_ci::env::Variable;
 use ide_ci::fs::compressed_size;
 use ide_ci::fs::copy_file_if_different;
-use ide_ci::fs::copy_if_different;
 use ide_ci::programs::cargo;
 use ide_ci::programs::wasm_opt;
 use ide_ci::programs::wasm_opt::WasmOpt;
@@ -252,7 +251,7 @@ impl IsTarget for Wasm {
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct WatchInput {
-    pub cargo_watch_flags: Vec<String>,
+    pub cargo_watch_options: Vec<String>,
 }
 
 impl IsWatchable for Wasm {
@@ -266,7 +265,7 @@ impl IsWatchable for Wasm {
     ) -> BoxFuture<'static, Result<Self::Watcher>> {
         async move {
             let WatchTargetJob {
-                watch_input: WatchInput { cargo_watch_flags },
+                watch_input: WatchInput { cargo_watch_options: cargo_watch_flags },
                 build: WithDestination { inner, destination },
             } = job;
             let BuildInput {

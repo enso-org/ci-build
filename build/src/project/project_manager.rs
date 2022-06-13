@@ -46,7 +46,7 @@ impl IsTarget for ProjectManager {
         context: Context,
         job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let Context { octocrab, cache } = context;
+        let Context { octocrab, cache: _ } = context;
         let WithDestination { inner, destination } = job;
         let this = self.clone();
         async move {
@@ -71,27 +71,4 @@ impl IsTarget for ProjectManager {
         }
         .boxed()
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::setup_octocrab;
-    use crate::version::Versions;
-    use ide_ci::log::setup_logging;
-
-    // #[tokio::test]
-    // async fn build_project_manager() -> Result {
-    //     setup_logging()?;
-    //     let engine = ProjectManager;
-    //     let input = BuildInput {
-    //         versions:  Versions::default(),
-    //         repo_root: r"H:\NBO\enso".into(),
-    //         octocrab:  setup_octocrab().await?,
-    //     };
-    //     let output_path = r"C:\temp\project-manager";
-    //     let result = engine.build_locally(input, output_path).await?;
-    //     dbg!(&result);
-    //     Ok(())
-    // }
 }

@@ -75,9 +75,9 @@ pub struct BuildInput {
 
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct WatchInput {
-    /// Additional options to be passed to Cargo.
-    #[clap(long, enso_env())]
-    pub cargo_watch_options: Vec<String>,
+    /// Additional option to be passed to Cargo. Can be used multiple times to pass many arguments.
+    #[clap(long, allow_hyphen_values = true, enso_env())]
+    pub cargo_watch_option: Vec<String>,
 }
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]
