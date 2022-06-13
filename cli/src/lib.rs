@@ -302,16 +302,13 @@ impl Processor {
         async move { get_resolved(target?, context, get_task?.await?).await }.boxed()
     }
 
-    pub fn build_locally<Target: Resolvable>(
-        &self,
-        job: BuildJob<Target>,
-    ) -> BoxFuture<'static, Result> {
+    pub fn build<Target: Resolvable>(&self, job: BuildJob<Target>) -> BoxFuture<'static, Result> {
         let context = self.context();
         let target = self.target::<Target>();
         let job = self.resolve_build_job(job);
         async move {
             let job = job.await?;
-            target?.build_locally(context, job).await
+            target?.build(context, job).await
         }
         .void_ok()
         .boxed()
@@ -320,7 +317,7 @@ impl Processor {
     pub fn handle_wasm(&self, wasm: arg::wasm::Target) -> BoxFuture<'static, Result> {
         match wasm.command {
             arg::wasm::Command::Watch(job) => self.watch_and_wait(job),
-            arg::wasm::Command::Build(job) => self.build_locally(job).void_ok().boxed(),
+            arg::wasm::Command::Build(job) => self.build(job).void_ok().boxed(),
             arg::wasm::Command::Check => Wasm.check().boxed(),
             arg::wasm::Command::Test { no_wasm, no_native } =>
                 Wasm.test(self.repo_root().path, !no_wasm, !no_native).boxed(),
@@ -341,7 +338,7 @@ impl Processor {
 
     pub fn handle_gui(&self, gui: arg::gui::Target) -> BoxFuture<'static, Result> {
         match gui.command {
-            arg::gui::Command::Build(job) => self.build_locally(job),
+            arg::gui::Command::Build(job) => self.build(job),
             arg::gui::Command::Get(source) => self.get(source).void_ok().boxed(),
             arg::gui::Command::Watch(job) => self.watch_and_wait(job),
         }

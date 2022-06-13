@@ -4,6 +4,7 @@ use derivative::Derivative;
 use ide_ci::actions::artifacts;
 use ide_ci::cache;
 use ide_ci::cache::Cache;
+use ide_ci::ok_ready_boxed;
 use octocrab::models::repos::Asset;
 use tokio::process::Child;
 
@@ -107,7 +108,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         let GetTargetJob { destination, inner } = job;
         match inner {
             Source::BuildLocally(inputs) =>
-                self.build_locally(context, WithDestination { inner: inputs, destination }),
+                self.build(context, WithDestination { inner: inputs, destination }),
             Source::External(external) =>
                 self.get_external(context, WithDestination { inner: external, destination }),
         }
@@ -145,7 +146,37 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
     }
 
     /// Produce an artifact from build inputs.
-    fn build_locally(
+    fn build(
+        &self,
+        context: Context,
+        job: BuildTargetJob<Self>,
+    ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        let span = info_span!("Building target.", ?self, ?context, ?job).entered();
+        let artifact_fut = self.build_internal(context, job);
+        let this = self.clone();
+        async move {
+            let artifact = artifact_fut.await.context(format!("Failed to build {:?}.", this))?;
+            // We upload only built artifacts. There would be no point in uploading something that
+            // we've just downloaded. That's why the uploading code is here.
+            this.perhaps_upload_artifact(&artifact).await?;
+            Ok(artifact)
+        }
+        .instrument(span.exit())
+        .boxed()
+    }
+
+    fn perhaps_upload_artifact(&self, artifact: &Self::Artifact) -> BoxFuture<'static, Result> {
+        let should_upload_artifact = ide_ci::actions::workflow::is_in_env();
+        info!("Got target {:?}, should it be uploaded? {}", self, should_upload_artifact);
+        if should_upload_artifact {
+            self.upload_artifact(ready(Ok(artifact.clone())))
+        } else {
+            ok_ready_boxed(())
+        }
+    }
+
+    /// Produce an artifact from build inputs.
+    fn build_internal(
         &self,
         context: Context,
         job: BuildTargetJob<Self>,

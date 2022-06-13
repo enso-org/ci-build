@@ -60,7 +60,7 @@ pub struct Artifact {
     /// packages. However in packages we create it is almost always zero (for plain PM package) or
     /// one (for full PM bundle).
     ///
-    /// Artifacts built with [`ProjectManager::build_locally`] will have exactly one engine
+    /// Artifacts built with [`ProjectManager::build`] will have exactly one engine
     /// bundled.
     #[derivative(Debug(format_with = "ide_ci::fmt::display_list"))]
     pub engine_versions: Vec<Version>,
@@ -129,7 +129,7 @@ impl IsTarget for Backend {
         .boxed()
     }
 
-    fn build_locally(
+    fn build_internal(
         &self,
         _context: Context,
         job: BuildTargetJob<Self>,

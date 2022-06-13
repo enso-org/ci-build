@@ -41,7 +41,7 @@ impl IsTarget for ProjectManager {
         ok_ready_boxed(Artifact { root: path.as_ref().into() })
     }
 
-    fn build_locally(
+    fn build_internal(
         &self,
         context: Context,
         job: BuildTargetJob<Self>,

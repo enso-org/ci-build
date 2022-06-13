@@ -48,7 +48,7 @@ impl IsTarget for Gui {
         Artifact::from_existing(path)
     }
 
-    fn build_locally(
+    fn build_internal(
         &self,
         context: Context,
         job: BuildTargetJob<Self>,

@@ -130,7 +130,7 @@ impl BuildInput {
         if let Some(wasm_size_limit) = self.wasm_size_limit {
             let wasm_size_limit = wasm_size_limit.get_appropriate_unit(true);
             if !self.profile.should_check_size() {
-                warn!("Skipping size check because profile is {}.", self.profile,);
+                warn!("Skipping size check because profile is '{}'.", self.profile,);
             } else if self.profiling_level.unwrap_or_default() != ProfilingLevel::Objective {
                 // TODO? additional leeway as sanity check
                 warn!(
@@ -167,7 +167,7 @@ impl IsTarget for Wasm {
         ready(Ok(Artifact::new(path.as_ref()))).boxed()
     }
 
-    fn build_locally(
+    fn build_internal(
         &self,
         context: Context,
         job: BuildTargetJob<Self>,
