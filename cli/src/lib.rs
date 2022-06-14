@@ -78,7 +78,6 @@ use ide_ci::programs::cargo;
 use ide_ci::programs::rustc;
 use ide_ci::programs::Cargo;
 use ide_ci::programs::Git;
-use std::any::type_name;
 use std::time::Duration;
 use tempfile::tempdir;
 use tokio::process::Child;
@@ -296,10 +295,10 @@ impl Processor {
         Target: IsTarget + IsTargetSource + Send + Sync + 'static,
         Target: Resolvable,
     {
-        let target = self.target();
+        let target = self.target::<Target>();
         let get_task = self.target().map(|target| self.resolve(target, target_source));
         let context = self.context();
-        async move { get_resolved(target?, context, get_task?.await?).await }.boxed()
+        async move { target?.get(context, get_task?.await?).await }.boxed()
     }
 
     pub fn build<Target: Resolvable>(&self, job: BuildJob<Target>) -> BoxFuture<'static, Result> {
@@ -629,34 +628,6 @@ impl WatchResolvable for Gui {
     ) -> Result<<Self as IsWatchable>::WatchInput> {
         Wasm::resolve_watch(ctx, from)
     }
-}
-
-#[tracing::instrument(skip_all, fields(?target, ?get_task), err)]
-pub async fn get_resolved<Target>(
-    target: Target,
-    context: project::Context,
-    get_task: GetTargetJob<Target>,
-) -> Result<Target::Artifact>
-where
-    Target: IsTarget + Send + Sync + 'static,
-{
-    // We upload only built artifacts. There would be no point in uploading something that
-    // we've just downloaded.
-    let should_upload_artifact = matches!(get_task.inner, Source::BuildLocally(_)) && is_in_env();
-    let artifact = target.get(context, get_task).await?;
-    info!(
-        "Got target {}, should it be uploaded? {}",
-        type_name::<Target>(),
-        should_upload_artifact
-    );
-    if should_upload_artifact {
-        let upload_job = target.upload_artifact(ready(Ok(artifact.clone())));
-        // global::spawn(upload_job);
-        // info!("Spawned upload job for {}.", type_name::<Target>());
-        warn!("Forcing the job.");
-        upload_job.await?;
-    }
-    Ok(artifact)
 }
 
 #[tracing::instrument(err)]
