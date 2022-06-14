@@ -151,7 +151,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         context: Context,
         job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let span = info_span!("Building target.", ?self, ?context, ?job).entered();
+        let span = info_span!("Building.", ?self, ?context, ?job).entered();
         let artifact_fut = self.build_internal(context, job);
         let this = self.clone();
         async move {
