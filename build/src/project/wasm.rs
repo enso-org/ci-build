@@ -54,7 +54,7 @@ pub enum ProfilingLevel {
     #[default]
     Objective,
     Task,
-    Details,
+    Detail,
     Debug,
 }
 

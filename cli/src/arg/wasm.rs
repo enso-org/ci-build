@@ -34,7 +34,7 @@ pub fn initialize_default_wasm_size_limit(limit: byte_unit::Byte) -> Result {
 pub enum ProfilingLevel {
     Objective,
     Task,
-    Details,
+    Detail,
     Debug,
 }
 
@@ -43,7 +43,7 @@ impl From<ProfilingLevel> for enso_build::project::wasm::ProfilingLevel {
         match profile {
             ProfilingLevel::Objective => Self::Objective,
             ProfilingLevel::Task => Self::Task,
-            ProfilingLevel::Details => Self::Details,
+            ProfilingLevel::Detail => Self::Detail,
             ProfilingLevel::Debug => Self::Debug,
         }
     }
