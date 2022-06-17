@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+use ide_ci::actions::workflow::is_in_env;
 use ide_ci::env::Variable;
 use sysinfo::SystemExt;
 
@@ -363,8 +364,10 @@ impl RunContext {
                 "main",
                 "schema",
             ]);
-            ide_ci::actions::artifacts::upload_compressed_directory(&schema_dir, "fbs-schema")
-                .await?;
+            if is_in_env() {
+                ide_ci::actions::artifacts::upload_compressed_directory(&schema_dir, "fbs-schema")
+                    .await?;
+            }
         }
 
         if self.config.build_launcher_bundle {
