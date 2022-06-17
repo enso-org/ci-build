@@ -18,6 +18,7 @@ use ide_ci::programs::PwSh;
 use std::process::Stdio;
 use tempfile::TempDir;
 use tokio::process::Child;
+use tracing::Span;
 
 lazy_static! {
     /// Path to the file with build information that is consumed by the JS part of the IDE.
@@ -205,6 +206,10 @@ impl IdeDesktop {
         Ok(())
     }
 
+
+    #[tracing::instrument(name="Setting up GUI Content watcher.", 
+        fields(wasm = tracing::field::Empty),
+        err)]
     pub async fn watch_content(
         &self,
         wasm: impl Future<Output = Result<Artifact>>,
@@ -214,9 +219,11 @@ impl IdeDesktop {
         // When watching we expect our artifacts to be served through server, not appear in any
         // specific location on the disk.
         let output_path = TempDir::new()?;
+        // let span = tracing::
+        // let wasm = wasm.inspect()
         let watch_environment =
             ContentEnvironment::new(self, wasm, build_info, output_path).await?;
-
+        Span::current().record("wasm", &watch_environment.wasm.as_str());
         let child_process = if shell {
             PwSh.cmd()?
                 .current_dir(&self.package_dir)

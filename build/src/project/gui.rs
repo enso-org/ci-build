@@ -158,11 +158,14 @@ pub fn perhaps_watch<T: IsWatchable>(
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Derivative, Serialize, Deserialize)]
+#[derivative(Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildInfo {
     pub commit:         String,
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub version:        Version,
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub engine_version: Version,
     pub name:           String,
 }
