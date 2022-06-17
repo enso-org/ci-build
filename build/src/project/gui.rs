@@ -1,6 +1,4 @@
 use crate::prelude::*;
-use futures_util::future::try_join;
-use ide_ci::ok_ready_boxed;
 
 use crate::ide::web::IdeDesktop;
 use crate::paths::generated::RepoRoot;
@@ -17,8 +15,20 @@ use crate::source::Source;
 use crate::source::WatchTargetJob;
 use crate::source::WithDestination;
 use crate::BoxFuture;
+use derivative::Derivative;
+use futures_util::future::try_join;
+use ide_ci::ok_ready_boxed;
 
 pub type Artifact = PlainArtifact<Gui>;
+
+#[derive(Clone, Derivative, derive_more::Deref)]
+#[derivative(Debug)]
+pub struct WatchInput {
+    #[deref]
+    pub wasm:  <Wasm as IsWatchable>::WatchInput,
+    /// Rather than start web watcher, spawn an interactive shell.
+    pub shell: bool,
+}
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
@@ -84,7 +94,7 @@ impl IsWatcher<Gui> for Watcher {
 
 impl IsWatchable for Gui {
     type Watcher = Watcher;
-    type WatchInput = <Wasm as IsWatchable>::WatchInput;
+    type WatchInput = WatchInput;
 
     // fn setup_watcher(
     //     &self,
@@ -109,12 +119,13 @@ impl IsWatchable for Gui {
     ) -> BoxFuture<'static, Result<Self::Watcher>> {
         let WatchTargetJob { watch_input, build: WithDestination { inner, destination } } = job;
         let BuildInput { build_info, repo_root, wasm } = inner;
-        let perhaps_watched_wasm = perhaps_watch(Wasm, context.clone(), wasm, watch_input);
+        let perhaps_watched_wasm = perhaps_watch(Wasm, context.clone(), wasm, watch_input.wasm);
         let ide = IdeDesktop::new(&repo_root.app.ide_desktop);
         async move {
             let perhaps_watched_wasm = perhaps_watched_wasm.await?;
             let wasm_artifacts = ok_ready_boxed(perhaps_watched_wasm.as_ref().clone());
-            let watch_process = ide.watch_content(wasm_artifacts, &build_info.await?).await?;
+            let watch_process =
+                ide.watch_content(wasm_artifacts, &build_info.await?, watch_input.shell).await?;
             let artifact = Self::Artifact::from_existing(destination).await?;
             let web_watcher = crate::project::Watcher { watch_process, artifact };
             Ok(Self::Watcher { wasm: perhaps_watched_wasm, web: web_watcher })

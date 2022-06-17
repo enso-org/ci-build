@@ -626,7 +626,7 @@ impl WatchResolvable for Gui {
         ctx: &Processor,
         from: <Self as IsWatchableSource>::WatchInput,
     ) -> Result<<Self as IsWatchable>::WatchInput> {
-        Wasm::resolve_watch(ctx, from)
+        Ok(gui::WatchInput { wasm: Wasm::resolve_watch(ctx, from.wasm)?, shell: from.gui_shell })
     }
 }
 

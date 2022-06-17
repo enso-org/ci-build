@@ -14,6 +14,7 @@ use ide_ci::program::command;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
 use ide_ci::programs::Npm;
+use ide_ci::programs::PwSh;
 use std::process::Stdio;
 use tempfile::TempDir;
 use tokio::process::Child;
@@ -208,18 +209,27 @@ impl IdeDesktop {
         &self,
         wasm: impl Future<Output = Result<Artifact>>,
         build_info: &BuildInfo,
+        shell: bool,
     ) -> Result<Watcher> {
         // When watching we expect our artifacts to be served through server, not appear in any
         // specific location on the disk.
         let output_path = TempDir::new()?;
         let watch_environment =
             ContentEnvironment::new(self, wasm, build_info, output_path).await?;
-        let child_process = self
-            .npm()?
-            .try_applying(&watch_environment)?
-            .workspace(Workspaces::Content)
-            .run("watch", EMPTY_ARGS)
-            .spawn_intercepting()?;
+
+        let child_process = if shell {
+            PwSh.cmd()?
+                .current_dir(&self.package_dir)
+                .try_applying(&watch_environment)?
+                .stdin(Stdio::inherit())
+                .spawn()?
+        } else {
+            self.npm()?
+                .try_applying(&watch_environment)?
+                .workspace(Workspaces::Content)
+                .run("watch", EMPTY_ARGS)
+                .spawn_intercepting()?
+        };
         Ok(Watcher { child_process, watch_environment })
     }
 
