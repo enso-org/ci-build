@@ -1,4 +1,4 @@
-use enso_build::prelude::*;
+use crate::prelude::*;
 
 use crate::arg::OutputPath;
 use crate::arg::Source;
@@ -41,7 +41,11 @@ pub enum Command {
     /// Like `Build` but automatically starts the IDE.
     Start {
         #[clap(flatten)]
-        params: BuildInput,
+        params:     BuildInput,
+        /// Additional option to be passed to Enso IDE. Can be used multiple times to pass many
+        /// arguments.
+        #[clap(long, allow_hyphen_values = true, enso_env())]
+        ide_option: Vec<String>,
     },
     /// Builds Project Manager and runs it in the background. Builds GUI and runs it using
     /// webpack's dev server.

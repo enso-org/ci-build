@@ -67,15 +67,20 @@ impl Artifact {
         Ok(())
     }
 
-    pub fn start_unpacked(&self) -> Command {
+    pub fn start_unpacked(
+        &self,
+        extra_ide_options: impl IntoIterator<Item: AsRef<OsStr>>,
+    ) -> Command {
         let application_path = self.unpacked.join(&self.unpacked_executable);
-        if TARGET_OS == OS::MacOS {
+        let mut command = if TARGET_OS == OS::MacOS {
             let mut ret = Command::new("open");
             ret.arg(application_path);
             ret
         } else {
             Command::new(application_path)
-        }
+        };
+        command.args(extra_ide_options);
+        command
     }
 }
 

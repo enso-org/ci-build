@@ -390,11 +390,11 @@ impl Processor {
                 }
                 .boxed()
             }
-            arg::ide::Command::Start { params } => {
+            arg::ide::Command::Start { params, ide_option } => {
                 let build_job = self.build_ide(params);
                 async move {
                     let ide = build_job.await?;
-                    ide.start_unpacked().run_ok().await?;
+                    ide.start_unpacked(ide_option).run_ok().await?;
                     Ok(())
                 }
                 .boxed()
