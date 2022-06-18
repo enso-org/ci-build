@@ -109,7 +109,7 @@ pub mod prelude {
     pub use std::path::PathBuf;
     pub use std::pin::Pin;
     pub use std::sync::Arc;
-    pub use tokio::io::AsyncWriteExt;
+    pub use tokio::io::AsyncWriteExt as _;
     pub use tracing::debug;
     pub use tracing::debug_span;
     pub use tracing::error;
@@ -138,7 +138,6 @@ pub mod prelude {
     pub use crate::program::command::IsCommandWrapper;
     pub use crate::program::command::MyCommand;
     pub use crate::program::Program;
-    pub use crate::program::ProgramExt;
     pub use crate::program::Shell;
 
     pub use crate::cache::goodie::GoodieExt as _;
@@ -152,6 +151,7 @@ pub mod prelude {
     pub use crate::extensions::iterator::TryIteratorExt;
     pub use crate::extensions::output::OutputExt as _;
     pub use crate::extensions::path::PathExt as _;
+    pub use crate::program::ProgramExt as _;
 
     pub fn into<T, U>(u: U) -> T
     where U: Into<T> {
