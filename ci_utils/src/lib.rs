@@ -136,6 +136,7 @@ pub mod prelude {
     pub use crate::os::target::TARGET_OS;
     pub use crate::program::command::Command;
     pub use crate::program::command::IsCommandWrapper;
+    pub use crate::program::command::MyCommand;
     pub use crate::program::Program;
     pub use crate::program::ProgramExt;
     pub use crate::program::Shell;

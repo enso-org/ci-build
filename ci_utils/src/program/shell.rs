@@ -39,7 +39,7 @@ impl Recognized {
     pub fn run_script(self, script_path: impl AsRef<Path>) -> Result<Command> {
         match self {
             Recognized::Command => crate::programs::Cmd.run_script(script_path),
-            Recognized::PowerShell => todo!(),
+            Recognized::PowerShell => crate::programs::PwSh.run_script(script_path),
             Recognized::Bash => crate::programs::Bash.run_script(script_path),
         }
     }

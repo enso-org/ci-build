@@ -30,7 +30,7 @@ pub const EMPTY_ARGS: [&str; 0] = [];
 // `Sized + 'static` bounds are due to using `Self` as type parameter for `Command` constructor.
 #[async_trait]
 pub trait Program: Sized + 'static {
-    type Command: MyCommand<Self> + Send + Sync = Command;
+    type Command: MyCommand<Self> + Send + Sync + IsCommandWrapper = Command;
 
     /// The name used to find and invoke the program.
     ///

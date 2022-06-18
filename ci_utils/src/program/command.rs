@@ -60,6 +60,10 @@ pub trait MyCommand<P: Program>: BorrowMut<Command> + From<Command> + Into<Comma
         let inner = Command::new_over::<P>(inner);
         Self::from(inner)
     }
+
+    fn spawn(&mut self) -> Result<Child> {
+        self.borrow_mut().spawn().anyhow_err()
+    }
 }
 
 pub trait IsCommandWrapper {

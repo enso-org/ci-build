@@ -14,7 +14,6 @@ use ide_ci::program::command;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
 use ide_ci::programs::Npm;
-use ide_ci::programs::PwSh;
 use std::process::Stdio;
 use tempfile::TempDir;
 use tokio::process::Child;
@@ -225,7 +224,8 @@ impl IdeDesktop {
             ContentEnvironment::new(self, wasm, build_info, output_path).await?;
         Span::current().record("wasm", &watch_environment.wasm.as_str());
         let child_process = if shell {
-            PwSh.cmd()?
+            ide_ci::os::default_shell()
+                .cmd()?
                 .current_dir(&self.package_dir)
                 .try_applying(&watch_environment)?
                 .stdin(Stdio::inherit())
