@@ -24,16 +24,15 @@ use ide_ci::programs::java;
 use regex::Regex;
 
 pub mod prelude {
-    pub use argh::FromArgs;
     pub use ide_ci::prelude::*;
 }
 
-pub mod args;
 pub mod aws;
+pub mod build2;
 pub mod bump_version;
 pub mod changelog;
-pub mod cli;
 pub mod config;
+pub mod context;
 pub mod engine;
 pub mod enso;
 pub mod env;
@@ -45,6 +44,7 @@ pub mod prettier;
 pub mod programs;
 pub mod project;
 pub mod project_manager;
+pub mod release;
 pub mod repo;
 pub mod source;
 pub mod version;
@@ -111,7 +111,7 @@ pub async fn setup_octocrab() -> Result<Octocrab> {
         let octocrab = builder.build()?;
         match octocrab.ratelimit().get().await {
             Ok(rate) => info!(
-                "Current rate limit: {}/{}",
+                "GitHub API rate limit: {}/{}.",
                 rate.resources.core.used, rate.resources.core.limit
             ),
             Err(e) => bail!(
@@ -182,10 +182,4 @@ val stdLibVersion       = defaultDevEnsoVersion
         assert_eq!(version.patch, 0);
         Ok(())
     }
-}
-
-
-pub fn check_run_build() {
-    let path = PathBuf::from("/runner/_work/ci-build/ci-build/enso/app/ide-desktop/node_modules/app-builder-bin/linux/x64/app-builder");
-    println!("App builder exists? {}", path.exists());
 }

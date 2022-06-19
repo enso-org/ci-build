@@ -54,6 +54,7 @@ pub mod prelude {
     pub use anyhow::anyhow;
     pub use anyhow::bail;
     pub use anyhow::ensure;
+    pub use anyhow::Context as _;
     pub use async_trait::async_trait;
     pub use bytes::Bytes;
     pub use derive_more::Display;
@@ -108,7 +109,7 @@ pub mod prelude {
     pub use std::path::PathBuf;
     pub use std::pin::Pin;
     pub use std::sync::Arc;
-    pub use tokio::io::AsyncWriteExt;
+    pub use tokio::io::AsyncWriteExt as _;
     pub use tracing::debug;
     pub use tracing::debug_span;
     pub use tracing::error;
@@ -135,10 +136,11 @@ pub mod prelude {
     pub use crate::os::target::TARGET_OS;
     pub use crate::program::command::Command;
     pub use crate::program::command::IsCommandWrapper;
+    pub use crate::program::command::MyCommand;
     pub use crate::program::Program;
-    pub use crate::program::ProgramExt;
     pub use crate::program::Shell;
 
+    pub use crate::cache::goodie::GoodieExt as _;
     pub use crate::env::new::RawVariable as _;
     pub use crate::env::new::TypedVariable as _;
     pub use crate::extensions::clap::ArgExt as _;
@@ -149,6 +151,7 @@ pub mod prelude {
     pub use crate::extensions::iterator::TryIteratorExt;
     pub use crate::extensions::output::OutputExt as _;
     pub use crate::extensions::path::PathExt as _;
+    pub use crate::program::ProgramExt as _;
 
     pub fn into<T, U>(u: U) -> T
     where U: Into<T> {
@@ -185,6 +188,14 @@ pub fn get_free_port() -> Result<u16> {
             TcpListener::bind(ipv4).is_ok()
         })
         .context("Failed to find a free local port.")
+}
+
+pub fn ok_ready_boxed<'a, T: 'a + Send>(t: T) -> BoxFuture<'a, Result<T>> {
+    ready(Ok(t)).boxed()
+}
+
+pub fn ready_boxed<'a, T: 'a + Send>(t: T) -> BoxFuture<'a, T> {
+    ready(t).boxed()
 }
 
 #[cfg(test)]

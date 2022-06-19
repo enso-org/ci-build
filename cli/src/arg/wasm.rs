@@ -1,18 +1,25 @@
-use crate::prelude::*;
+use enso_build::prelude::*;
 
-use crate::cli::arg::ArgExt;
-use crate::cli::arg::OutputPath;
-use crate::cli::arg::Source;
-use crate::project::wasm::Wasm;
+use crate::arg::ArgExt;
+use crate::arg::Source;
+use crate::arg::WatchJob;
 use crate::source_args_hlp;
+use crate::BuildJob;
+use crate::IsWatchableSource;
 
 use clap::ArgEnum;
 use clap::Args;
 use clap::Subcommand;
-use ide_ci::programs::wasm_pack;
+use enso_build::project::wasm::Wasm;
 use std::lazy::SyncOnceCell;
 
-source_args_hlp!(Wasm, "wasm", BuildInputs);
+pub use enso_build::project::wasm::Profile;
+
+source_args_hlp!(Wasm, "wasm", BuildInput);
+
+impl IsWatchableSource for Wasm {
+    type WatchInput = WatchInput;
+}
 
 static DEFAULT_WASM_SIZE_LIMIT: SyncOnceCell<String> = SyncOnceCell::new();
 
@@ -22,47 +29,30 @@ pub fn initialize_default_wasm_size_limit(limit: byte_unit::Byte) -> Result {
         .map_err(|e| anyhow!("WASM size limit was already set to {e}."))
 }
 
-#[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
-pub enum Profile {
-    Dev,
-    Profile,
-    Release,
-}
-
-impl From<Profile> for wasm_pack::Profile {
-    fn from(profile: Profile) -> Self {
-        match profile {
-            Profile::Dev => Self::Dev,
-            Profile::Profile => Self::Profile,
-            Profile::Release => Self::Release,
-        }
-    }
-}
-
 // Follows hierarchy defined in  lib/rust/profiler/src/lib.rs
 #[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
 pub enum ProfilingLevel {
     Objective,
     Task,
-    Details,
+    Detail,
     Debug,
 }
 
-impl From<ProfilingLevel> for crate::project::wasm::ProfilingLevel {
+impl From<ProfilingLevel> for enso_build::project::wasm::ProfilingLevel {
     fn from(profile: ProfilingLevel) -> Self {
         match profile {
             ProfilingLevel::Objective => Self::Objective,
             ProfilingLevel::Task => Self::Task,
-            ProfilingLevel::Details => Self::Details,
+            ProfilingLevel::Detail => Self::Detail,
             ProfilingLevel::Debug => Self::Debug,
         }
     }
 }
 
 #[derive(Args, Clone, Debug, PartialEq)]
-pub struct BuildInputs {
+pub struct BuildInput {
     /// Which crate should be treated as a WASM entry point. Relative path from source root.
-    #[clap(default_value = crate::project::wasm::DEFAULT_TARGET_CRATE, long, enso_env())]
+    #[clap(default_value = enso_build::project::wasm::DEFAULT_TARGET_CRATE, long, enso_env())]
     pub crate_path: PathBuf,
 
     /// Profile that is passed to wasm-pack.
@@ -83,29 +73,23 @@ pub struct BuildInputs {
     pub wasm_size_limit: Option<byte_unit::Byte>,
 }
 
+#[derive(Args, Clone, Debug, PartialEq)]
+pub struct WatchInput {
+    /// Additional option to be passed to Cargo. Can be used multiple times to pass many arguments.
+    #[clap(long, allow_hyphen_values = true, enso_env())]
+    pub cargo_watch_option: Vec<String>,
+}
+
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
     /// Build the WASM package.
-    Build {
-        #[clap(flatten)]
-        params:      BuildInputs,
-        #[clap(flatten)]
-        output_path: OutputPath<Wasm>,
-    },
+    Build(BuildJob<Wasm>),
     /// Lint the coodebase.
     Check,
     /// Get the WASM artifacts from arbitrary source (e.g. release).
-    Get {
-        #[clap(flatten)]
-        source: Source<Wasm>,
-    },
+    Get(Source<Wasm>),
     /// Start an ongoing watch process that rebuilds WASM when its sources are touched.
-    Watch {
-        #[clap(flatten)]
-        params:      BuildInputs,
-        #[clap(flatten)]
-        output_path: OutputPath<Wasm>,
-    },
+    Watch(WatchJob<Wasm>),
     /// Run the unit tests.
     Test {
         /// Skip the native (non-WASM) Rust tests.

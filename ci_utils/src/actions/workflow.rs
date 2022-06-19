@@ -27,7 +27,7 @@ pub fn set_output(name: &str, value: &impl ToString) {
 ///
 /// See: <https://docs.github.com/en/actions/learn-github-actions/workflow-commands-for-github-actions#setting-a-debug-message>
 pub fn debug(message: &str) {
-    debug!("::debug::{message}")
+    println!("::debug::{message}")
 }
 
 /// Creates or updates an environment variable for any steps running next in a job.
@@ -88,4 +88,8 @@ impl Message {
     pub fn send(&self) {
         println!("::{} ::{}", self.level, self.text);
     }
+}
+
+pub fn message(level: MessageLevel, text: impl AsRef<str>) {
+    Message { level, text: text.as_ref().into() }.send()
 }

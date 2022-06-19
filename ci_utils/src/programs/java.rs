@@ -1,5 +1,24 @@
 use crate::prelude::*;
 
+#[derive(Clone, Debug)]
+pub enum Option {
+    EnableAssertions,
+}
+
+impl AsRef<str> for Option {
+    fn as_ref(&self) -> &str {
+        match self {
+            Option::EnableAssertions => "-enableassertions",
+        }
+    }
+}
+
+impl AsRef<OsStr> for Option {
+    fn as_ref(&self) -> &OsStr {
+        OsStr::new::<str>(self.as_ref())
+    }
+}
+
 pub struct Java;
 
 impl Program for Java {

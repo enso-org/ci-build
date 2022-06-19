@@ -5,16 +5,21 @@ use crate::prelude::*;
 use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
 use crate::project::wasm::js_patcher::patch_js_glue_in_place;
+use crate::project::Context;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
-
-use anyhow::Context;
-use async_compression::tokio::bufread::GzipEncoder;
-use async_compression::Level;
+use crate::source::BuildTargetJob;
+use crate::source::WatchTargetJob;
+use crate::source::WithDestination;
 use derivative::Derivative;
+use ide_ci::cache;
 use ide_ci::env::Variable;
+use ide_ci::fs::compressed_size;
+use ide_ci::fs::copy_file_if_different;
 use ide_ci::programs::cargo;
+use ide_ci::programs::wasm_opt;
+use ide_ci::programs::wasm_opt::WasmOpt;
 use ide_ci::programs::wasm_pack;
 use ide_ci::programs::Cargo;
 use ide_ci::programs::WasmPack;
@@ -27,7 +32,11 @@ pub mod env;
 pub mod js_patcher;
 pub mod test;
 
+pub const BINARYEN_VERSION_TO_INSTALL: usize = 108;
+
 pub const DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT: Duration = Duration::from_secs(300);
+
+pub const INTEGRATION_TESTS_CRATE_NAME: &str = "enso-integration-test";
 
 pub const OUTPUT_NAME: &str = "ide";
 
@@ -45,8 +54,60 @@ pub enum ProfilingLevel {
     #[default]
     Objective,
     Task,
-    Details,
+    Detail,
     Debug,
+}
+
+#[derive(clap::ArgEnum, Clone, Copy, Debug, PartialEq, strum::Display, strum::AsRefStr)]
+#[strum(serialize_all = "kebab-case")]
+pub enum Profile {
+    Dev,
+    Profile,
+    Release,
+    // Production,
+}
+
+impl From<Profile> for wasm_pack::Profile {
+    fn from(profile: Profile) -> Self {
+        match profile {
+            Profile::Dev => Self::Dev,
+            Profile::Profile => Self::Profile,
+            Profile::Release => Self::Release,
+            // Profile::Production => Self::Release,
+        }
+    }
+}
+
+impl Profile {
+    pub fn should_check_size(self) -> bool {
+        match self {
+            Profile::Dev => false,
+            Profile::Profile => false,
+            Profile::Release => true,
+            // Profile::Production => true,
+        }
+    }
+
+    pub fn extra_rust_options(self) -> Vec<String> {
+        match self {
+            // Profile::Production => ["-Clto=fat", "-Ccodegen-units=1", "-Cincremental=false"]
+            //     .into_iter()
+            //     .map(ToString::to_string)
+            //     .collect(),
+            Profile::Dev | Profile::Profile | Profile::Release => vec![],
+        }
+    }
+
+    /// wasm-opt invocation that should follow the wasm-pack build for this profile.
+    pub fn wasm_opt_command(self) -> Result<Option<Command>> {
+        let opt_level = match self {
+            Profile::Dev => return Ok(None),
+            Profile::Profile => wasm_opt::OptimizationLevel::O,
+            Profile::Release => wasm_opt::OptimizationLevel::O3,
+            // Profile::Production => wasm_opt::OptimizationLevel::O4,
+        };
+        Ok(Some(WasmOpt.cmd()?.with_applied(&opt_level)))
+    }
 }
 
 #[derive(Clone, Derivative)]
@@ -57,7 +118,7 @@ pub struct BuildInput {
     /// Path to the crate to be compiled to WAM. Relative to the repository root.
     pub crate_path:          PathBuf,
     pub extra_cargo_options: Vec<String>,
-    pub profile:             wasm_pack::Profile,
+    pub profile:             Profile,
     pub profiling_level:     Option<ProfilingLevel>,
     pub wasm_size_limit:     Option<byte_unit::Byte>,
 }
@@ -68,12 +129,8 @@ impl BuildInput {
         info!("Compressed size of {} is {}.", wasm_path.as_ref().display(), compressed_size);
         if let Some(wasm_size_limit) = self.wasm_size_limit {
             let wasm_size_limit = wasm_size_limit.get_appropriate_unit(true);
-            if self.profile != wasm_pack::Profile::Release {
-                warn!(
-                    "Skipping size check because profile is {} rather than {}.",
-                    self.profile,
-                    wasm_pack::Profile::Release
-                );
+            if !self.profile.should_check_size() {
+                warn!("Skipping size check because profile is '{}'.", self.profile,);
             } else if self.profiling_level.unwrap_or_default() != ProfilingLevel::Objective {
                 // TODO? additional leeway as sanity check
                 warn!(
@@ -110,15 +167,17 @@ impl IsTarget for Wasm {
         ready(Ok(Artifact::new(path.as_ref()))).boxed()
     }
 
-    fn build_locally(
+    fn build_internal(
         &self,
-        input: Self::BuildInput,
-        output_path: impl AsRef<Path> + Send + Sync + 'static,
+        context: Context,
+        job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
+        let Context { octocrab: _, cache } = context;
+        let WithDestination { inner, destination } = job;
         let span = info_span!("Building WASM.",
-            repo = %input.repo_root.display(),
-            crate = %input.crate_path.display(),
-            cargo_opts = ?input.extra_cargo_options
+            repo = %inner.repo_root.display(),
+            crate = %inner.crate_path.display(),
+            cargo_opts = ?inner.extra_cargo_options
         );
         async move {
             // Old wasm-pack does not pass trailing `build` command arguments to the Cargo.
@@ -132,11 +191,15 @@ impl IsTarget for Wasm {
                 profile,
                 profiling_level,
                 wasm_size_limit: _wasm_size_limit,
-            } = &input;
+            } = &inner;
+
+            cache::goodie::binaryen::Binaryen { version: BINARYEN_VERSION_TO_INSTALL }
+                .install_if_missing(&cache, WasmOpt)
+                .await?;
 
             info!("Building wasm.");
             let temp_dir = tempdir()?;
-            let temp_dist = RepoRootDistWasm::new(temp_dir.path());
+            let temp_dist = RepoRootDistWasm::new_root(temp_dir.path());
             let mut command = ide_ci::programs::WasmPack.cmd()?;
             command
                 .current_dir(&repo_root)
@@ -144,7 +207,7 @@ impl IsTarget for Wasm {
                 .env_remove(ide_ci::programs::rustup::env::Toolchain::NAME)
                 .set_env(env::ENSO_ENABLE_PROC_MACRO_SPAN, &true)?
                 .build()
-                .arg(&profile)
+                .arg(&wasm_pack::Profile::from(*profile))
                 .target(wasm_pack::Target::Web)
                 .output_directory(&temp_dist)
                 .output_name(&OUTPUT_NAME)
@@ -158,15 +221,26 @@ impl IsTarget for Wasm {
             }
             command.run_ok().await?;
 
-            patch_js_glue_in_place(&temp_dist.wasm_glue)?;
-            ide_ci::fs::rename(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
+            if let Some(mut wasm_opt_command) = profile.wasm_opt_command()? {
+                wasm_opt_command
+                    .arg(&temp_dist.wasm_main_raw)
+                    .apply(&wasm_opt::Output(&temp_dist.wasm_main))
+                    .run_ok()
+                    .await?;
+            } else {
+                debug!("Skipping wasm-opt invocation, as it is not part of profile {profile}.");
+                copy_file_if_different(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
+            }
 
-            ide_ci::fs::create_dir_if_missing(&output_path)?;
-            let ret = RepoRootDistWasm::new(output_path.as_ref());
+            // ide_ci::fs::rename(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
+            patch_js_glue_in_place(&temp_dist.wasm_glue)?;
+
+            ide_ci::fs::create_dir_if_missing(&destination)?;
+            let ret = RepoRootDistWasm::new_root(&destination);
             ide_ci::fs::copy(&temp_dist, &ret)?;
-            // copy_if_different(&temp_dist.wasm_glue, &ret.wasm_glue)?;
+            // copy_if_different(&temp_dist, &ret).await?;
             // copy_if_different(&temp_dist.wasm_main_raw, &ret.wasm_main)?;
-            input.perhaps_check_size(&ret.wasm_main).await?;
+            inner.perhaps_check_size(&ret.wasm_main).await?;
             Ok(Artifact(ret))
         }
         .instrument(span)
@@ -174,39 +248,26 @@ impl IsTarget for Wasm {
     }
 }
 
-pub fn check_if_identical(source: impl AsRef<Path>, target: impl AsRef<Path>) -> bool {
-    (|| -> Result<bool> {
-        if ide_ci::fs::metadata(&source)?.len() == ide_ci::fs::metadata(&target)?.len() {
-            Ok(true)
-        } else if ide_ci::fs::read(&source)? == ide_ci::fs::read(&target)? {
-            // TODO: Not good for large files, should process them chunk by chunk.
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    })()
-    .unwrap_or(false)
-}
-
-pub fn copy_if_different(source: impl AsRef<Path>, target: impl AsRef<Path>) -> Result {
-    if !check_if_identical(&source, &target) {
-        ide_ci::fs::copy(&source, &target)?;
-    }
-    Ok(())
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
+pub struct WatchInput {
+    pub cargo_watch_options: Vec<String>,
 }
 
 impl IsWatchable for Wasm {
     type Watcher = crate::project::Watcher<Self, Child>;
+    type WatchInput = WatchInput;
 
-    fn setup_watcher(
+    fn watch(
         &self,
-        input: Self::BuildInput,
-        output_path: impl AsRef<Path> + Send + Sync + 'static,
+        _context: Context,
+        job: WatchTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Watcher>> {
-        // TODO
-        // This is not nice, as this module should not be aware of the CLI parsing/generation.
-        // Rather than using `cargo watch` this should be implemented directly in Rust.
         async move {
+            let WatchTargetJob {
+                watch_input: WatchInput { cargo_watch_options: cargo_watch_flags },
+                build: WithDestination { inner, destination },
+            } = job;
             let BuildInput {
                 repo_root,
                 crate_path,
@@ -214,7 +275,7 @@ impl IsWatchable for Wasm {
                 profile,
                 profiling_level,
                 wasm_size_limit,
-            } = input;
+            } = inner;
 
             let current_exe = std::env::current_exe()?;
             // Cargo watch apparently cannot handle verbatim path prefix. We remove it and hope for
@@ -229,14 +290,18 @@ impl IsWatchable for Wasm {
                 .current_dir(&repo_root)
                 .arg("watch")
                 .args(["--ignore", "README.md"])
+                .args(cargo_watch_flags)
                 .arg("--")
-                // FIXME: does not play nice for use as a library
+                // TODO [mwu]
+                // This is not nice, as this module should not be aware of the CLI
+                // parsing/generation. Rather than using `cargo watch` this should
+                // be implemented directly in Rust.
                 .arg(current_exe)
                 .args(["--repo-path", repo_root.as_str()])
                 .arg("wasm")
                 .arg("build")
                 .args(["--crate-path", crate_path.as_str()])
-                .args(["--wasm-output-path", output_path.as_str()])
+                .args(["--wasm-output-path", destination.as_str()])
                 .args(["--wasm-profile", profile.as_ref()]);
             if let Some(profiling_level) = profiling_level {
                 watch_cmd.args(["--profiling-level", profiling_level.to_string().as_str()]);
@@ -247,7 +312,7 @@ impl IsWatchable for Wasm {
             watch_cmd.arg("--").args(extra_cargo_options);
 
             let watch_process = watch_cmd.spawn_intercepting()?;
-            let artifact = Artifact(RepoRootDistWasm::new(output_path.as_ref()));
+            let artifact = Artifact(RepoRootDistWasm::new_root(&destination));
             Ok(Self::Watcher { artifact, watch_process })
         }
         .boxed()
@@ -261,7 +326,7 @@ pub struct Artifact(RepoRootDistWasm);
 
 impl Artifact {
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self(RepoRootDistWasm::new(path))
+        Self(RepoRootDistWasm::new_root(path))
     }
     pub fn wasm(&self) -> &Path {
         &self.0.wasm_main
@@ -288,7 +353,7 @@ impl Wasm {
             .cmd()?
             .apply(&cargo::Command::Check)
             .apply(&cargo::Options::Workspace)
-            .apply(&cargo::Options::Package("enso-integration-test".into()))
+            .apply(&cargo::Options::Package(INTEGRATION_TESTS_CRATE_NAME.into()))
             .apply(&cargo::Options::AllTargets)
             .run_ok()
             .await
@@ -355,13 +420,6 @@ impl Wasm {
             .await
         // PM will be automatically killed by dropping the handle.
     }
-}
-
-/// Get the size of a file after gzip compression.
-pub async fn compressed_size(path: impl AsRef<Path>) -> Result<byte_unit::Byte> {
-    let file = tokio::io::BufReader::new(ide_ci::fs::tokio::open(&path).await?);
-    let encoded_stream = GzipEncoder::with_quality(file, Level::Best);
-    ide_ci::io::read_length(encoded_stream).await.map(into)
 }
 
 #[cfg(test)]

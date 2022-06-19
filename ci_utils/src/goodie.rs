@@ -18,6 +18,8 @@ pub trait Instance {
     fn add_to_environment(&self) -> anyhow::Result<()>;
 }
 
+
+#[derive(Clone, Debug)]
 pub struct GoodieDatabase {
     pub root_directory: PathBuf,
 }

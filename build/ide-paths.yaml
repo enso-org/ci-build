@@ -1,6 +1,8 @@
 <repo_root>/:
   .github/:
     workflows/:
+      gui.yml:
+      nightly.yml:
   app/:
     gui/:
     ide-desktop/:
@@ -35,7 +37,11 @@
     init:
     build-init:
     build.json:
+  distribution/:
+    editions/:
+      <edition>.yaml:
   run:
+  CHANGELOG.md:
 
 project-manager/:
   bin/:

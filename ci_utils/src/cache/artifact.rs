@@ -18,12 +18,6 @@ pub struct ExtractedArtifact {
     pub client: Octocrab,
 }
 
-impl Borrow<Key> for ExtractedArtifact {
-    fn borrow(&self) -> &Key {
-        &self.key
-    }
-}
-
 impl Storable for ExtractedArtifact {
     type Metadata = ();
     type Output = PathBuf;
@@ -50,5 +44,9 @@ impl Storable for ExtractedArtifact {
         _metadata: Self::Metadata,
     ) -> BoxFuture<'static, Result<Self::Output>> {
         ready(Result::Ok(cache)).boxed()
+    }
+
+    fn key(&self) -> Self::Key {
+        self.key.clone()
     }
 }

@@ -126,6 +126,7 @@ impl ContainerEntry {
 #[serde(rename_all = "camelCase")]
 pub enum EntryStatus {
     Created,
+    PendingUpload,
     // No other values known at this point.
 }
 

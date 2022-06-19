@@ -30,7 +30,7 @@ pub const EMPTY_ARGS: [&str; 0] = [];
 // `Sized + 'static` bounds are due to using `Self` as type parameter for `Command` constructor.
 #[async_trait]
 pub trait Program: Sized + 'static {
-    type Command: MyCommand<Self> + Send + Sync = Command;
+    type Command: MyCommand<Self> + Send + Sync + IsCommandWrapper = Command;
 
     /// The name used to find and invoke the program.
     ///
@@ -64,10 +64,15 @@ pub trait Program: Sized + 'static {
             .map(Location::new)
     }
 
-    async fn require_present(&self) -> Result<String> {
-        let version = self.version_string().await?;
-        debug!("Found {}: {}", self.executable_name(), version);
-        Ok(version)
+    fn require_present(&self) -> BoxFuture<'static, Result<String>> {
+        let executable_name = self.executable_name().to_owned();
+        let get_version_string = self.version_string();
+        async move {
+            let version = get_version_string.await?;
+            debug!("Found {}: {}", executable_name, version);
+            Ok(version)
+        }
+        .boxed()
     }
 
     async fn require_present_at(&self, required_version: &Version) -> Result {
@@ -126,9 +131,13 @@ pub trait Program: Sized + 'static {
         Ok(cmd)
     }
 
-    async fn version_string(&self) -> Result<String> {
-        let output = self.version_command()?.borrow_mut().run_stdout().await?;
-        Ok(output.trim().to_string())
+    fn version_string(&self) -> BoxFuture<'static, Result<String>> {
+        let command = self.version_command();
+        async move {
+            let output = command?.borrow_mut().run_stdout().await?;
+            Ok(output.trim().to_string())
+        }
+        .boxed()
     }
 
     // TODO if such need appears, likely Version should be made an associated type

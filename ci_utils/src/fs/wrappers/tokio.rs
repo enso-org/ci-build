@@ -2,7 +2,12 @@ use crate::prelude::*;
 
 use tokio::fs::File;
 
-/// Like the standard version but will create any missing parent directories from the path.
+
+#[context("Failed to obtain metadata for file: {}", path.as_ref().display())]
+pub async fn metadata<P: AsRef<Path>>(path: P) -> Result<std::fs::Metadata> {
+    tokio::fs::metadata(&path).await.anyhow_err()
+}
+
 #[context("Failed to open path for reading: {}", path.as_ref().display())]
 pub async fn open(path: impl AsRef<Path>) -> Result<File> {
     File::open(&path).await.anyhow_err()

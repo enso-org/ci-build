@@ -1,15 +1,21 @@
-use crate::prelude::*;
+use enso_build::prelude::*;
 
-use crate::cli::arg::OutputPath;
-use crate::cli::arg::Source;
-use crate::project::gui::Gui;
-use crate::project::wasm::Wasm;
+use crate::arg::BuildJob;
+use crate::arg::Source;
+use crate::arg::WatchJob;
 use crate::source_args_hlp;
+use crate::IsWatchableSource;
+use enso_build::project::gui::Gui;
+use enso_build::project::wasm::Wasm;
 
 use clap::Args;
 use clap::Subcommand;
 
 source_args_hlp!(Gui, "gui", BuildInput);
+
+impl IsWatchableSource for Gui {
+    type WatchInput = WatchInput;
+}
 
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInput {
@@ -20,30 +26,21 @@ pub struct BuildInput {
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct WatchInput {
     #[clap(flatten)]
-    pub wasm:        Source<Wasm>,
-    #[clap(flatten)]
-    pub output_path: OutputPath<Gui>,
+    pub wasm:      <Wasm as IsWatchableSource>::WatchInput,
+    /// Does not spawn the web-side watcher and dev-server. Instead, a nested shell session will be
+    /// created, allowing user to run arbitrary commands in gui build environment.
+    #[clap(long)]
+    pub gui_shell: bool,
 }
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
     /// Builds the GUI from the local sources.
-    Build {
-        #[clap(flatten)]
-        input:       BuildInput,
-        #[clap(flatten)]
-        output_path: OutputPath<Gui>,
-    },
+    Build(BuildJob<Gui>),
     /// Gets the GUI, either by compiling it from scratch or downloading from an external source.
-    Get {
-        #[clap(flatten)]
-        source: Source<Gui>,
-    },
+    Get(Source<Gui>),
     /// Continuously rebuilds GUI when its sources are changed and serves it using dev-server.
-    Watch {
-        #[clap(flatten)]
-        input: WatchInput,
-    },
+    Watch(WatchJob<Gui>),
 }
 
 #[derive(Args, Clone, Debug)]

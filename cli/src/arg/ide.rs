@@ -1,23 +1,25 @@
 use crate::prelude::*;
 
-use crate::cli::arg::OutputPath;
-use crate::cli::arg::Source;
-use crate::project::gui::Gui;
-use crate::project::project_manager::ProjectManager;
-use crate::project::wasm::DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT;
+use crate::arg::OutputPath;
+use crate::arg::Source;
+use crate::arg::WatchJob;
 use crate::source_args_hlp;
+use enso_build::project::backend::Backend;
+use enso_build::project::gui::Gui;
+use enso_build::project::wasm::DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT;
 
 use clap::Args;
 use clap::Subcommand;
+use octocrab::models::ReleaseId;
 
 source_args_hlp!(Target, "ide", BuildInput);
 
-#[derive(Args, Clone, Debug)]
+#[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInput {
     #[clap(flatten)]
     pub gui:             Source<Gui>,
     #[clap(flatten)]
-    pub project_manager: Source<ProjectManager>,
+    pub project_manager: Source<Backend>,
     #[clap(flatten)]
     pub output_path:     OutputPath<Target>,
 }
@@ -30,18 +32,28 @@ pub enum Command {
         #[clap(flatten)]
         params: BuildInput,
     },
+    Upload {
+        #[clap(flatten)]
+        params:     BuildInput,
+        #[clap(long, env = enso_build::env::ReleaseId::NAME)]
+        release_id: ReleaseId,
+    },
     /// Like `Build` but automatically starts the IDE.
     Start {
         #[clap(flatten)]
-        params: BuildInput,
+        params:     BuildInput,
+        /// Additional option to be passed to Enso IDE. Can be used multiple times to pass many
+        /// arguments.
+        #[clap(long, allow_hyphen_values = true, enso_env())]
+        ide_option: Vec<String>,
     },
     /// Builds Project Manager and runs it in the background. Builds GUI and runs it using
     /// webpack's dev server.
     Watch {
         #[clap(flatten)]
-        gui:             crate::cli::arg::gui::WatchInput,
+        gui:             WatchJob<Gui>,
         #[clap(flatten)]
-        project_manager: Source<ProjectManager>,
+        project_manager: Source<Backend>,
     },
     /// Runs integration tests. This involves building and spawning Project Manager, unless
     /// requested otherwise.
@@ -50,7 +62,7 @@ pub enum Command {
         #[clap(long)]
         external_backend:  bool,
         #[clap(flatten)]
-        project_manager:   Source<ProjectManager>,
+        project_manager:   Source<Backend>,
         /// Run WASM tests in the headless mode
         #[clap(long, parse(try_from_str), default_value_t = true)]
         headless:          bool,

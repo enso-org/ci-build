@@ -7,6 +7,8 @@ pub mod wrappers;
 
 pub use wrappers::*;
 
+use async_compression::tokio::bufread::GzipEncoder;
+use async_compression::Level;
 use std::fs::File;
 
 /////////////////////////////
@@ -157,7 +159,7 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
             options.content_only = true;
             fs_extra::dir::copy(source_file, destination_file, &options)?;
         } else {
-            std::fs::copy(source_file, destination_file)?;
+            wrappers::copy(source_file, destination_file)?;
         }
     } else {
         bail!("Cannot copy to the root path: {}", destination_file.display());
@@ -198,7 +200,7 @@ pub fn expect_dir(path: impl AsRef<Path>) -> Result {
 #[context("Failed because the path does not point to a regular file: {}", path.as_ref().display())]
 pub fn expect_file(path: impl AsRef<Path>) -> Result {
     let filetype = metadata(&path)?.file_type();
-    if filetype.is_dir() {
+    if filetype.is_file() {
         Ok(())
     } else {
         bail!("File is not a regular file, its type is: {filetype:?}")
@@ -224,4 +226,73 @@ pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
 pub fn allow_owner_execute(path: impl AsRef<Path>) -> Result {
     // No-op on Windows.
     Ok(())
+}
+
+/// Get the size of a file after gzip compression.
+pub async fn compressed_size(path: impl AsRef<Path>) -> Result<byte_unit::Byte> {
+    let file = ::tokio::io::BufReader::new(crate::fs::tokio::open(&path).await?);
+    let encoded_stream = GzipEncoder::with_quality(file, Level::Best);
+    crate::io::read_length(encoded_stream).await.map(into)
+}
+
+pub fn check_if_identical(source: impl AsRef<Path>, target: impl AsRef<Path>) -> bool {
+    (|| -> Result<bool> {
+        if crate::fs::metadata(&source)?.len() == crate::fs::metadata(&target)?.len() {
+            Ok(true)
+        } else if crate::fs::read(&source)? == crate::fs::read(&target)? {
+            // TODO: Not good for large files, should process them chunk by chunk.
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    })()
+    .unwrap_or(false)
+}
+
+pub fn copy_file_if_different(source: impl AsRef<Path>, target: impl AsRef<Path>) -> Result {
+    if !check_if_identical(&source, &target) {
+        trace!(
+            "Modified, will copy {} to {}.",
+            source.as_ref().display(),
+            target.as_ref().display()
+        );
+        crate::fs::copy(&source, &target)?;
+    } else {
+        trace!("No changes, skipping {}.", source.as_ref().display())
+    }
+    Ok(())
+}
+
+#[tracing::instrument(skip_all, fields(
+    src  = %source.as_ref().display(),
+    dest = %target.as_ref().display()),
+    err)]
+pub async fn copy_if_different(source: impl AsRef<Path>, target: impl AsRef<Path>) -> Result {
+    if tokio::metadata(&source).await?.is_file() {
+        return copy_file_if_different(source, target);
+    }
+
+    let walkdir = walkdir::WalkDir::new(&source);
+    let entries = walkdir.into_iter().collect_result()?;
+    for entry in entries.into_iter().filter(|e| e.file_type().is_file()) {
+        let entry_path = entry.path();
+        let relative_path = pathdiff::diff_paths(entry_path, &source)
+            .context(format!("Failed to relativize path {}.", entry_path.display()))?;
+        copy_file_if_different(entry_path, target.as_ref().join(relative_path))?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::log::setup_logging;
+    use ::tokio;
+
+    #[tokio::test]
+    async fn copy_if_different_test() -> Result {
+        setup_logging()?;
+        copy_if_different(".", r"C:\temp\out").await?;
+        Ok(())
+    }
 }

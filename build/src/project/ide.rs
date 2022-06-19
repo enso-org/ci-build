@@ -55,7 +55,7 @@ impl Artifact {
         }
     }
 
-    pub async fn upload(&self) -> Result {
+    pub async fn upload_as_ci_artifact(&self) -> Result {
         if is_in_env() {
             upload_compressed_directory(&self.unpacked, format!("ide-unpacked-{}", TARGET_OS))
                 .await?;
@@ -67,15 +67,20 @@ impl Artifact {
         Ok(())
     }
 
-    pub fn start_unpacked(&self) -> Command {
+    pub fn start_unpacked(
+        &self,
+        extra_ide_options: impl IntoIterator<Item: AsRef<OsStr>>,
+    ) -> Command {
         let application_path = self.unpacked.join(&self.unpacked_executable);
-        if TARGET_OS == OS::MacOS {
+        let mut command = if TARGET_OS == OS::MacOS {
             let mut ret = Command::new("open");
             ret.arg(application_path);
             ret
         } else {
             Command::new(application_path)
-        }
+        };
+        command.args(extra_ide_options);
+        command
     }
 }
 
@@ -87,7 +92,7 @@ pub struct BuildInput {
     #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub version:         Version,
     #[derivative(Debug = "ignore")]
-    pub project_manager: BoxFuture<'static, Result<crate::project::project_manager::Artifact>>,
+    pub project_manager: BoxFuture<'static, Result<crate::project::backend::Artifact>>,
     #[derivative(Debug = "ignore")]
     pub gui:             BoxFuture<'static, Result<crate::project::gui::Artifact>>,
 }

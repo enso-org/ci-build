@@ -9,6 +9,10 @@ use crate::postgres;
 use crate::postgres::EndpointConfiguration;
 use crate::postgres::Postgresql;
 
+ide_ci::define_env_var! {
+    ENSO_JVM_OPTS, String
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum IrCaches {
     Yes,
@@ -43,7 +47,13 @@ impl BuiltEnso {
     pub fn run_test(&self, test: impl AsRef<Path>, ir_caches: IrCaches) -> Result<Command> {
         let test_path = self.paths.stdlib_test(test);
         let mut command = self.cmd()?;
-        command.arg(ir_caches).arg("--run").arg(test_path);
+        command
+            .arg(ir_caches)
+            .arg("--run")
+            .arg(test_path)
+            // This flag enables assertions in the JVM. Some of our stdlib tests had in the past
+            // failed on Graal/Truffle assertions, so we want to have them triggered.
+            .set_env(ENSO_JVM_OPTS, &ide_ci::programs::java::Option::EnableAssertions.as_ref())?;
         Ok(command)
     }
 
@@ -64,7 +74,7 @@ impl BuiltEnso {
             let google_api_test_data_dir =
                 paths.repo_root.join("test").join("Google_Api_Test").join("data");
             ide_ci::fs::create_dir_if_missing(&google_api_test_data_dir)?;
-            std::fs::write(google_api_test_data_dir.join("secret.json"), &gdoc_key)?;
+            ide_ci::fs::write(google_api_test_data_dir.join("secret.json"), &gdoc_key)?;
         }
 
         let _httpbin = crate::httpbin::get_and_spawn_httpbin_on_free_port().await?;
@@ -117,8 +127,10 @@ impl Program for BuiltEnso {
         ide_ci::platform::DEFAULT_SHELL.run_script(self.wrapper_script_path())
     }
 
-    async fn version_string(&self) -> Result<String> {
-        self.cmd()?.args(["version", "--json", "--only-launcher"]).run_stdout().await
+    fn version_string(&self) -> BoxFuture<'static, Result<String>> {
+        let command = self.cmd();
+        async move { command?.args(["version", "--json", "--only-launcher"]).run_stdout().await }
+            .boxed()
     }
 
     async fn version(&self) -> Result<Version> {

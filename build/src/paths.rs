@@ -8,6 +8,8 @@ pub mod generated {
     include!(concat!(env!("OUT_DIR"), "/paths.rs"));
 }
 
+pub const EDITION_FILE_ARTIFACT_NAME: &str = "Edition File";
+
 pub const LIBRARIES_TO_TEST: [&str; 5] =
     ["Tests", "Table_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
 
@@ -216,12 +218,16 @@ impl Paths {
     }
 
     pub async fn upload_edition_file_artifact(&self) -> Result {
-        ide_ci::actions::artifacts::upload_single_file(self.edition_file(), "Edition File").await
+        ide_ci::actions::artifacts::upload_single_file(
+            self.edition_file(),
+            EDITION_FILE_ARTIFACT_NAME,
+        )
+        .await
     }
 
     pub async fn download_edition_file_artifact(&self) -> Result {
         ide_ci::actions::artifacts::download_single_file_artifact(
-            "Edition File",
+            EDITION_FILE_ARTIFACT_NAME,
             self.edition_file(),
         )
         .await

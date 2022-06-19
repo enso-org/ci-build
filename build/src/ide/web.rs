@@ -17,6 +17,7 @@ use ide_ci::programs::Npm;
 use std::process::Stdio;
 use tempfile::TempDir;
 use tokio::process::Child;
+use tracing::Span;
 
 lazy_static! {
     /// Path to the file with build information that is consumed by the JS part of the IDE.
@@ -204,22 +205,38 @@ impl IdeDesktop {
         Ok(())
     }
 
+
+    #[tracing::instrument(name="Setting up GUI Content watcher.", 
+        fields(wasm = tracing::field::Empty),
+        err)]
     pub async fn watch_content(
         &self,
         wasm: impl Future<Output = Result<Artifact>>,
         build_info: &BuildInfo,
+        shell: bool,
     ) -> Result<Watcher> {
         // When watching we expect our artifacts to be served through server, not appear in any
         // specific location on the disk.
         let output_path = TempDir::new()?;
+        // let span = tracing::
+        // let wasm = wasm.inspect()
         let watch_environment =
             ContentEnvironment::new(self, wasm, build_info, output_path).await?;
-        let child_process = self
-            .npm()?
-            .try_applying(&watch_environment)?
-            .workspace(Workspaces::Content)
-            .run("watch", EMPTY_ARGS)
-            .spawn_intercepting()?;
+        Span::current().record("wasm", &watch_environment.wasm.as_str());
+        let child_process = if shell {
+            ide_ci::os::default_shell()
+                .cmd()?
+                .current_dir(&self.package_dir)
+                .try_applying(&watch_environment)?
+                .stdin(Stdio::inherit())
+                .spawn()?
+        } else {
+            self.npm()?
+                .try_applying(&watch_environment)?
+                .workspace(Workspaces::Content)
+                .run("watch", EMPTY_ARGS)
+                .spawn_intercepting()?
+        };
         Ok(Watcher { child_process, watch_environment })
     }
 
@@ -232,7 +249,7 @@ impl IdeDesktop {
     pub async fn dist(
         &self,
         gui: &crate::project::gui::Artifact,
-        project_manager: &crate::project::project_manager::Artifact,
+        project_manager: &crate::project::backend::Artifact,
         output_path: impl AsRef<Path>,
         target_os: OS,
     ) -> Result {

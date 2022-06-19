@@ -1,18 +1,21 @@
-use crate::prelude::*;
+use enso_build::prelude::*;
 
+pub mod backend;
+pub mod engine;
 pub mod gui;
 pub mod ide;
 pub mod project_manager;
+pub mod release;
 pub mod wasm;
-
-use crate::args::BuildKind;
 
 use clap::Arg;
 use clap::ArgEnum;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
+use derivative::Derivative;
 use ide_ci::cache;
+use ide_ci::extensions::path::display_fmt;
 use ide_ci::models::config::RepoContext;
 use octocrab::models::RunId;
 
@@ -22,7 +25,7 @@ pub const ENVIRONMENT_VARIABLE_NAME_PREFIX: &str = "ENSO_BUILD";
 pub const DEFAULT_REMOTE_REPOSITORY_FALLBACK: &str = "enso-org/enso";
 
 pub fn default_repo_path() -> Option<PathBuf> {
-    crate::repo::deduce_repository_path()
+    enso_build::repo::deduce_repository_path()
 }
 
 pub fn default_repo_remote() -> RepoContext {
@@ -67,13 +70,17 @@ pub trait IsTargetSource {
     const ARTIFACT_NAME_NAME: &'static str;
     const DEFAULT_OUTPUT_PATH: &'static str;
 
-    type BuildInput: Debug + Args + Send + Sync;
+    type BuildInput: Clone + Debug + PartialEq + Args + Send + Sync;
+}
+
+pub trait IsWatchableSource: IsTargetSource {
+    type WatchInput: Clone + Debug + PartialEq + Args + Send + Sync;
 }
 
 #[macro_export]
 macro_rules! source_args_hlp {
     ($target:ty, $prefix:literal, $inputs:ty) => {
-        impl $crate::cli::arg::IsTargetSource for $target {
+        impl $crate::arg::IsTargetSource for $target {
             const SOURCE_NAME: &'static str = concat!($prefix, "-", "source");
             const PATH_NAME: &'static str = concat!($prefix, "-", "path");
             const OUTPUT_PATH_NAME: &'static str = concat!($prefix, "-", "output-path");
@@ -93,8 +100,12 @@ pub enum Target {
     Wasm(wasm::Target),
     /// Build/Run GUI that consists of WASM and JS parts. This is what we deploy to cloud.
     Gui(gui::Target),
-    /// Build/Get Project Manager bundle (includes Enso Engine with GraalVM Runtime).
+    /// Project Manager package (just the binary, no Engine)
     ProjectManager(project_manager::Target),
+    /// Enso Engine distribution.
+    Engine(engine::Target),
+    /// Build/Get Project Manager bundle (includes Enso Engine with GraalVM Runtime).
+    Backend(backend::Target),
     /// Build/Run/Test IDE bundle (includes GUI and Project Manager).
     Ide(ide::Target),
     /// Clean the repository. Keeps the IntelliJ's .idea directory intact. WARNING: This removes
@@ -104,6 +115,10 @@ pub enum Target {
     Lint,
     /// Apply automatic formatters on the repository.
     Fmt,
+    /// Release-related subcommand.
+    Release(release::Target),
+    /// Regenerate GitHub Actions workflows.
+    CiGen,
 }
 
 /// Build, test and package Enso Engine.
@@ -126,8 +141,8 @@ pub struct Cli {
     pub repo_remote: RepoContext,
 
     /// The build kind. Affects the default version generation.
-    #[clap(long, arg_enum, default_value_t = BuildKind::Dev, enso_env())]
-    pub build_kind: BuildKind,
+    #[clap(long, arg_enum, default_value_t = enso_build::version::BuildKind::Dev, env = crate::BuildKind::NAME)]
+    pub build_kind: enso_build::version::BuildKind,
 
     /// Platform to target. Currently cross-compilation is enabled only for GUI/IDE (without
     /// Project Manager) on platforms where Electron Builder supports this.
@@ -197,24 +212,39 @@ pub enum SourceKind {
 }
 
 /// Strongly typed argument for an output directory of a given build target.
-#[derive(Args, Clone, PartialEq)]
+#[derive(Args, Clone, Derivative)]
+#[derivative(Debug, PartialEq)]
 pub struct OutputPath<Target: IsTargetSource> {
     /// Directory where artifacts should be placed.
+    #[derivative(Debug(format_with = "display_fmt"))]
     #[clap(name = Target::OUTPUT_PATH_NAME, long, parse(try_from_str=normalize_path), default_value = Target::DEFAULT_OUTPUT_PATH, enso_env())]
     pub output_path: PathBuf,
+    #[derivative(Debug = "ignore", PartialEq(bound = ""))]
     #[allow(missing_docs)]
     #[clap(skip)]
     pub phantom:     PhantomData<Target>,
-}
-
-impl<Target: IsTargetSource> Debug for OutputPath<Target> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.output_path.fmt(f)
-    }
 }
 
 impl<Target: IsTargetSource> AsRef<Path> for OutputPath<Target> {
     fn as_ref(&self) -> &Path {
         self.output_path.as_path()
     }
+}
+
+#[derive(Args, Clone, PartialEq, Derivative)]
+#[derivative(Debug)]
+pub struct BuildJob<Target: IsTargetSource> {
+    #[clap(flatten)]
+    pub input:       Target::BuildInput,
+    #[clap(flatten)]
+    pub output_path: OutputPath<Target>,
+}
+
+#[derive(Args, Clone, PartialEq, Derivative)]
+#[derivative(Debug)]
+pub struct WatchJob<Target: IsWatchableSource> {
+    #[clap(flatten)]
+    pub build:       BuildJob<Target>,
+    #[clap(flatten)]
+    pub watch_input: Target::WatchInput,
 }

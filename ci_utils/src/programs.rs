@@ -22,6 +22,7 @@ pub mod sh;
 pub mod tar;
 pub mod vs;
 pub mod vswhere;
+pub mod wasm_opt;
 pub mod wasm_pack;
 
 pub use cargo::Cargo;

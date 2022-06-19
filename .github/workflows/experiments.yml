@@ -6,80 +6,85 @@ on:
 
   push:
 
+env:
+  ENSO_BUILD_KIND: nightly
+  ENSO_BUILD_REPO_PATH: enso
+  ENSO_BUILD_REPO_REMOTE: enso-org/ci-build
+  GITHUB_TOKEN: ${{ github.token }}
+  RUST_BACKTRACE: full
+
 jobs:
-  build:
-    # The type of runner that the job will run on
+  prepare:
+    runs-on: [mwu-deluxe]
+    outputs:
+      ENSO_VERSION: ${{ steps.prepare-step.outputs.ENSO_VERSION }}
+      ENSO_RELEASE_ID: ${{ steps.prepare-step.outputs.ENSO_RELEASE_ID }}
+    steps:
+      - uses: enso-org/ci-build/actions/install@wip/mwu/engine
+      - run: enso-build-cli --help
+      - run: enso-build-cli release create-draft
+        id: prepare-step
+
+  build-engine:
+    needs: prepare
+    env:
+      ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
+      ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os:
+          - [mwu-deluxe]
+          - [self-hosted, Windows]
           - [macos-latest]
-          - [self-hosted, Windows, engine]
-          - [self-hosted, Linux, engine]
       fail-fast: false
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - uses: enso-org/ci-build/actions/install@wip/mwu/new-ide-build
-        with:
-          enso_ref: ${{ github.ref }}
-      - name: Run a multi-line script
-        run: enso-build2  --repo-remote enso-org/ci-build ide build
-        working-directory: ${{ github.workspace }}/ci-build
+      - uses: enso-org/ci-build/actions/install@wip/mwu/engine
+      - run: enso-build-engine upload
+
+  build-wasm:
+    needs: prepare
+    env:
+      ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
+      ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [mwu-deluxe]
+      fail-fast: false
+    steps:
+      - uses: enso-org/ci-build/actions/install@wip/mwu/engine
+      - run: enso-build-cli wasm build
+
+  build-ide:
+    needs: [prepare, build-engine, build-wasm]
+    env:
+      ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
+      ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [mwu-deluxe]
+          - [self-hosted, Windows]
+          - [macos-latest]
+      fail-fast: false
+    steps:
+      - uses: enso-org/ci-build/actions/install@wip/mwu/engine
+      - run: enso-build-cli --help
+      - run: enso-build-cli ide upload --wasm-source current-ci-run --backend-source release --backend-release ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
+
+  finish:
+    runs-on: [mwu-deluxe]
+    needs: [prepare, build-engine, build-wasm, build-ide]
+    env:
+      ENSO_VERSION: ${{needs.prepare.outputs.ENSO_VERSION}}
+      ENSO_RELEASE_ID: ${{needs.prepare.outputs.ENSO_RELEASE_ID}}
+    steps:
+      - uses: enso-org/ci-build/actions/install@wip/mwu/engine
+      - run: enso-build-cli release publish
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          RUST_BACKTRACE: full
-          RUST_LOG: info,ide_ci=trace,enso_build2=trace,enso_build=trace
-#
-#      - name: Upload Content Artifacts
-#        uses: actions/upload-artifact@v2
-#        with:
-#          name: content
-#          path: dist/content
-#        if: runner.os == 'Linux'
-#      - name: Upload Artifacts (macOS, dmg)
-#        uses: actions/upload-artifact@v1
-#        with:
-#          name: enso-mac-${{ env.ENSO_VERSION }}.dmg
-#          path: >-
-#            enso/dist/client/enso-mac-${{ env.ENSO_VERSION }}.dmg
-#        if: runner.os == 'macOS'
-#      - name: Upload Artifacts (macOS, dmg.sha256)
-#        uses: actions/upload-artifact@v1
-#        with:
-#          name: >-
-#            enso-mac-${{ env.ENSO_VERSION }}.dmg.sha256
-#          path: >-
-#            enso/dist/client/enso-mac-${{ env.ENSO_VERSION }}.dmg.sha256
-#        if: runner.os == 'macOS'
-#      - name: Upload Artifacts (Windows, exe)
-#        uses: actions/upload-artifact@v1
-#        with:
-#          name: enso-win-${{ env.ENSO_VERSION }}.exe
-#          path: >-
-#            enso/dist/client/enso-win-${{ env.ENSO_VERSION }}.exe
-#        if: runner.os == 'Windows'
-#      - name: Upload Artifacts (Windows, exe.sha256)
-#        uses: actions/upload-artifact@v1
-#        with:
-#          name: >-
-#            enso-win-${{ env.ENSO_VERSION }}.exe.sha256
-#          path: >-
-#            enso/dist/client/enso-win-${{ env.ENSO_VERSION }}.exe.sha256
-#        if: runner.os == 'Windows'
-#      - name: Upload Artifacts (Linux, AppImage)
-#        uses: actions/upload-artifact@v1
-#        with:
-#          name: >-
-#            enso-linux-${{ env.ENSO_VERSION }}.AppImage
-#          path: >-
-#            enso/dist/client/enso-linux-${{ env.ENSO_VERSION }}.AppImage
-#        if: runner.os == 'Linux'
-#      - name: Upload Artifacts (Linux, AppImage.sha256)
-#        uses: actions/upload-artifact@v1
-#        with:
-#          name: >-
-#            enso-linux-${{ env.ENSO_VERSION }}.AppImage.sha256
-#          path: >-
-#            enso/dist/client/enso-linux-${{ env.ENSO_VERSION }}.AppImage.sha256
-#        if: runner.os == 'Linux'
+          AWS_ACCESS_KEY_ID: ${{ secrets.ARTEFACT_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ARTEFACT_S3_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-west-1

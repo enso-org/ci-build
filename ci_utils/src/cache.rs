@@ -2,6 +2,7 @@ pub mod archive;
 pub mod artifact;
 pub mod asset;
 pub mod download;
+pub mod goodie;
 
 use crate::prelude::*;
 use anyhow::Context;
@@ -10,15 +11,17 @@ use std::hash::Hasher;
 use serde::de::DeserializeOwned;
 use sha2::Digest;
 
+pub use goodie::Goodie;
+
 pub const VERSION: u8 = 1;
 
 pub fn default_path() -> Result<PathBuf> {
     Ok(dirs::home_dir().context("Cannot locate home directory.")?.join_iter([".enso-ci", "cache"]))
 }
 
-pub trait Storable: Debug + Borrow<Self::Key> + Send + Sync + 'static {
+pub trait Storable: Debug + Send + Sync + 'static {
     type Metadata: Serialize + DeserializeOwned + Send + Sync + 'static;
-    type Output: Send + Sync + 'static;
+    type Output: Clone + Send + Sync + 'static;
     type Key: Clone + Debug + Serialize + DeserializeOwned + Send + Sync + 'static;
 
     fn generate(&self, cache: Cache, store: PathBuf) -> BoxFuture<'static, Result<Self::Metadata>>;
@@ -28,6 +31,8 @@ pub trait Storable: Debug + Borrow<Self::Key> + Send + Sync + 'static {
         cache: PathBuf,
         metadata: Self::Metadata,
     ) -> BoxFuture<'static, Result<Self::Output>>;
+
+    fn key(&self) -> Self::Key;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -48,13 +53,14 @@ impl<'a, D: Digest> Hasher for HashToDigest<'a, D> {
 }
 
 pub fn digest<S: Storable>(storable: &S) -> Result<String> {
-    let key: &S::Key = storable.borrow();
-    let key_serialized = bincode::serialize(key)?;
+    let key = storable.key();
+    let key_serialized = bincode::serialize(&key)?;
 
     let mut digest = sha2::Sha224::default();
     sha2::Digest::update(&mut digest, &[VERSION]);
     sha2::Digest::update(&mut digest, &key_serialized);
     std::any::TypeId::of::<S::Key>().hash(&mut HashToDigest(&mut digest));
+    std::any::TypeId::of::<S>().hash(&mut HashToDigest(&mut digest));
     let digest = digest.finalize();
     Ok(data_encoding::BASE64URL_NOPAD.encode(&digest))
 }
@@ -87,24 +93,29 @@ impl Cache {
 
             let retrieve = async {
                 let info = entry_meta.read_to_json::<EntryIndex<S>>()?;
+                crate::fs::require_exist(&entry_dir)?;
                 storable.adapt(entry_dir.clone(), info.metadata).await
             };
 
-            if let Ok(out) = retrieve.await {
-                debug!("Found in cache, skipping generation.");
-                Ok(out)
-            } else {
-                debug!("Not found in cache, will generate.");
-                let key: &S::Key = storable.borrow();
-                let info = EntryIndex::<S> {
-                    metadata: storable
-                        .generate(this, entry_dir.clone())
-                        .instrument(info_span!("Generating value to be cached.", ?key))
-                        .await?,
-                    key:      key.clone(),
-                };
-                entry_meta.write_as_json(&info)?;
-                storable.adapt(entry_dir, info.metadata).await
+            match retrieve.await {
+                Ok(out) => {
+                    debug!("Found in cache, skipping generation.");
+                    return Ok(out);
+                }
+                Err(e) => {
+                    debug!("Value cannot be retrieved from cache because: {e}");
+                    crate::fs::reset_dir(&entry_dir)?;
+                    let key = storable.key();
+                    let info = EntryIndex::<S> {
+                        metadata: storable
+                            .generate(this, entry_dir.clone())
+                            .instrument(info_span!("Generating value to be cached.", ?key))
+                            .await?,
+                        key:      key.clone(),
+                    };
+                    entry_meta.write_as_json(&info)?;
+                    storable.adapt(entry_dir, info.metadata).await
+                }
             }
         }
         .boxed()
@@ -125,8 +136,6 @@ mod tests {
 
         let cache = Cache::new("C:/temp/enso-cache").await?;
         cache.get(download_task).await?;
-
-
         Ok(())
     }
 }

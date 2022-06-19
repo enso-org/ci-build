@@ -60,10 +60,20 @@ pub trait MyCommand<P: Program>: BorrowMut<Command> + From<Command> + Into<Comma
         let inner = Command::new_over::<P>(inner);
         Self::from(inner)
     }
+
+    fn spawn(&mut self) -> Result<Child> {
+        self.borrow_mut().spawn().anyhow_err()
+    }
 }
 
 pub trait IsCommandWrapper {
     fn borrow_mut_command(&mut self) -> &mut tokio::process::Command;
+
+    fn with_applied<M: Manipulator>(mut self, manipulator: &M) -> Self
+    where Self: Sized {
+        manipulator.apply(&mut self);
+        self
+    }
 
     fn apply<M: Manipulator>(&mut self, manipulator: &M) -> &mut Self {
         manipulator.apply(self);

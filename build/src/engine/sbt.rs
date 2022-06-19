@@ -5,6 +5,13 @@ use crate::prelude::*;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::Sbt;
 
+pub fn verify_generated_package_task(package: &str, path: impl AsRef<Path>) -> String {
+    format!(
+        "enso/verifyGeneratedPackage {} {}",
+        package,
+        path.as_ref().join("THIRD-PARTY").display()
+    )
+}
 
 
 pub async fn verify_generated_package(
@@ -12,12 +19,5 @@ pub async fn verify_generated_package(
     package: &str,
     path: impl AsRef<Path>,
 ) -> Result {
-    sbt.cmd()?
-        .arg(format!(
-            "enso/verifyGeneratedPackage {} {}",
-            package,
-            path.as_ref().join("THIRD-PARTY").display()
-        ))
-        .run_ok()
-        .await
+    sbt.cmd()?.arg(verify_generated_package_task(package, path)).run_ok().await
 }

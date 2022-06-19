@@ -1,5 +1,25 @@
 use crate::prelude::*;
 
+macro_rules! strong_string {
+    ($name:ident($inner_ty:ty)) => {
+        paste::paste! {
+            #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
+            pub struct $name(pub <$inner_ty as ToOwned>::Owned);
+
+            impl $name {
+                pub fn new(inner: impl Into<<$inner_ty as ToOwned>::Owned>) -> Self {
+                    Self(inner.into())
+                }
+            }
+
+            #[derive(Debug, Serialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
+            pub struct [<$name Ref>]<'a>(pub &'a $inner_ty);
+        }
+    };
+}
+
+strong_string!(Task(str));
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Sbt;
 

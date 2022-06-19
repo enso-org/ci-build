@@ -72,35 +72,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5d78ce20460b82d3fa150275ed9d55e21064fc7951177baacf86a145c4a4b1f"
 
 [[package]]
-name = "argh"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbb41d85d92dfab96cb95ab023c265c5e4261bb956c0fb49ca06d90c570f1958"
-dependencies = [
- "argh_derive",
- "argh_shared",
-]
-
-[[package]]
-name = "argh_derive"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be69f70ef5497dd6ab331a50bd95c6ac6b8f7f17a7967838332743fbd58dc3b5"
-dependencies = [
- "argh_shared",
- "heck 0.3.3",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "argh_shared"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6f8c380fa28aa1b36107cd97f0196474bb7241bb95a453c5c01a15ac74b2eac"
-
-[[package]]
 name = "ascii"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -892,6 +863,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cron"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d76219e9243e100d5a37676005f08379297f8addfebc247613299600625c734d"
+dependencies = [
+ "chrono",
+ "nom",
+ "once_cell",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1102,7 +1084,6 @@ name = "enso-build"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "argh",
  "async-compression",
  "async-trait",
  "aws-config",
@@ -1115,6 +1096,7 @@ dependencies = [
  "clap",
  "console-subscriber",
  "derivative",
+ "derive_more",
  "dirs",
  "filetime",
  "flate2",
@@ -1136,6 +1118,7 @@ dependencies = [
  "nix",
  "octocrab",
  "ouroboros",
+ "paste",
  "path-absolutize",
  "pin-project",
  "platforms",
@@ -1167,6 +1150,27 @@ dependencies = [
  "which",
  "whoami",
  "zip",
+]
+
+[[package]]
+name = "enso-build-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "byte-unit",
+ "clap",
+ "derivative",
+ "enso-build",
+ "futures",
+ "futures-util",
+ "humantime 2.1.0",
+ "ide-ci",
+ "octocrab",
+ "strum",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1796,12 +1800,14 @@ dependencies = [
  "async-compression",
  "async-trait",
  "bincode",
+ "byte-unit",
  "bytes",
  "cached",
  "cfg-if",
  "chrono",
  "clap",
  "convert_case 0.5.0",
+ "cron",
  "data-encoding",
  "derivative",
  "derive_more",
@@ -1828,6 +1834,7 @@ dependencies = [
  "new_mime_guess",
  "nix",
  "octocrab",
+ "paste",
  "path-absolutize",
  "path-slash",
  "pathdiff",
@@ -2348,6 +2355,12 @@ dependencies = [
  "rand_core 0.6.3",
  "subtle",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c520e05135d6e763148b6426a837e239041653ba7becd2e538c076c738025fc"
 
 [[package]]
 name = "path-absolutize"
@@ -3382,9 +3395,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.18.2"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4903bf0427cf68dddd5aa6a93220756f8be0c34fcfa9f5e6191e103e15a31395"
+checksum = "0f392c8f16bda3456c0b00c6de39cb100449b98de55ac41c6cdd2bfcf53a1245"
 dependencies = [
  "bytes",
  "libc",

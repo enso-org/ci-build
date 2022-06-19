@@ -13,6 +13,11 @@ pub fn metadata<P: AsRef<Path>>(path: P) -> Result<Metadata> {
     std::fs::metadata(&path).anyhow_err()
 }
 
+#[context("Failed to copy file from {} to {}", from.as_ref().display(), to.as_ref().display())]
+pub fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<u64> {
+    std::fs::copy(&from, &to).anyhow_err()
+}
+
 #[context("Failed to rename file from {} to {}", from.as_ref().display(), to.as_ref().display())]
 pub fn rename(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result {
     std::fs::rename(&from, &to).anyhow_err()

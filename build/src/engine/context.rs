@@ -1,22 +1,18 @@
 use crate::prelude::*;
 
+use ide_ci::actions::workflow::is_in_env;
 use ide_ci::env::Variable;
 use sysinfo::SystemExt;
 
-use crate::args;
-use crate::args::Args;
-use crate::args::WhatToDo;
 use crate::engine::download_project_templates;
 use crate::engine::env;
-use crate::engine::BuildConfiguration;
+use crate::engine::BuildConfigurationResolved;
 use crate::engine::BuildMode;
-use crate::engine::BuildOperation;
 use crate::engine::BuiltArtifacts;
 use crate::engine::ComponentPathExt;
 use crate::engine::Operation;
 use crate::engine::ReleaseCommand;
 use crate::engine::ReleaseOperation;
-use crate::engine::RunOperation;
 use crate::engine::FLATC_VERSION;
 use crate::engine::PARALLEL_ENSO_TESTS;
 use crate::get_graal_version;
@@ -25,18 +21,15 @@ use crate::paths::cache_directory;
 use crate::paths::Paths;
 use crate::project::ProcessWrapper;
 use crate::retrieve_github_access_token;
-use crate::setup_octocrab;
 
 use crate::engine::bundle::Bundle;
 use crate::engine::sbt::verify_generated_package;
 use crate::enso::BuiltEnso;
 use crate::enso::IrCaches;
-use crate::version::deduce_versions;
 
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::goodies;
 use ide_ci::goodies::graalvm;
-use ide_ci::models::config::RepoContext;
 use ide_ci::platform::DEFAULT_SHELL;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::graal;
@@ -44,8 +37,9 @@ use ide_ci::programs::Flatc;
 use ide_ci::programs::Git;
 use ide_ci::programs::Sbt;
 
+#[derive(Clone, Debug)]
 pub struct RunContext {
-    pub config:    BuildConfiguration,
+    pub config:    BuildConfigurationResolved,
     pub octocrab:  Octocrab,
     pub paths:     Paths,
     pub goodies:   GoodieDatabase,
@@ -53,38 +47,6 @@ pub struct RunContext {
 }
 
 impl RunContext {
-    pub async fn new(args: &Args) -> Result<Self> {
-        // Get default build configuration for a given build kind.
-        let config = BuildConfiguration::new(&args);
-        let octocrab = setup_octocrab().await?;
-        let enso_root = args.target.clone();
-        debug!("Received target location: {}", enso_root.display());
-        let enso_root = args.target.absolutize()?.to_path_buf();
-        debug!("Absolute target location: {}", enso_root.display());
-
-
-        let operation = match &args.command {
-            WhatToDo::Create(_) | WhatToDo::Upload(_) | WhatToDo::Publish(_) =>
-                Operation::Release(ReleaseOperation::new(args)?),
-            WhatToDo::Run(args::Run { command_pieces }) =>
-                Operation::Run(RunOperation { command_pieces: command_pieces.clone() }),
-            WhatToDo::Build(args::Build {}) => Operation::Build(BuildOperation {}),
-        };
-        debug!("Operation to perform: {:?}", operation);
-
-        let target_repo = if let Operation::Release(release_op) = &operation {
-            Ok(&release_op.repo)
-        } else {
-            Err(anyhow!("Missing repository information for release operation."))
-        };
-        let versions = deduce_versions(&octocrab, args.kind, target_repo, &enso_root).await?;
-        versions.publish()?;
-        debug!("Target version: {versions:?}.");
-        let paths = Paths::new_version(&enso_root, versions.version.clone())?;
-        let goodies = GoodieDatabase::new()?;
-        Ok(Self { config, octocrab, paths, goodies, operation })
-    }
-
     /// Check that required programs are present (if not, installs them, if supported). Set
     /// environment variables for the build to follow.
     pub async fn prepare_build_env(&self) -> Result {
@@ -149,7 +111,7 @@ impl RunContext {
 
 
         // Setup GraalVM
-        let build_sbt_content = std::fs::read_to_string(self.paths.build_sbt())?;
+        let build_sbt_content = ide_ci::fs::read_to_string(self.paths.build_sbt())?;
         let graalvm = graalvm::GraalVM {
             client:        &self.octocrab,
             graal_version: get_graal_version(&build_sbt_content)?,
@@ -172,51 +134,6 @@ impl RunContext {
         let required_components =
             once(graal::Component::NativeImage).chain(conditional_components.into_iter().copied());
         graal::install_missing_components(required_components).await?;
-        Ok(())
-    }
-
-    /// Create a new draft release on the GitHub repository.
-    ///
-    /// Emits its ID into environment, so other build steps can use it.
-    pub async fn create_release(
-        &self,
-        repo: &RepoContext,
-    ) -> Result<octocrab::models::repos::Release> {
-        let versions = &self.paths.triple.versions;
-        let commit = ide_ci::actions::env::GITHUB_SHA.get()?;
-
-        let changelog_contents = ide_ci::fs::read_to_string(self.paths.changelog())?;
-        let latest_changelog_body =
-            crate::changelog::Changelog(&changelog_contents).top_release_notes()?;
-
-        debug!("Preparing release {} for commit {}", versions.version, commit);
-        let release = repo
-            .repos(&self.octocrab)
-            .releases()
-            .create(&versions.tag())
-            .target_commitish(&commit)
-            .name(&versions.pretty_name())
-            .body(&latest_changelog_body.contents)
-            .prerelease(true)
-            .draft(true)
-            .send()
-            .await?;
-
-        crate::env::ReleaseId.emit(&release.id)?;
-        Ok(release)
-    }
-
-    pub async fn publish_release(&self, repo: &RepoContext) -> Result {
-        let release_id = crate::env::ReleaseId.fetch()?;
-        debug!("Looking for release with id {release_id} on github.");
-        let release = repo.repos(&self.octocrab).releases().get_by_id(release_id).await?;
-        debug!("Found the target release, will publish it.");
-        repo.repos(&self.octocrab).releases().update(release.id.0).draft(false).send().await?;
-        debug!("Done. Release URL: {}", release.url);
-
-        self.paths.download_edition_file_artifact().await?;
-        debug!("Updating edition in the AWS S3.");
-        crate::aws::update_manifest(repo, &self.paths).await?;
         Ok(())
     }
 
@@ -267,33 +184,30 @@ impl RunContext {
         debug!("Bootstrapping Enso project.");
         sbt.call_arg("bootstrap").await?;
 
-        if TARGET_OS != OS::Windows {
-            // FIXME [mwu] apparently this is broken on Windows because of the line endings mismatch
-            sbt.call_arg("verifyLicensePackages").await?;
-        }
-
         // If we have much memory, we can try building everything in a single batch. Reducing number
         // of SBT invocations significantly helps build time. However, it is more memory heavy, so
         // we don't want to call this in environments like GH-hosted runners.
         let github_hosted_macos_memory = 15_032_385;
         if system.total_memory() > github_hosted_macos_memory {
-            let mut tasks = vec![
-                "engine-runner/assembly",
-                // "project-manager/buildNativeImage",
-                // "launcher/buildNativeImage",
-                // "buildLauncherDistribution",
-                // "buildEngineDistribution",
-                // "buildProjectManagerDistribution",
-            ];
+            let mut tasks = vec![];
 
             if self.config.build_engine_package() {
                 tasks.push("buildEngineDistribution");
+                tasks.push("engine-runner/assembly");
                 ret.packages.engine = Some(self.paths.engine.clone());
             }
+
+            if TARGET_OS != OS::Windows {
+                // FIXME [mwu] apparently this is broken on Windows because of the line endings
+                // mismatch
+                tasks.push("verifyLicensePackages");
+            }
+
             if self.config.build_project_manager_package() {
                 tasks.push("buildProjectManagerDistribution");
                 ret.packages.project_manager = Some(self.paths.project_manager.clone());
             }
+
             if self.config.build_launcher_package() {
                 tasks.push("buildLauncherDistribution");
                 ret.packages.launcher = Some(self.paths.launcher.clone());
@@ -386,19 +300,20 @@ impl RunContext {
             enso.run_tests(IrCaches::No, PARALLEL_ENSO_TESTS).await?;
         }
 
-        let std_libs = self.paths.engine.dir.join("lib").join("Standard");
-        // Compile the Standard Libraries (Unix)
-        debug!("Compiling standard libraries under {}", std_libs.display());
-        for entry in ide_ci::fs::read_dir(&std_libs)? {
-            let entry = entry?;
-            let target = entry.path().join(self.paths.version().to_string());
-            enso.compile_lib(target)?.run_ok().await?;
+        if self.config.build_engine_package() {
+            let std_libs = self.paths.engine.dir.join("lib").join("Standard");
+            // Compile the Standard Libraries (Unix)
+            debug!("Compiling standard libraries under {}", std_libs.display());
+            for entry in ide_ci::fs::read_dir(&std_libs)? {
+                let entry = entry?;
+                let target = entry.path().join(self.paths.version().to_string());
+                enso.compile_lib(target)?.run_ok().await?;
+            }
         }
 
         if self.config.test_standard_library {
             enso.run_tests(IrCaches::Yes, PARALLEL_ENSO_TESTS).await?;
         }
-
 
         // Verify License Packages in Distributions
         // FIXME apparently this does not work on Windows due to some CRLF issues?
@@ -420,34 +335,39 @@ impl RunContext {
                 verify_generated_package(&sbt, "project-manager", &self.paths.project_manager.dir)
                     .await?;
             }
-            for libname in ["Base", "Table", "Image", "Database"] {
-                verify_generated_package(
-                    &sbt,
-                    libname,
-                    self.paths
-                        .engine
-                        .dir
-                        .join_iter(["lib", "Standard"])
-                        .join(libname)
-                        .join(self.paths.version().to_string()),
-                )
-                .await?;
+            if self.config.build_engine_package {
+                for libname in ["Base", "Table", "Image", "Database"] {
+                    verify_generated_package(
+                        &sbt,
+                        libname,
+                        self.paths
+                            .engine
+                            .dir
+                            .join_iter(["lib", "Standard"])
+                            .join(libname)
+                            .join(self.paths.version().to_string()),
+                    )
+                    .await?;
+                }
             }
         }
 
-        // Compress the built artifacts for upload
-        // The artifacts are compressed before upload to work around an error with long path
-        // handling in the upload-artifact action on Windows. See: https://github.com/actions/upload-artifact/issues/240
-        self.paths.engine.pack().await?;
-        let schema_dir =
-            self.paths.repo_root.join_iter(["engine", "language-server", "src", "main", "schema"]);
-        let schema_files =
-            ide_ci::fs::read_dir(&schema_dir)?.map(|e| e.map(|e| e.path())).collect_result()?;
-        ide_ci::archive::create(self.paths.target.join("fbs-upload/fbs-schema.zip"), schema_files)
-            .await?;
+        if self.config.build_engine_package {
+            if TARGET_OS == OS::Linux && ide_ci::ci::run_in_ci() {
+                self.paths.upload_edition_file_artifact().await?;
+            }
 
-        if TARGET_OS == OS::Linux && ide_ci::ci::run_in_ci() {
-            self.paths.upload_edition_file_artifact().await?;
+            let schema_dir = self.paths.repo_root.join_iter([
+                "engine",
+                "language-server",
+                "src",
+                "main",
+                "schema",
+            ]);
+            if is_in_env() {
+                ide_ci::actions::artifacts::upload_compressed_directory(&schema_dir, "fbs-schema")
+                    .await?;
+            }
         }
 
         if self.config.build_launcher_bundle {
@@ -466,33 +386,30 @@ impl RunContext {
     pub async fn execute(&self) -> Result {
         match &self.operation {
             Operation::Release(ReleaseOperation { command, repo }) => match command {
-                ReleaseCommand::Create => {
-                    self.create_release(repo).await?;
-                }
-                ReleaseCommand::Publish => {
-                    self.publish_release(repo).await?;
-                }
                 ReleaseCommand::Upload => {
                     let artifacts = self.build().await?;
 
                     // Make packages.
                     let release_id = crate::env::ReleaseId.fetch()?;
                     let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
-                    for package in artifacts.packages.iter() {
+
+                    for package in artifacts.packages.into_iter() {
+                        package.pack().await?;
                         ide_ci::github::release::upload_asset(
                             repo,
                             &client,
                             release_id,
-                            &package.dir,
+                            package.artifact_archive,
                         )
                         .await?;
                     }
-                    for bundle in artifacts.bundles.iter() {
+                    for bundle in artifacts.bundles.into_iter() {
+                        bundle.pack().await?;
                         ide_ci::github::release::upload_asset(
                             repo,
                             &client,
                             release_id,
-                            &bundle.dir,
+                            bundle.artifact_archive,
                         )
                         .await?;
                     }

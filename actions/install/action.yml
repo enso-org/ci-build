@@ -6,7 +6,7 @@ inputs:
     required: true
     default: 'false'
   enso_ref:
-    description: Reference to be cheked out in the Enso repository.
+    description: Reference to be checked out in the Enso repository.
     required: false
     default: ''
 
@@ -53,7 +53,7 @@ runs:
           core.addPath(String.raw`${{ runner.temp }}/bin`);
           let args = ['install', '--bins', 
               '--root', process.env["RUNNER_TEMP"],
-              '--path', './build'
+              '--path', './cli'
           ]; 
           let opts = {'cwd': path.resolve(process.env["GITHUB_WORKSPACE"], 'ci-build')};
           await exec.exec('cargo', args, opts);
