@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use crate::prelude::*;
 
 use crate::models::config::Runner;
@@ -38,14 +39,14 @@ impl Config {
     /// The custom labels that the runner will be registered with.
     ///
     /// Apart from them, the GH-defined labels are always used.
-    pub fn custom_labels(&self) -> Vec<String> {
-        vec![self.runner.name.clone()]
+    pub fn custom_labels(&self) -> BTreeSet<String> {
+        once(self.runner.name.clone()).chain(self.runner.labels.as_ref().into_iter().flatten().cloned()).collect()
     }
 
     /// The list of custom labels pretty printed in the format expected by the `--labels` argument
     /// of the runner's configure script.
     pub fn registered_labels_arg(&self) -> OsString {
-        self.custom_labels().join(",").into()
+        self.custom_labels().into_iter().join(",").into()
     }
 
     pub fn registered_name(&self) -> String {
