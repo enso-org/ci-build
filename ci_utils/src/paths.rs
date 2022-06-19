@@ -215,6 +215,9 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
 
     let parameter_vars = last_node.all_parameters_vars();
     let own_parameter_vars: Vec<Ident> = last_node.own_parameter_vars();
+    let parent_parameter_vars =
+        full_path.into_iter().flat_map(|n| n.own_parameter_vars()).collect_vec();
+
 
     let child_parameter_vars = last_node
         .children()
@@ -222,6 +225,22 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
         .flat_map(|node| node.parameters.iter())
         .map(to_ident)
         .collect_vec();
+    let all_parameters = {
+        let mut v = parent_parameter_vars.clone();
+        v.extend(child_parameter_vars.clone());
+        v
+    };
+
+    let mut foo = vec![];
+    for i in 0..full_path.len() {
+        let nodes = &full_path[0..=i];
+        let node = full_path[i];
+        let ty_name = struct_ident(nodes.into_iter().cloned());
+        let vars = node.own_parameter_vars();
+        foo.push(quote! {
+            #ty_name::segment_name(#(#vars),*)
+        });
+    }
 
     let children_init = zip(last_node.children(), &children_struct)
         .map(|(child, children_struct)| {
@@ -236,13 +255,13 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
         quote! {
             impl From<std::path::PathBuf> for #ty_name {
                 fn from(value: std::path::PathBuf) -> Self {
-                    #ty_name::new(value)
+                    #ty_name::new_root(value)
                 }
             }
 
             impl From<&std::path::Path> for #ty_name {
                 fn from(value: &std::path::Path) -> Self {
-                    #ty_name::new(value)
+                    #ty_name::new_root(value)
                 }
             }
         }
@@ -260,7 +279,12 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
         #opt_conversions
 
        impl #ty_name {
-           pub fn new(path: impl Into<std::path::PathBuf> #(, #child_parameter_vars: impl AsRef<std::path::Path>)*) -> Self {
+           pub fn new(#(#all_parameters: impl AsRef<std::path::Path>, )*) -> Self {
+                let path = std::path::PathBuf::from_iter([#(#foo,)*]);
+                Self::new_root(path, #(#child_parameter_vars,)*)
+           }
+
+           pub fn new_root(path: impl Into<std::path::PathBuf> #(, #child_parameter_vars: impl AsRef<std::path::Path>)*) -> Self {
                let path = path.into();
                #(let #children_var = #children_init;)*
                Self { path, #(#children_var),* }
@@ -268,7 +292,7 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
 
            pub fn new_under(parent: impl AsRef<std::path::Path> #(, #parameter_vars: impl AsRef<std::path::Path>)*) -> Self {
                let path = parent.as_ref().join(Self::segment_name(#(#own_parameter_vars),*));
-               Self::new(path, #(#child_parameter_vars),*)
+               Self::new_root(path, #(#child_parameter_vars),*)
            }
 
             pub fn segment_name(#(#own_parameter_vars: impl AsRef<std::path::Path>),*) -> String {

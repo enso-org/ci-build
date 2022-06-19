@@ -50,6 +50,11 @@ pub trait PathExt: AsRef<Path> {
         serde_json::to_writer(file, value).anyhow_err()
     }
 
+    fn write_as_yaml<T: Serialize>(&self, value: &T) -> Result {
+        let file = crate::fs::create(self)?;
+        serde_yaml::to_writer(file, value).anyhow_err()
+    }
+
     fn as_str(&self) -> &str {
         self.as_ref().to_str().unwrap()
     }

@@ -118,7 +118,7 @@ impl IsTarget for Backend {
     }
 
     fn adapt_artifact(self, path: impl AsRef<Path>) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let path = crate::paths::generated::ProjectManager::new(
+        let path = crate::paths::generated::ProjectManager::new_root(
             path.as_ref(),
             self.target_os.exe_suffix(),
         );

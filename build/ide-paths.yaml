@@ -1,6 +1,8 @@
 <repo_root>/:
   .github/:
     workflows/:
+      gui.yml:
+      nightly.yml:
   app/:
     gui/:
     ide-desktop/:

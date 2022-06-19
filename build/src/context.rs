@@ -43,7 +43,7 @@ pub struct BuildContext {
 
 impl BuildContext {
     pub fn repo_root(&self) -> RepoRoot {
-        RepoRoot::new(
+        RepoRoot::new_root(
             &self.source_root,
             &self.triple.to_string(),
             &self.triple.versions.edition_name(),

@@ -46,7 +46,7 @@ pub async fn publish_release(context: &BuildContext) -> Result {
     debug!("Done. Release URL: {}", release.url);
 
     let temp = tempdir()?;
-    let edition_file_path = crate::paths::generated::RepoRootDistributionEditions::new(
+    let edition_file_path = crate::paths::generated::RepoRootDistributionEditions::new_root(
         temp.path(),
         triple.versions.edition_name(),
     )

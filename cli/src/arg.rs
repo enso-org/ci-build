@@ -117,6 +117,8 @@ pub enum Target {
     Fmt,
     /// Release-related subcommand.
     Release(release::Target),
+    /// Regenerate GitHub Actions workflows.
+    CiGen,
 }
 
 /// Build, test and package Enso Engine.

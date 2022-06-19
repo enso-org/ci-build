@@ -199,7 +199,7 @@ impl IsTarget for Wasm {
 
             info!("Building wasm.");
             let temp_dir = tempdir()?;
-            let temp_dist = RepoRootDistWasm::new(temp_dir.path());
+            let temp_dist = RepoRootDistWasm::new_root(temp_dir.path());
             let mut command = ide_ci::programs::WasmPack.cmd()?;
             command
                 .current_dir(&repo_root)
@@ -236,7 +236,7 @@ impl IsTarget for Wasm {
             patch_js_glue_in_place(&temp_dist.wasm_glue)?;
 
             ide_ci::fs::create_dir_if_missing(&destination)?;
-            let ret = RepoRootDistWasm::new(&destination);
+            let ret = RepoRootDistWasm::new_root(&destination);
             ide_ci::fs::copy(&temp_dist, &ret)?;
             // copy_if_different(&temp_dist, &ret).await?;
             // copy_if_different(&temp_dist.wasm_main_raw, &ret.wasm_main)?;
@@ -312,7 +312,7 @@ impl IsWatchable for Wasm {
             watch_cmd.arg("--").args(extra_cargo_options);
 
             let watch_process = watch_cmd.spawn_intercepting()?;
-            let artifact = Artifact(RepoRootDistWasm::new(&destination));
+            let artifact = Artifact(RepoRootDistWasm::new_root(&destination));
             Ok(Self::Watcher { artifact, watch_process })
         }
         .boxed()
@@ -326,7 +326,7 @@ pub struct Artifact(RepoRootDistWasm);
 
 impl Artifact {
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self(RepoRootDistWasm::new(path))
+        Self(RepoRootDistWasm::new_root(path))
     }
     pub fn wasm(&self) -> &Path {
         &self.0.wasm_main

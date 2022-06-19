@@ -1,9 +1,11 @@
+#![feature(explicit_generic_args_with_impl_trait)]
 #![feature(option_result_contains)]
 #![feature(once_cell)]
 #![feature(default_free_fn)]
 
 pub mod arg;
 pub mod args;
+pub mod ci_gen;
 
 pub mod prelude {
     pub use crate::arg::ArgExt as _;
@@ -694,6 +696,9 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
                 enso_build::release::publish_release(&*ctx).await?;
             }
         },
+        Target::CiGen => ci_gen::generate(
+            &enso_build::paths::generated::RepoRootGithubWorkflows::new(cli.repo_path),
+        )?,
     };
     info!("Completed main job.");
     global::complete_tasks().await?;

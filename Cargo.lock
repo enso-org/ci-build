@@ -863,6 +863,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cron"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d76219e9243e100d5a37676005f08379297f8addfebc247613299600625c734d"
+dependencies = [
+ "chrono",
+ "nom",
+ "once_cell",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1796,6 +1807,7 @@ dependencies = [
  "chrono",
  "clap",
  "convert_case 0.5.0",
+ "cron",
  "data-encoding",
  "derivative",
  "derive_more",
