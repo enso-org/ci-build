@@ -1,5 +1,5 @@
-use std::collections::BTreeSet;
 use crate::prelude::*;
+use std::collections::BTreeSet;
 
 use crate::models::config::Runner;
 use crate::models::config::RunnerLocation;
@@ -17,13 +17,14 @@ pub const DIRECTORY_WITH_CI_CRATE: &str = "ci";
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Repository where this runner is registered.
-    pub location: RunnerLocation,
+    pub location:    RunnerLocation,
     /// Runner's name.
-    pub runner:   Runner,
+    pub runner:      Runner,
     /// Operating system of the runner's image. It is possible to have Linux on Windows or macOS,
     /// so we don't assume this to be always equal to `TARGET_OS`.
-    pub os:       OS,
-    pub index:    usize,
+    pub os:          OS,
+    pub server_name: String,
+    pub index:       usize,
 }
 
 impl Config {
@@ -40,7 +41,9 @@ impl Config {
     ///
     /// Apart from them, the GH-defined labels are always used.
     pub fn custom_labels(&self) -> BTreeSet<String> {
-        once(self.runner.name.clone()).chain(self.runner.labels.as_ref().into_iter().flatten().cloned()).collect()
+        once(self.runner.name.clone())
+            .chain(self.runner.labels.as_ref().into_iter().flatten().cloned())
+            .collect()
     }
 
     /// The list of custom labels pretty printed in the format expected by the `--labels` argument
