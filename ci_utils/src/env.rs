@@ -40,6 +40,9 @@ pub mod new {
     pub trait RawVariable {
         fn name(&self) -> &str;
 
+        fn is_set(&self) -> bool {
+            std::env::var(self.name()) != Err(std::env::VarError::NotPresent)
+        }
         fn get_raw(&self) -> Result<String> {
             expect_var(self.name())
         }
