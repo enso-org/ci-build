@@ -34,7 +34,7 @@ impl Config {
             RunnerLocation::Organization(org) => iformat!("{org.name}"),
             RunnerLocation::Repository(repo) => iformat!("{repo.owner}-{repo.name}"),
         };
-        iformat!("{location_prefix}-{self.runner.name}-{self.index}")
+        iformat!("{location_prefix}-{self.runner.name}-{self.server_name}-{self.index}")
     }
 
     /// The custom labels that the runner will be registered with.
@@ -42,6 +42,7 @@ impl Config {
     /// Apart from them, the GH-defined labels are always used.
     pub fn custom_labels(&self) -> BTreeSet<String> {
         once(self.runner.name.clone())
+            .chain(once(self.server_name.clone()))
             .chain(self.runner.labels.as_ref().into_iter().flatten().cloned())
             .collect()
     }
@@ -53,7 +54,7 @@ impl Config {
     }
 
     pub fn registered_name(&self) -> String {
-        format!("{}-{}-{}", &self.runner.name, self.os, self.index)
+        format!("{}-{}-{}", &self.runner.name, self.server_name, self.index)
     }
 
     pub fn register_script_call_args(
@@ -62,6 +63,7 @@ impl Config {
     ) -> Result<impl IntoIterator<Item = String>> {
         let url = self.location.url()?;
         let name = self.registered_name();
+        let labels = self.registered_labels_arg();
         Ok([
             "--unattended",
             "--replace",
@@ -72,7 +74,7 @@ impl Config {
             "--token",
             token.as_ref(),
             "--labels",
-            &self.runner.name,
+            labels.as_str(),
         ]
         .map(into))
     }
