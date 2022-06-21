@@ -167,7 +167,9 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
             let artifact = artifact_fut.await.context(format!("Failed to build {:?}.", this))?;
             // We upload only built artifacts. There would be no point in uploading something that
             // we've just downloaded. That's why the uploading code is here.
-            this.perhaps_upload_artifact(&artifact).await?;
+            if context.upload_artifacts {
+                this.perhaps_upload_artifact(&artifact).await?;
+            }
             Ok(artifact)
         }
         .instrument(span.exit())
