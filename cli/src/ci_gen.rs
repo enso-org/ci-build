@@ -111,8 +111,7 @@ impl JobArchetype for UploadIde {
 pub fn nightly() -> Result<Workflow> {
     let on = Event {
         workflow_dispatch: Some(WorkflowDispatch {}),
-        push: Some(Push { ..default() }),
-        // 4am (UTC) from Tuesday to Saturday (i.e. after every workday)
+        // 5am (UTC) from Tuesday to Saturday (i.e. after every workday)
         schedule: vec![Schedule::new("0 5 * * 2-6")?],
         ..default()
     };
