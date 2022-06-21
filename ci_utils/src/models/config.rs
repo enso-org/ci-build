@@ -9,8 +9,10 @@ use crate::serde::regex_vec;
 use crate::serde::single_or_sequence;
 use regex::Regex;
 
+
+pub type Config = BTreeMap<String, MachineConfig>;
 /// Root type of the configuration file.
-pub type Config = Vec<RepoConfig>;
+pub type MachineConfig = Vec<RepoConfig>;
 
 /// Description of the runners deployment for a specific GitHub repository.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -192,7 +194,7 @@ mod tests {
     target: metarunner
     docker_access: true";
 
-        let _config = serde_yaml::from_str::<Config>(contents)?;
+        let _config = serde_yaml::from_str::<MachineConfig>(contents)?;
         Ok(())
     }
 }

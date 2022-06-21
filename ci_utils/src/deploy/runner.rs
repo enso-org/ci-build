@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use std::collections::BTreeSet;
 
 use crate::models::config::Runner;
 use crate::models::config::RunnerLocation;
@@ -16,13 +17,14 @@ pub const DIRECTORY_WITH_CI_CRATE: &str = "ci";
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Repository where this runner is registered.
-    pub location: RunnerLocation,
+    pub location:    RunnerLocation,
     /// Runner's name.
-    pub runner:   Runner,
+    pub runner:      Runner,
     /// Operating system of the runner's image. It is possible to have Linux on Windows or macOS,
     /// so we don't assume this to be always equal to `TARGET_OS`.
-    pub os:       OS,
-    pub index:    usize,
+    pub os:          OS,
+    pub server_name: String,
+    pub index:       usize,
 }
 
 impl Config {
@@ -32,24 +34,27 @@ impl Config {
             RunnerLocation::Organization(org) => iformat!("{org.name}"),
             RunnerLocation::Repository(repo) => iformat!("{repo.owner}-{repo.name}"),
         };
-        iformat!("{location_prefix}-{self.runner.name}-{self.index}")
+        iformat!("{location_prefix}-{self.runner.name}-{self.server_name}-{self.index}")
     }
 
     /// The custom labels that the runner will be registered with.
     ///
     /// Apart from them, the GH-defined labels are always used.
-    pub fn custom_labels(&self) -> Vec<String> {
-        vec![self.runner.name.clone()]
+    pub fn custom_labels(&self) -> BTreeSet<String> {
+        once(self.runner.name.clone())
+            .chain(once(self.server_name.clone()))
+            .chain(self.runner.labels.as_ref().into_iter().flatten().cloned())
+            .collect()
     }
 
     /// The list of custom labels pretty printed in the format expected by the `--labels` argument
     /// of the runner's configure script.
     pub fn registered_labels_arg(&self) -> OsString {
-        self.custom_labels().join(",").into()
+        self.custom_labels().into_iter().join(",").into()
     }
 
     pub fn registered_name(&self) -> String {
-        format!("{}-{}-{}", &self.runner.name, self.os, self.index)
+        format!("{}-{}-{}", &self.runner.name, self.server_name, self.index)
     }
 
     pub fn register_script_call_args(
@@ -58,6 +63,7 @@ impl Config {
     ) -> Result<impl IntoIterator<Item = String>> {
         let url = self.location.url()?;
         let name = self.registered_name();
+        let labels = self.registered_labels_arg();
         Ok([
             "--unattended",
             "--replace",
@@ -68,7 +74,7 @@ impl Config {
             "--token",
             token.as_ref(),
             "--labels",
-            &self.runner.name,
+            labels.as_str(),
         ]
         .map(into))
     }
