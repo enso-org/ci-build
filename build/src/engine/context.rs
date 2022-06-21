@@ -37,10 +37,11 @@ use ide_ci::programs::Flatc;
 use ide_ci::programs::Git;
 use ide_ci::programs::Sbt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, derive_more::Deref)]
 pub struct RunContext {
+    #[deref]
+    pub inner:     crate::project::Context,
     pub config:    BuildConfigurationResolved,
-    pub octocrab:  Octocrab,
     pub paths:     Paths,
     pub goodies:   GoodieDatabase,
     pub operation: Operation,

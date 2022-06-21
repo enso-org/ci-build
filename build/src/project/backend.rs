@@ -22,17 +22,12 @@ use octocrab::models::repos::Asset;
 pub struct BuildInput {
     pub repo_root: PathBuf,
     pub versions:  Versions,
-    /// Used for GraalVM release lookup.
-    ///
-    /// Default instance will suffice, but then we are prone to hit API limits. Authorized one will
-    /// likely do better.
-    #[derivative(Debug = "ignore")]
-    pub octocrab:  Octocrab,
 }
 
 impl BuildInput {
     pub fn prepare_context(
         &self,
+        inner: Context,
         operation: Operation,
         config: BuildConfigurationFlags,
     ) -> Result<crate::engine::RunContext> {
@@ -41,7 +36,7 @@ impl BuildInput {
             operation,
             goodies: GoodieDatabase::new()?,
             config: config.into(),
-            octocrab: self.octocrab.clone(),
+            inner,
             paths,
         };
         Ok(context)
@@ -131,7 +126,7 @@ impl IsTarget for Backend {
 
     fn build_internal(
         &self,
-        _context: Context,
+        context: Context,
         job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let WithDestination { inner, destination } = job;
@@ -148,13 +143,12 @@ impl IsTarget for Backend {
                 build_project_manager_bundle: true,
                 ..crate::engine::NIGHTLY
             };
-            let context = inner.prepare_context(operation, config)?;
+            let context = inner.prepare_context(context, operation, config)?;
             let artifacts = context.build().await?;
             let project_manager =
                 artifacts.bundles.project_manager.context("Missing project manager bundle!")?;
             ide_ci::fs::mirror_directory(&project_manager.dir, &destination).await?;
             this.adapt_artifact(destination).await
-            // Artifact::from_existing(output_path.as_ref()).await
         }
         .boxed()
     }

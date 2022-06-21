@@ -163,7 +163,11 @@ impl JobArchetype for IntegrationTest {
 pub struct BuildWasm;
 impl JobArchetype for BuildWasm {
     fn job(os: OS) -> Job {
-        plain_job(&os, "Build GUI (WASM)", "wasm build")
+        plain_job(
+            &os,
+            "Build GUI (WASM)",
+            "wasm build --upload-artifacts ${{ runner.os == 'Linux' }}",
+        )
     }
 }
 

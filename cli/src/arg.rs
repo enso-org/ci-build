@@ -153,6 +153,11 @@ pub struct Cli {
     #[clap(long, enso_env())]
     pub skip_version_check: bool,
 
+    /// Whether built artifacts should be uploaded as part of CI run. Ignored in non-CI
+    /// environment.
+    #[clap(long, hide = !ide_ci::actions::workflow::is_in_env(), parse(try_from_str), default_value_t = true, enso_env())]
+    pub upload_artifacts: bool,
+
     #[clap(subcommand)]
     pub target: Target,
 }

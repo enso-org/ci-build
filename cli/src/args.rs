@@ -17,6 +17,7 @@ use enso_build::version::deduce_versions;
 use enso_build::version::BuildKind;
 
 use enso_build::paths::Paths;
+use ide_ci::cache::Cache;
 use ide_ci::env::Variable;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::models::config::RepoContext;
@@ -155,7 +156,12 @@ impl Arguments {
         debug!("Target version: {versions:?}.");
         let paths = Paths::new_version(&enso_root, versions.version.clone())?;
         let goodies = GoodieDatabase::new()?;
-        Ok(RunContext { config, octocrab, paths, goodies, operation })
+        let inner = crate::project::Context {
+            upload_artifacts: true,
+            octocrab,
+            cache: Cache::new_default().await?,
+        };
+        Ok(RunContext { inner, config, paths, goodies, operation })
     }
 
     pub fn release_operation(&self) -> Result<ReleaseOperation> {

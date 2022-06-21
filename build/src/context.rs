@@ -3,7 +3,6 @@ use crate::prelude::*;
 use crate::paths::generated::RepoRoot;
 use crate::paths::TargetTriple;
 use derivative::Derivative;
-use ide_ci::cache::Cache;
 use ide_ci::models::config::RepoContext;
 use ide_ci::programs::Git;
 use octocrab::models::repos::Release;
@@ -11,15 +10,11 @@ use octocrab::models::ReleaseId;
 
 
 /// The basic, common information available in this application.
-#[derive(Clone, Derivative)]
+#[derive(Clone, Derivative, derive_more::Deref)]
 #[derivative(Debug)]
 pub struct BuildContext {
-    /// GitHub API client.
-    ///
-    /// If authorized, it will count API rate limits against our identity and allow operations like
-    /// managing releases or downloading CI run artifacts.
-    #[derivative(Debug = "ignore")]
-    pub octocrab: Octocrab,
+    #[deref]
+    pub inner: crate::project::Context,
 
     /// Version to be built.
     ///
@@ -36,9 +31,6 @@ pub struct BuildContext {
     /// Remote repository is used for release-related operations. This also includes deducing a new
     /// version number.
     pub remote_repo: RepoContext,
-
-    /// Stores things like downloaded release assets to save time.
-    pub cache: Cache,
 }
 
 impl BuildContext {

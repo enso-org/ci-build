@@ -47,7 +47,6 @@ impl IsTarget for Engine {
         context: Context,
         job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let Context { octocrab, cache: _ } = context;
         let WithDestination { inner, destination } = job;
         let this = self.clone();
         async move {
@@ -61,7 +60,7 @@ impl IsTarget for Engine {
                     ..crate::engine::NIGHTLY
                 }
                 .into(),
-                octocrab,
+                inner: context,
                 paths,
             };
             let artifacts = context.build().await?;

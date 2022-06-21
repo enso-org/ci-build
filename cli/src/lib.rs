@@ -125,17 +125,20 @@ impl Processor {
         triple.os = cli.target_os;
         triple.versions.publish()?;
         let context = BuildContext {
-            octocrab,
+            inner: project::Context {
+                cache: Cache::new(&cli.cache_path).await?,
+                octocrab,
+                upload_artifacts: cli.upload_artifacts,
+            },
             triple,
             source_root: absolute_repo_path.into(),
             remote_repo: cli.repo_remote.clone(),
-            cache: Cache::new(&cli.cache_path).await?,
         };
         Ok(Self { context })
     }
 
     pub fn context(&self) -> project::Context {
-        project::Context { octocrab: self.octocrab.clone(), cache: self.cache.clone() }
+        self.inner.clone()
     }
 
     pub fn resolve<T: IsTargetSource + IsTarget>(
@@ -229,7 +232,6 @@ impl Processor {
 
     pub fn pm_info(&self) -> enso_build::project::backend::BuildInput {
         enso_build::project::backend::BuildInput {
-            octocrab:  self.octocrab.clone(),
             versions:  self.triple.versions.clone(),
             repo_root: self.source_root.clone(),
         }
@@ -351,6 +353,7 @@ impl Processor {
             arg::backend::Command::Upload { input } => {
                 let input = enso_build::project::Backend::resolve(self, input);
                 let repo = self.remote_repo.clone();
+                let context = self.context();
 
                 async move {
                     let input = input.await?;
@@ -367,7 +370,7 @@ impl Processor {
                         clean_repo: false,
                         ..enso_build::engine::NIGHTLY
                     };
-                    let context = input.prepare_context(operation, config)?;
+                    let context = input.prepare_context(context, operation, config)?;
                     context.execute().await?;
                     Ok(())
                 }
@@ -569,7 +572,6 @@ impl Resolvable for Backend {
     ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
         ok_ready_boxed(backend::BuildInput {
             repo_root: ctx.repo_root().path,
-            octocrab:  ctx.octocrab.clone(),
             versions:  ctx.triple.versions.clone(),
         })
     }
@@ -586,7 +588,6 @@ impl Resolvable for ProjectManager {
     ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
         ok_ready_boxed(project_manager::BuildInput {
             repo_root: ctx.repo_root().path,
-            octocrab:  ctx.octocrab.clone(),
             versions:  ctx.triple.versions.clone(),
         })
     }
@@ -603,7 +604,6 @@ impl Resolvable for Engine {
     ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
         ok_ready_boxed(engine::BuildInput {
             repo_root: ctx.repo_root().path,
-            octocrab:  ctx.octocrab.clone(),
             versions:  ctx.triple.versions.clone(),
         })
     }
@@ -716,30 +716,30 @@ pub fn lib_main(config: enso_build::config::Config) -> Result {
 }
 
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use enso_build::version::Versions;
-    use ide_ci::models::config::RepoContext;
-
-    #[tokio::test]
-    async fn resolving_release() -> Result {
-        setup_logging()?;
-        let octocrab = Octocrab::default();
-        let context = Processor {
-            context: BuildContext {
-                remote_repo: RepoContext::from_str("enso-org/enso")?,
-                triple: TargetTriple::new(Versions::new(Version::new(2022, 1, 1))),
-                source_root: r"H:/NBO/enso5".into(),
-                octocrab,
-                cache: Cache::new_default().await?,
-            },
-        };
-
-        dbg!(
-            context.resolve_release_source(Backend { target_os: TARGET_OS }, "latest".into()).await
-        )?;
-
-        Ok(())
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use enso_build::version::Versions;
+//     use ide_ci::models::config::RepoContext;
+//
+//     #[tokio::test]
+//     async fn resolving_release() -> Result {
+//         setup_logging()?;
+//         let octocrab = Octocrab::default();
+//         let context = Processor {
+//             context: BuildContext {
+//                 remote_repo: RepoContext::from_str("enso-org/enso")?,
+//                 triple: TargetTriple::new(Versions::new(Version::new(2022, 1, 1))),
+//                 source_root: r"H:/NBO/enso5".into(),
+//                 octocrab,
+//                 cache: Cache::new_default().await?,
+//             },
+//         };
+//
+//         dbg!(
+//             context.resolve_release_source(Backend { target_os: TARGET_OS },
+//     "latest".into()).await     )?;
+//
+//         Ok(())
+//     }
+// }

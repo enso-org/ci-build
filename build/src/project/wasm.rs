@@ -170,7 +170,7 @@ impl IsTarget for Wasm {
         context: Context,
         job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let Context { octocrab: _, cache } = context;
+        let Context { octocrab: _, cache, upload_artifacts: _ } = context;
         let WithDestination { inner, destination } = job;
         let span = info_span!("Building WASM.",
             repo = %inner.repo_root.display(),
@@ -220,13 +220,11 @@ impl IsTarget for Wasm {
             }
             command.run_ok().await?;
 
-            dbg!(44444);
             if *profile != Profile::Dev {
                 let mut wasm_opt_command = WasmOpt.cmd()?;
-                let has_custom_opt_level = dbg!(wasm_opt_options.iter().any(|opt| dbg!(
-                    wasm_opt::OptimizationLevel::from_str(opt.trim_start_matches('-'))
-                )
-                .is_ok()));
+                let has_custom_opt_level = wasm_opt_options.iter().any(|opt| {
+                    wasm_opt::OptimizationLevel::from_str(opt.trim_start_matches('-')).is_ok()
+                });
                 if !has_custom_opt_level {
                     wasm_opt_command.apply(&profile.optimization_level());
                 }

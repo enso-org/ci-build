@@ -2,6 +2,7 @@ use crate::prelude::*;
 
 use crate::context::BuildContext;
 use crate::paths::EDITION_FILE_ARTIFACT_NAME;
+use crate::project;
 use octocrab::models::repos::Release;
 use tempfile::tempdir;
 
@@ -33,7 +34,8 @@ pub async fn create_release(context: &BuildContext) -> Result<Release> {
 }
 
 pub async fn publish_release(context: &BuildContext) -> Result {
-    let BuildContext { remote_repo, octocrab, triple, .. } = context;
+    let BuildContext { inner: project::Context { octocrab, .. }, remote_repo, triple, .. } =
+        context;
 
     let release_id = crate::env::ReleaseId.fetch()?;
 

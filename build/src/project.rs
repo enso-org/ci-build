@@ -77,9 +77,18 @@ impl<T> PlainArtifact<T> {
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct Context {
-    pub cache:    Cache,
+    /// GitHub API client.
+    ///
+    /// If authorized, it will count API rate limits against our identity and allow operations like
+    /// managing releases or downloading CI run artifacts.
     #[derivative(Debug = "ignore")]
     pub octocrab: Octocrab,
+
+    /// Stores things like downloaded release assets to save time.
+    pub cache: Cache,
+
+    /// Whether built artifacts should be uploaded as part of CI run. Works only in CI environment.
+    pub upload_artifacts: bool,
 }
 
 /// Build targets, like GUI or Project Manager.
@@ -197,7 +206,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         ci_run: CiRunSource,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let Context { octocrab, cache } = context;
+        let Context { octocrab, cache, upload_artifacts: _ } = context;
         let CiRunSource { run_id, artifact_name, repository } = ci_run;
         let span = info_span!("Downloading CI Artifact.", %artifact_name, %repository, target = output_path.as_str());
         let this = self.clone();
@@ -229,7 +238,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         source: ReleaseSource,
         destination: PathBuf,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let Context { octocrab, cache } = context;
+        let Context { octocrab, cache, upload_artifacts: _ } = context;
         let span = info_span!("Downloading built target from a release asset.",
             asset_id = source.asset_id.0,
             repo = %source.repository);
