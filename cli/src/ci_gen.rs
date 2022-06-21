@@ -155,6 +155,7 @@ pub fn nightly() -> Result<Workflow> {
     for (var_name, value) in global_env {
         workflow.env(var_name, value);
     }
+    workflow.env("ENSO_BUILD_SKIP_VERSION_CHECK", "true");
     Ok(workflow)
 }
 
