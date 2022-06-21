@@ -98,15 +98,12 @@ impl Profile {
         }
     }
 
-    /// wasm-opt invocation that should follow the wasm-pack build for this profile.
-    pub fn wasm_opt_command(self) -> Result<Option<Command>> {
-        let opt_level = match self {
-            Profile::Dev => return Ok(None),
+    pub fn optimization_level(self) -> wasm_opt::OptimizationLevel {
+        match self {
+            Profile::Dev => wasm_opt::OptimizationLevel::O0,
             Profile::Profile => wasm_opt::OptimizationLevel::O,
             Profile::Release => wasm_opt::OptimizationLevel::O3,
-            // Profile::Production => wasm_opt::OptimizationLevel::O4,
-        };
-        Ok(Some(WasmOpt.cmd()?.with_applied(&opt_level)))
+        }
     }
 }
 
@@ -117,6 +114,7 @@ pub struct BuildInput {
     pub repo_root:           RepoRoot,
     /// Path to the crate to be compiled to WAM. Relative to the repository root.
     pub crate_path:          PathBuf,
+    pub wasm_opt_options:    Vec<String>,
     pub extra_cargo_options: Vec<String>,
     pub profile:             Profile,
     pub profiling_level:     Option<ProfilingLevel>,
@@ -187,6 +185,7 @@ impl IsTarget for Wasm {
             let BuildInput {
                 repo_root,
                 crate_path,
+                wasm_opt_options,
                 extra_cargo_options,
                 profile,
                 profiling_level,
@@ -221,8 +220,18 @@ impl IsTarget for Wasm {
             }
             command.run_ok().await?;
 
-            if let Some(mut wasm_opt_command) = profile.wasm_opt_command()? {
+            dbg!(44444);
+            if *profile != Profile::Dev {
+                let mut wasm_opt_command = WasmOpt.cmd()?;
+                let has_custom_opt_level = dbg!(wasm_opt_options.iter().any(|opt| dbg!(
+                    wasm_opt::OptimizationLevel::from_str(opt.trim_start_matches('-'))
+                )
+                .is_ok()));
+                if !has_custom_opt_level {
+                    wasm_opt_command.apply(&profile.optimization_level());
+                }
                 wasm_opt_command
+                    .args(wasm_opt_options)
                     .arg(&temp_dist.wasm_main_raw)
                     .apply(&wasm_opt::Output(&temp_dist.wasm_main))
                     .run_ok()
@@ -271,6 +280,7 @@ impl IsWatchable for Wasm {
             let BuildInput {
                 repo_root,
                 crate_path,
+                wasm_opt_options,
                 extra_cargo_options,
                 profile,
                 profiling_level,
@@ -305,6 +315,9 @@ impl IsWatchable for Wasm {
                 .args(["--wasm-profile", profile.as_ref()]);
             if let Some(profiling_level) = profiling_level {
                 watch_cmd.args(["--profiling-level", profiling_level.to_string().as_str()]);
+            }
+            for wasm_opt_option in wasm_opt_options {
+                watch_cmd.args(["--wasm-opt-option", &wasm_opt_option]);
             }
             if let Some(wasm_size_limit) = wasm_size_limit {
                 watch_cmd.args(["--wasm-size-limit", wasm_size_limit.to_string().as_str()]);

@@ -524,6 +524,7 @@ impl Resolvable for Wasm {
         let arg::wasm::BuildInput {
             crate_path,
             wasm_profile,
+            wasm_opt_option: wasm_opt_options,
             cargo_options,
             profiling_level,
             wasm_size_limit,
@@ -531,6 +532,7 @@ impl Resolvable for Wasm {
         ok_ready_boxed(wasm::BuildInput {
             repo_root: ctx.repo_root(),
             crate_path,
+            wasm_opt_options,
             extra_cargo_options: cargo_options,
             profile: wasm_profile.into(),
             profiling_level: profiling_level.map(into),

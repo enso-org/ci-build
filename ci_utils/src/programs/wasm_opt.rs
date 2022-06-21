@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::program::command::Manipulator;
 
-#[derive(Clone, Copy, Debug, strum::Display)]
+#[derive(Clone, Copy, Debug, strum::Display, strum::EnumString)]
 pub enum OptimizationLevel {
     /// execute default optimization passes (equivalent to -Os)
     O,

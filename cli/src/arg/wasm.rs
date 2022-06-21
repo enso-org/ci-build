@@ -59,6 +59,11 @@ pub struct BuildInput {
     #[clap(long, arg_enum, default_value_t = Profile::Release, enso_env())]
     pub wasm_profile: Profile,
 
+    /// Additional options to be passed to wasm-opt. Might overwrite the optimization flag
+    /// resulting from 'wasm_profile' setting.
+    #[clap(long, allow_hyphen_values = true, enso_env())]
+    pub wasm_opt_option: Vec<String>,
+
     /// Additional options to be passed to Cargo.
     #[clap(last = true, enso_env())]
     pub cargo_options: Vec<String>,
