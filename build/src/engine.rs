@@ -257,7 +257,7 @@ trait ComponentPathExt {
 #[async_trait]
 impl ComponentPathExt for ComponentPaths {
     async fn pack(&self) -> Result {
-        ide_ci::archive::pack_directory_contents(&self.artifact_archive, &self.dir).await
+        ide_ci::archive::create(&self.artifact_archive, [&self.dir]).await
     }
     fn clear(&self) -> Result {
         ide_ci::fs::remove_dir_if_exists(&self.root)?;

@@ -226,13 +226,13 @@ impl RunContext {
             }
 
             let build_stuff = Sbt::concurrent_tasks(tasks);
-            sbt.call_arg(build_stuff).await?;
+            sbt.call_arg(format!("interpreter-dsl/clean; runtime/clean; {}", build_stuff)).await?;
         } else {
             // Compile
             sbt.call_arg("compile").await?;
 
             // Build the Runner & Runtime Uberjars
-            sbt.call_arg("engine-runner/assembly").await?;
+            sbt.call_arg("runtime/clean; engine-runner/assembly").await?;
 
             // Build the Launcher Native Image
             sbt.call_arg("launcher/assembly").await?;
@@ -247,17 +247,17 @@ impl RunContext {
             sbt.call_arg("buildLauncherDistribution").await?;
 
             // Prepare Engine Distribution
-            sbt.call_arg("buildEngineDistribution").await?;
+            sbt.call_arg("runtime/clean; buildEngineDistribution").await?;
 
             // Prepare Project Manager Distribution
             sbt.call_arg("buildProjectManagerDistribution").await?;
 
             if self.config.benchmark_compilation {
                 // Check Runtime Benchmark Compilation
-                sbt.call_arg("runtime/Benchmark/compile").await?;
+                sbt.call_arg("runtime/clean; runtime/Benchmark/compile").await?;
 
                 // Check Language Server Benchmark Compilation
-                sbt.call_arg("language-server/Benchmark/compile").await?;
+                sbt.call_arg("runtime/clean; language-server/Benchmark/compile").await?;
 
                 // Check Searcher Benchmark Compilation
                 sbt.call_arg("searcher/Benchmark/compile").await?;
@@ -265,7 +265,8 @@ impl RunContext {
         }
         if self.config.test_scala {
             // Test Enso
-            sbt.call_arg("set Global / parallelExecution := false; compile; test").await?;
+            sbt.call_arg("set Global / parallelExecution := false; runtime/clean; compile; test")
+                .await?;
         }
 
         // === Build Distribution ===
