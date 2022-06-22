@@ -161,13 +161,14 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let span = info_span!("Building.", ?self, ?context, ?job).entered();
+        let upload_artifacts = context.upload_artifacts;
         let artifact_fut = self.build_internal(context, job);
         let this = self.clone();
         async move {
             let artifact = artifact_fut.await.context(format!("Failed to build {:?}.", this))?;
             // We upload only built artifacts. There would be no point in uploading something that
             // we've just downloaded. That's why the uploading code is here.
-            if context.upload_artifacts {
+            if upload_artifacts {
                 this.perhaps_upload_artifact(&artifact).await?;
             }
             Ok(artifact)
