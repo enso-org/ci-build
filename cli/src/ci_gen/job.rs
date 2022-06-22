@@ -166,7 +166,7 @@ impl JobArchetype for BuildWasm {
         plain_job(
             &os,
             "Build GUI (WASM)",
-            "wasm build --upload-artifacts ${{ runner.os == 'Linux' }}",
+            " --upload-artifacts ${{ runner.os == 'Linux' }} wasm build",
         )
     }
 }
