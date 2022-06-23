@@ -27,6 +27,7 @@ pub enum Command {
         #[clap(flatten)]
         input: BuildInput,
     },
+    CiCheck {},
 }
 
 #[derive(Args, Clone, Debug, PartialEq)]

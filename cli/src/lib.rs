@@ -376,6 +376,32 @@ impl Processor {
                 }
                 .boxed()
             }
+            arg::backend::Command::CiCheck {} => {
+                let operation =
+                    enso_build::engine::Operation::Build(enso_build::engine::BuildOperation {});
+                debug!("Operation to perform: {:?}", operation);
+                let paths =
+                    enso_build::paths::Paths::new_triple(&self.source_root, self.triple.clone());
+                let config = enso_build::engine::BuildConfigurationFlags {
+                    clean_repo: false,
+                    ..enso_build::engine::DEV
+                }
+                .into();
+                let octocrab = self.octocrab.clone();
+                async move {
+                    let paths = paths?;
+                    let goodies = ide_ci::goodie::GoodieDatabase::new()?;
+                    let inner = crate::project::Context {
+                        upload_artifacts: true,
+                        octocrab,
+                        cache: Cache::new_default().await?,
+                    };
+                    let context =
+                        enso_build::engine::RunContext { inner, config, paths, goodies, operation };
+                    context.execute().await
+                }
+                .boxed()
+            }
         }
     }
 
