@@ -393,26 +393,20 @@ impl RunContext {
                     // Make packages.
                     let release_id = crate::env::ReleaseId.fetch()?;
                     let client = ide_ci::github::create_client(retrieve_github_access_token()?)?;
-
+                    let upload_asset = |asset: PathBuf| {
+                        ide_ci::github::release::upload_asset(repo, &client, release_id, asset)
+                    };
                     for package in artifacts.packages.into_iter() {
                         package.pack().await?;
-                        ide_ci::github::release::upload_asset(
-                            repo,
-                            &client,
-                            release_id,
-                            package.artifact_archive,
-                        )
-                        .await?;
+                        upload_asset(package.artifact_archive).await?;
                     }
                     for bundle in artifacts.bundles.into_iter() {
                         bundle.pack().await?;
-                        ide_ci::github::release::upload_asset(
-                            repo,
-                            &client,
-                            release_id,
-                            bundle.artifact_archive,
-                        )
-                        .await?;
+                        upload_asset(bundle.artifact_archive).await?;
+                    }
+                    if TARGET_OS == OS::Linux {
+                        upload_asset(self.paths.manifest_file()).await?;
+                        upload_asset(self.paths.launcher_manifest_file()).await?;
                     }
                 }
             },

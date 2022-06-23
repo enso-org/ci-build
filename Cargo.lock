@@ -1158,6 +1158,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "byte-unit",
+ "chrono",
  "clap",
  "derivative",
  "enso-build",
@@ -1166,6 +1167,9 @@ dependencies = [
  "humantime 2.1.0",
  "ide-ci",
  "octocrab",
+ "serde",
+ "serde_json",
+ "serde_yaml",
  "strum",
  "tempfile",
  "tokio",

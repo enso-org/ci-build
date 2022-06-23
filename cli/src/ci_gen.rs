@@ -146,11 +146,7 @@ pub fn nightly() -> Result<Workflow> {
     };
 
     let _publish_job_id = workflow.add_dependent::<PublishRelease>(linux_only, publish_deps);
-    let global_env = [
-        ("ENSO_BUILD_KIND", "nightly"),
-        ("ENSO_BUILD_REPO_REMOTE", "enso-org/enso-staging"),
-        ("RUST_BACKTRACE", "full"),
-    ];
+    let global_env = [("ENSO_BUILD_KIND", "nightly"), ("RUST_BACKTRACE", "full")];
     for (var_name, value) in global_env {
         workflow.env(var_name, value);
     }
@@ -197,15 +193,115 @@ pub fn generate(repo_root: &enso_build::paths::generated::RepoRootGithubWorkflow
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use enso_build::paths::generated::RepoRootGithubWorkflows;
-
-    #[test]
-    fn generate_test() -> Result {
-        let repo_path = r"H:/NBO/enso-staging";
-        generate(&RepoRootGithubWorkflows::new(repo_path))?;
-        Ok(())
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use enso_build::paths::generated::RepoRootGithubWorkflows;
+//     use enso_build::setup_octocrab;
+//     use futures_util::future::join_all;
+//     use ide_ci::future::try_join_all;
+//     use ide_ci::future::AsyncPolicy;
+//     use ide_ci::log::setup_logging;
+//     use octocrab::models::workflows::Run;
+//     use octocrab::models::RunId;
+//
+//     #[test]
+//     fn generate_test() -> Result {
+//         let repo_path = r"H:/NBO/enso-staging";
+//         generate(&RepoRootGithubWorkflows::new(repo_path))?;
+//         Ok(())
+//     }
+//
+//     async fn cancel_workflow_run(octo: &Octocrab, run_id: RunId) -> Result<serde_json::Value> {
+//         debug!("Will cancel {}", run_id);
+//         let owner = "enso-org";
+//         let repo = "enso";
+//         octo.post::<(), serde_json::Value>(
+//             format!("/repos/{owner}/{repo}/actions/runs/{run_id}/cancel"),
+//             Option::<&()>::None,
+//         )
+//         .void_ok()
+//         .anyhow_err()
+//         .await
+//         .context(format!("Cancelling run {run_id}."))
+//     }
+//
+//     async fn delete_workflow_run(octo: &Octocrab, run_id: RunId) -> Result {
+//         debug!("Will delete {}", run_id);
+//         let owner = "enso-org";
+//         let repo = "enso";
+//         octo.delete::<serde_json::Value, _, _>(
+//             format!("/repos/{owner}/{repo}/actions/runs/{run_id}"),
+//             Option::<&()>::None,
+//         )
+//         .void_ok()
+//         .await
+//         .context(format!("Deleting run {run_id}."))
+//     }
+//
+//     #[tokio::test]
+//     async fn remove_extra_runs2() -> Result {
+//         setup_logging()?;
+//         let owner = "enso-org";
+//         let repo = "enso";
+//         let octo: &'static Octocrab = Box::leak(Box::new(setup_octocrab().await?));
+//         // delete_workflow_run(octo, 2541547617.into()).await?;
+//         delete_workflow_run(octo, 2541547617.into()).await?;
+//         Ok(())
+//     }
+//
+//     #[tokio::test]
+//     async fn remove_extra_runs() -> Result {
+//         setup_logging()?;
+//         let owner = "enso-org";
+//         let repo = "enso";
+//         let octo: &'static Octocrab = Box::leak(Box::new(setup_octocrab().await?));
+//         let mut runs_page =
+//             octo.workflows("enso-org", "enso").list_all_runs().per_page(100).send().await?;
+//         // let all_runs = octo.all_pages(runs_page).await?;
+//         let path = PathBuf::from("runs.yaml");
+//         path.write_as_yaml(&runs_page.items)?;
+//
+//         let file = ide_ci::fs::create("runs4.yaml")?;
+//
+//         let mut tasks = vec![];
+//
+//         let mut i = 0;
+//         // while let Some(page_ok) = octo.get_page::<Run>(&runs_page.next).await? {
+//         //     runs_page = page_ok;
+//         serde_yaml::to_writer(&file, &runs_page.items)?;
+//         if let Some(first) = runs_page.items.first() {
+//             debug!("{}", first.created_at);
+//         }
+//         let jobs = runs_page.items.into_iter().filter(|run| run.head_commit.message == "Merge
+// branch 'develop' into wip/michaelmauderer/Component_List_Panel_View_#180892146").map(|run| {
+//                 async move {
+//                     if run.status == "queued" {
+//                         cancel_workflow_run(octo, run.id).await?;
+//                         debug!("Done with {}", run.id);
+//                     }
+//                     // delete_workflow_run(octo, run.id).await
+//                     Result::Ok(())
+//                 }
+//             }).collect_vec();
+//
+//         tasks.push(tokio::spawn(async move {
+//             let result = join_all(jobs).await;
+//             debug!("{:?}", result);
+//             ()
+//         }));
+//
+//         // i += 10;
+//         // debug!("#{i}");
+//         // if i >= 1 {
+//         //     break;
+//         // }
+//         // }
+//
+//         try_join_all(tasks, AsyncPolicy::Sequential).await?;
+//
+//
+//
+//         Ok(())
+//     }
+// }
