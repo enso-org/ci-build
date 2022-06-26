@@ -95,6 +95,7 @@ pub fn remove_file_if_exists(path: impl AsRef<Path>) -> Result<()> {
 /// Remove a file being either directory or regular file..
 ///
 /// Does not fail if the file is not found.
+#[context("Failed to remove entry if exists: {}", path.as_ref().display())]
 pub fn remove_if_exists(path: impl AsRef<Path>) -> Result {
     let path = path.as_ref();
     if path.is_dir() {
