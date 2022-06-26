@@ -73,6 +73,7 @@ use enso_build::source::WithDestination;
 use ide_ci::actions::workflow::is_in_env;
 use ide_ci::cache::Cache;
 use ide_ci::fs::remove_dir_if_exists;
+use ide_ci::fs::remove_if_exists;
 use ide_ci::github::release::upload_asset;
 use ide_ci::global;
 use ide_ci::log::setup_logging;
@@ -681,8 +682,8 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
     // TRANSITION: Previous Engine CI job used to clone these both repositories side-by-side.
     // This collides with GraalVM native image build location.
     if is_in_env() {
-        remove_dir_if_exists(cli.repo_path.join("enso"))?;
-        remove_dir_if_exists(cli.repo_path.join("ci-build"))?;
+        remove_if_exists(cli.repo_path.join("enso"))?;
+        remove_if_exists(cli.repo_path.join("ci-build"))?;
     }
 
     let ctx = Processor::new(&cli).instrument(info_span!("Building context.")).await?;

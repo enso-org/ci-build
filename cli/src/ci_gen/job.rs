@@ -195,3 +195,10 @@ impl JobArchetype for PackageIde {
         )
     }
 }
+
+pub struct CiCheckBackend;
+impl JobArchetype for CiCheckBackend {
+    fn job(os: OS) -> Job {
+        plain_job(&os, "Engine", "backend ci-check")
+    }
+}

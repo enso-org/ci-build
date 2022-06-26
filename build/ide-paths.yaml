@@ -1,8 +1,12 @@
+# This file is used to generate `target/debug/build/enso-build-<hash>/out/paths.rs`.
+# Generation logic is in `ci_utils/src/paths.rs`.
+
 <repo_root>/:
   .github/:
     workflows/:
       gui.yml:
       nightly.yml:
+      scala-new.yml:
   app/:
     gui/:
     ide-desktop/:
