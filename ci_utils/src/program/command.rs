@@ -377,6 +377,7 @@ pub fn spawn_log_processor(
             let mut line_buffer = String::new();
 
             loop {
+                line_buffer.clear();
                 match bufread.read_line(&mut line_buffer).await {
                     Ok(0) => break,
                     Ok(_) => {
