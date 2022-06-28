@@ -34,15 +34,14 @@ impl Git {
 new_command_type!(Git, GitCommand);
 
 impl GitCommand {
-    pub fn nice_clean(&mut self) -> &mut Self {
+    pub fn clean(&mut self) -> &mut Self {
         self.arg(Command::Clean)
             .apply(&Clean::Ignored)
             .apply(&Clean::Force)
             .apply(&Clean::UntrackedDirectories)
-            .apply(&Clean::Exclude(".idea".into()))
-            .apply(&Clean::Exclude(
-                PathBuf::from_iter(["target", "enso-build"]).display().to_string(),
-            ))
+    }
+    pub fn nice_clean(&mut self) -> &mut Self {
+        self.clean().apply(&Clean::Exclude(".idea".into()))
     }
 }
 

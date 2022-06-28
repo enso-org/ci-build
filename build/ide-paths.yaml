@@ -17,7 +17,7 @@
         project-manager/:
   build/:
     prettier/:
-  built-distribution:
+  built-distribution/:
     "project-manager-bundle-<triple>":
       enso:
   dist/:
@@ -44,6 +44,8 @@
   distribution/:
     editions/:
       <edition>.yaml:
+  tools/:
+    simple-library-server/:
   run:
   CHANGELOG.md:
 

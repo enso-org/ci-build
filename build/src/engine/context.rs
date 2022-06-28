@@ -264,6 +264,11 @@ impl RunContext {
             }
         }
         if self.config.test_scala {
+            let simpl_server_path = crate::paths::generated::RepoRootToolsSimpleLibraryServer::new(
+                &self.paths.repo_root,
+            );
+            ide_ci::programs::Git::new(&simpl_server_path).cmd()?.clean().run_ok().await?;
+
             // Test Enso
             sbt.call_arg("set Global / parallelExecution := false; test").await?;
         }
