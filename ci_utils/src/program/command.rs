@@ -373,15 +373,28 @@ pub fn spawn_log_processor(
 ) -> JoinHandle<Result> {
     tokio::task::spawn(
         async move {
-            let bufread = BufReader::new(out);
-            let mut lines = bufread.lines();
-            while let Some(line) = lines.next_line().await? {
-                debug!("{} {}", prefix, line)
+            let mut bufread = BufReader::new(out);
+            let mut line_buffer = String::new();
+
+            loop {
+                match bufread.read_line(&mut line_buffer).await {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        let line = line_buffer.trim_end_matches(|c| c == '\n' || c == '\r');
+                        info!("{prefix} {line}");
+                    }
+                    Err(e) => {
+                        error!("{prefix} Failed to decode a line from output: {e}");
+                        let mut raw_buffer = Vec::new();
+                        bufread.read_until('\n' as u8, &mut raw_buffer).await?;
+                        warn!("{prefix} Raw buffer: {:?}", raw_buffer);
+                    }
+                }
             }
-            debug!("{} {}", prefix, "<ENDUT>");
+
             Result::Ok(())
         }
-        .inspect_err(|e| error!("Error during process output processing: {e}")),
+        .inspect_err(|e| error!("Fatal error while processing process output: {e}")),
     )
 }
 

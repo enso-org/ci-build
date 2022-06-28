@@ -13,4 +13,5 @@ pub fn test_reporter() -> Step {
     }
     .with_custom_argument("reporter", "java-junit")
     .with_custom_argument("path", wrap_expression(format!("env.{}", paths::ENSO_TEST_JUNIT_DIR)))
+    .with_custom_argument("name", "Enso Standard Library Tests")
 }
