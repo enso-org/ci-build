@@ -71,6 +71,7 @@ pub fn create_parent_dir_if_missing(path: impl AsRef<Path>) -> Result<PathBuf> {
 /// Remove a directory with all its subtree.
 ///
 /// Does not fail if the directory is not found.
+#[tracing::instrument(fields(path = %path.as_ref().display()))]
 #[context("Failed to remove directory {}", path.as_ref().display())]
 pub fn remove_dir_if_exists(path: impl AsRef<Path>) -> Result {
     let result = std::fs::remove_dir_all(&path);
@@ -83,6 +84,7 @@ pub fn remove_dir_if_exists(path: impl AsRef<Path>) -> Result {
 /// Remove a regular file.
 ///
 /// Does not fail if the file is not found.
+#[tracing::instrument(fields(path = %path.as_ref().display()))]
 #[context("Failed to remove file {}", path.as_ref().display())]
 pub fn remove_file_if_exists(path: impl AsRef<Path>) -> Result<()> {
     let result = std::fs::remove_file(&path);
@@ -95,7 +97,7 @@ pub fn remove_file_if_exists(path: impl AsRef<Path>) -> Result<()> {
 /// Remove a file being either directory or regular file..
 ///
 /// Does not fail if the file is not found.
-#[context("Failed to remove entry if exists: {}", path.as_ref().display())]
+#[context("Failed to remove entry {} (if exists)", path.as_ref().display())]
 pub fn remove_if_exists(path: impl AsRef<Path>) -> Result {
     let path = path.as_ref();
     if path.is_dir() {
