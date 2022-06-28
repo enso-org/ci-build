@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 use enso_build::paths;
-use ide_ci::actions::workflow::definition::wrap_expression;
+use ide_ci::actions::workflow::definition::env_expression;
 use ide_ci::actions::workflow::definition::Step;
 
 pub fn test_reporter() -> Step {
@@ -14,7 +14,7 @@ pub fn test_reporter() -> Step {
     .with_custom_argument("reporter", "java-junit")
     .with_custom_argument(
         "path",
-        wrap_expression(format!("env.{}/**/*.xml", paths::ENSO_TEST_JUNIT_DIR)),
+        format!("{}/**/*.xml", env_expression(&paths::ENSO_TEST_JUNIT_DIR)),
     )
     .with_custom_argument("name", "Enso Standard Library Tests")
 }

@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+use crate::env::new::RawVariable;
 use heck::ToKebabCase;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -7,6 +8,11 @@ use std::collections::BTreeSet;
 pub fn wrap_expression(expression: impl AsRef<str>) -> String {
     format!("${{{{ {} }}}}", expression.as_ref())
 }
+
+pub fn env_expression(environment_variable: &impl RawVariable) -> String {
+    wrap_expression(format!("env.{}", environment_variable.name()))
+}
+
 
 pub fn is_github_hosted() -> String {
     "startsWith(runner.name, 'GitHub Actions') || startsWith(runner.name, 'Hosted Agent')".into()
