@@ -371,15 +371,18 @@ pub fn spawn_log_processor(
     prefix: String,
     out: impl AsyncRead + Send + Unpin + 'static,
 ) -> JoinHandle<Result> {
-    tokio::task::spawn(async move {
-        let bufread = BufReader::new(out);
-        let mut lines = bufread.lines();
-        while let Some(line) = lines.next_line().await? {
-            debug!("{} {}", prefix, line)
+    tokio::task::spawn(
+        async move {
+            let bufread = BufReader::new(out);
+            let mut lines = bufread.lines();
+            while let Some(line) = lines.next_line().await? {
+                debug!("{} {}", prefix, line)
+            }
+            debug!("{} {}", prefix, "<ENDUT>");
+            Result::Ok(())
         }
-        debug!("{} {}", prefix, "<ENDUT>");
-        Result::Ok(())
-    })
+        .inspect_err(|e| error!("Error during process output processing: {e}")),
+    )
 }
 
 pub trait Manipulator {

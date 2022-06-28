@@ -8,10 +8,16 @@ pub mod generated {
     include!(concat!(env!("OUT_DIR"), "/paths.rs"));
 }
 
+ide_ci::define_env_var! {
+    /// Directory where JUnit-format test run results are stored.
+    /// These are generated as part of the standard library test suite run.
+    ENSO_TEST_JUNIT_DIR, PathBuf
+}
+
 pub const EDITION_FILE_ARTIFACT_NAME: &str = "Edition File";
 
-pub const LIBRARIES_TO_TEST: [&str; 5] =
-    ["Tests", "Table_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests"];
+pub const LIBRARIES_TO_TEST: [&str; 6] =
+    ["Tests", "Table_Tests", "Geo_Tests", "Visualization_Tests", "Image_Tests", "Examples_Tests"];
 
 pub const ARCHIVE_EXTENSION: &str = match TARGET_OS {
     OS::Windows => "zip",
@@ -179,10 +185,7 @@ impl Paths {
         }
 
         ide_ci::actions::workflow::set_env("TARGET_DIR", &self.target.to_string_lossy())?;
-        ide_ci::actions::workflow::set_env(
-            "ENSO_TEST_JUNIT_DIR",
-            &self.test_results.to_string_lossy(),
-        )?;
+        ENSO_TEST_JUNIT_DIR.set_workflow_env(self.test_results.as_path())?;
         Ok(())
     }
 

@@ -72,7 +72,6 @@ use enso_build::source::WatchTargetJob;
 use enso_build::source::WithDestination;
 use ide_ci::actions::workflow::is_in_env;
 use ide_ci::cache::Cache;
-use ide_ci::fs::remove_dir_if_exists;
 use ide_ci::fs::remove_if_exists;
 use ide_ci::github::release::upload_asset;
 use ide_ci::global;

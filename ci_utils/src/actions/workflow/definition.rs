@@ -4,6 +4,10 @@ use heck::ToKebabCase;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+pub fn wrap_expression(expression: impl AsRef<str>) -> String {
+    format!("${{{{ {} }}}}", expression.as_ref())
+}
+
 pub fn is_github_hosted() -> String {
     "startsWith(runner.name, 'GitHub Actions') || startsWith(runner.name, 'Hosted Agent')".into()
 }
@@ -297,6 +301,30 @@ impl Step {
         self.id = Some(id.into());
         self
     }
+
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    pub fn with_custom_argument(
+        mut self,
+        name: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        match &mut self.with {
+            Some(step::Argument::Other(map)) => {
+                map.insert(name.into(), value.into());
+            }
+            _ => {
+                if let Some(previous) = self.with {
+                    warn!("Dropping previous step argument: {:?}", previous);
+                }
+                self.with = Some(step::Argument::new_other(name, value));
+            }
+        }
+        self
+    }
 }
 
 pub fn github_token_env() -> (String, String) {
@@ -338,6 +366,12 @@ pub mod step {
         },
         Other(BTreeMap<String, String>),
     }
+
+    impl Argument {
+        pub fn new_other(name: impl Into<String>, value: impl Into<String>) -> Self {
+            Argument::Other(BTreeMap::from_iter([(name.into(), value.into())]))
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -369,7 +403,9 @@ pub enum RunnerLabel {
 pub fn checkout_repo_step() -> Step {
     Step {
         name: Some("Checking out the repository".into()),
-        uses: Some("actions/checkout@v3".into()),
+        // FIXME: Check what is wrong with v3. Seemingly Engine Tests fail because there's only a
+        //        shallow copy of the repo.
+        uses: Some("actions/checkout@v2".into()),
         with: Some(step::Argument::Checkout { clean: Some(false) }),
         ..default()
     }

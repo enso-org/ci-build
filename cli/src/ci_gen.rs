@@ -19,8 +19,11 @@ use ide_ci::actions::workflow::definition::Workflow;
 use ide_ci::actions::workflow::definition::WorkflowDispatch;
 
 pub mod job;
+pub mod step;
 
 pub struct DeluxeRunner;
+
+pub const PRIMARY_OS: OS = OS::Linux;
 
 pub const TARGETED_SYSTEMS: [OS; 3] = [OS::Windows, OS::Linux, OS::MacOS];
 
@@ -46,7 +49,7 @@ pub fn runs_on(os: OS) -> Vec<RunnerLabel> {
 pub fn setup_script_steps() -> Vec<Step> {
     let mut ret =
         vec![setup_conda(), setup_wasm_pack_step(), setup_artifact_api(), checkout_repo_step()];
-    ret.push(run("--help"));
+    ret.push(run("--help").with_name("Build Script Setup"));
     ret
 }
 
@@ -118,7 +121,6 @@ pub fn nightly() -> Result<Workflow> {
         ..default()
     };
 
-    let targeted_platforms = [OS::Windows, OS::Linux, OS::MacOS];
     let linux_only = OS::Linux;
 
     let concurrency_group = "release";
@@ -132,7 +134,7 @@ pub fn nightly() -> Result<Workflow> {
     let prepare_job_id = workflow.add::<DraftRelease>(linux_only);
     let build_wasm_job_id = workflow.add::<job::BuildWasm>(linux_only);
     let mut packaging_job_ids = vec![];
-    for os in targeted_platforms {
+    for os in TARGETED_SYSTEMS {
         let backend_job_id = workflow.add_dependent::<job::UploadBackend>(os, [&prepare_job_id]);
         let build_ide_job_id = workflow.add_dependent::<UploadIde>(os, [
             &prepare_job_id,
@@ -157,13 +159,12 @@ pub fn nightly() -> Result<Workflow> {
 }
 
 pub fn typical_check_triggers() -> Event {
+    let branches =
+        ["develop", "unstable", "stable"].into_iter().map(ToString::to_string).collect_vec();
     Event {
         pull_request: Some(PullRequest {}),
         workflow_dispatch: Some(WorkflowDispatch {}),
-        push: Some(Push {
-            branches: vec!["develop".into(), "unstable".into(), "stable".into()],
-            ..default()
-        }),
+        push: Some(Push { branches, ..default() }),
         ..default()
     }
 }
@@ -172,14 +173,13 @@ pub fn gui() -> Result<Workflow> {
     let on = typical_check_triggers();
     let mut workflow = Workflow { name: "GUI CI".into(), on, ..default() };
     workflow.env("ENSO_BUILD_SKIP_VERSION_CHECK", "true");
-    let primary_os = OS::Linux;
-    workflow.add::<job::AssertChangelog>(primary_os);
-    workflow.add::<job::CancelWorkflow>(primary_os);
-    workflow.add::<job::Lint>(primary_os);
-    workflow.add::<job::WasmTest>(primary_os);
-    workflow.add::<job::NativeTest>(primary_os);
-    workflow.add_customized::<job::IntegrationTest>(primary_os, |job| {
-        job.needs.insert(job::BuildBackend::key(primary_os));
+    workflow.add::<job::AssertChangelog>(PRIMARY_OS);
+    workflow.add::<job::CancelWorkflow>(PRIMARY_OS);
+    workflow.add::<job::Lint>(PRIMARY_OS);
+    workflow.add::<job::WasmTest>(PRIMARY_OS);
+    workflow.add::<job::NativeTest>(PRIMARY_OS);
+    workflow.add_customized::<job::IntegrationTest>(PRIMARY_OS, |job| {
+        job.needs.insert(job::BuildBackend::key(PRIMARY_OS));
     });
 
     for os in TARGETED_SYSTEMS {
@@ -195,14 +195,14 @@ pub fn gui() -> Result<Workflow> {
 
 pub fn backend() -> Result<Workflow> {
     let on = typical_check_triggers();
-    let mut workflow = Workflow { name: "Engine CI (new)".into(), on, ..default() };
+    let mut workflow = Workflow { name: "Engine CI".into(), on, ..default() };
     workflow.env("ENSO_BUILD_SKIP_VERSION_CHECK", "true");
-    for os in [OS::Windows, OS::Linux, OS::MacOS] {
+    workflow.add::<job::CancelWorkflow>(PRIMARY_OS);
+    for os in TARGETED_SYSTEMS {
         workflow.add::<job::CiCheckBackend>(os);
     }
     Ok(workflow)
 }
-
 
 pub fn generate(repo_root: &enso_build::paths::generated::RepoRootGithubWorkflows) -> Result {
     repo_root.nightly_yml.write_as_yaml(&nightly()?)?;

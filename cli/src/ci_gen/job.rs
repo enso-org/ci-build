@@ -1,4 +1,5 @@
 use crate::ci_gen::runs_on;
+use crate::ci_gen::step;
 use crate::prelude::*;
 use ide_ci::actions::workflow::definition::cancel_workflow_action;
 use ide_ci::actions::workflow::definition::checkout_repo_step;
@@ -199,6 +200,8 @@ impl JobArchetype for PackageIde {
 pub struct CiCheckBackend;
 impl JobArchetype for CiCheckBackend {
     fn job(os: OS) -> Job {
-        plain_job(&os, "Engine", "backend ci-check")
+        let mut ret = plain_job(&os, "Engine", "backend ci-check");
+        ret.steps.push(step::test_reporter());
+        ret
     }
 }
