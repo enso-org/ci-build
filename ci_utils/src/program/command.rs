@@ -388,7 +388,11 @@ pub fn spawn_log_processor(
                         error!("{prefix} Failed to decode a line from output: {e}");
                         let mut raw_buffer = Vec::new();
                         bufread.read_until('\n' as u8, &mut raw_buffer).await?;
-                        warn!("{prefix} Raw buffer: {:?}", raw_buffer);
+                        warn!(
+                            "{prefix} Raw buffer: {:?}. Decoded with placeholders: {}",
+                            raw_buffer,
+                            String::from_utf8_lossy(&raw_buffer)
+                        );
                     }
                 }
             }
