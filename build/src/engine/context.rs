@@ -68,6 +68,25 @@ impl RunContext {
         ide_ci::programs::Node.require_present().await?;
         ide_ci::programs::Npm.require_present().await?;
 
+        let prepare_simple_library_server = {
+            if self.config.test_scala {
+                let simple_server_path =
+                    crate::paths::generated::RepoRootToolsSimpleLibraryServer::new(
+                        &self.paths.repo_root,
+                    );
+                ide_ci::programs::Git::new(&simple_server_path).cmd()?.clean().run_ok().await?;
+                ide_ci::programs::Npm
+                    .cmd()?
+                    .current_dir(&simple_server_path)
+                    .install()
+                    .run_ok()
+                    .left_future()
+            } else {
+                ready(Result::Ok(())).right_future()
+            }
+        };
+        let prepare_simple_library_server = tokio::spawn(prepare_simple_library_server);
+
         // Setup Conda Environment
         // Install FlatBuffers Compiler
         // If it is not available, we require conda to install it. We should not require conda in
@@ -135,6 +154,7 @@ impl RunContext {
         let required_components =
             once(graal::Component::NativeImage).chain(conditional_components.into_iter().copied());
         graal::install_missing_components(required_components).await?;
+        prepare_simple_library_server.await??;
         Ok(())
     }
 
@@ -161,12 +181,6 @@ impl RunContext {
             let lib_src = PathBuf::from_iter(["distribution", "lib"]);
             git.args(["checkout"])?.arg(lib_src).run_ok().await?;
         }
-
-        // // Install Dependencies of the Simple Library Server. It is a JS tool that is used by the
-        // // library manager tests.
-        // let simple_lib_server_path =
-        //     self.paths.repo_root.join_many(["tools", "simple-library-server"]);
-        // ide_ci::programs::Npm.cmd()?.install().arg(simple_lib_server_path).run_ok().await?;
 
         // Download Project Template Files
         let client = reqwest::Client::new();
@@ -264,11 +278,6 @@ impl RunContext {
             }
         }
         if self.config.test_scala {
-            let simpl_server_path = crate::paths::generated::RepoRootToolsSimpleLibraryServer::new(
-                &self.paths.repo_root,
-            );
-            ide_ci::programs::Git::new(&simpl_server_path).cmd()?.clean().run_ok().await?;
-
             // Test Enso
             sbt.call_arg("set Global / parallelExecution := false; test").await?;
         }
