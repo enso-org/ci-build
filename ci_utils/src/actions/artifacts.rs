@@ -67,9 +67,10 @@ pub async fn upload(
 ) -> Result {
     let handler =
         ArtifactUploader::new(SessionClient::new_from_env()?, artifact_name.as_ref()).await?;
-    handler.upload_artifact_to_file_container(file_provider, &options).await?;
+    let result = handler.upload_artifact_to_file_container(file_provider, &options).await;
+    // We want to patch size even if there were some failures.
     handler.patch_artifact_size().await?;
-    Ok(())
+    result
 }
 
 pub fn upload_single_file(

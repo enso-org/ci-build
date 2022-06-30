@@ -57,6 +57,7 @@ pub mod prelude {
     pub use anyhow::Context as _;
     pub use async_trait::async_trait;
     pub use bytes::Bytes;
+    pub use derivative::Derivative;
     pub use derive_more::Display;
     pub use fn_error_context::context;
     pub use futures_util::future::BoxFuture;
@@ -116,6 +117,7 @@ pub mod prelude {
     pub use tracing::error_span;
     pub use tracing::info;
     pub use tracing::info_span;
+    pub use tracing::instrument;
     pub use tracing::span;
     pub use tracing::trace;
     pub use tracing::trace_span;

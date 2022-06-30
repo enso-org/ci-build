@@ -1,11 +1,9 @@
 use crate::actions::artifacts::models::PatchArtifactSizeResponse;
 use crate::prelude::*;
 use anyhow::Context;
+use futures_util::select;
 use reqwest::Client;
-use std::collections::VecDeque;
-use std::ops::DerefMut;
 use std::sync::atomic::Ordering;
-use std::sync::Mutex;
 
 use crate::actions::artifacts::raw;
 use crate::actions::artifacts::run_session::SessionClient;
@@ -37,6 +35,7 @@ pub struct ArtifactUploader {
     pub artifact_name: String,
     pub upload_url:    Url,
     pub total_size:    std::sync::atomic::AtomicUsize,
+    pub cancel:        tokio_util::sync::CancellationToken,
 }
 
 impl ArtifactUploader {
@@ -49,6 +48,7 @@ impl ArtifactUploader {
             artifact_name,
             upload_url: container.file_container_resource_url,
             total_size: default(),
+            cancel: default(),
         })
     }
 
@@ -87,48 +87,35 @@ impl ArtifactUploader {
             debug!("File discovery complete.");
         });
 
-        for task_index in 0..options.file_concurrency {
-            debug!("Preparing file upload worker #{}.", task_index);
-            let _continue_on_error = options.continue_on_error; // TODO
-            let uploader = self.uploader(options);
-            let mut job_receiver = work_rx.clone().into_stream();
-            let result_sender = result_tx.clone();
-
-            let task = async move {
-                debug!("Upload worker #{} has spawned.", task_index);
-                while let Some(file_to_upload) = job_receiver.next().await {
-                    // debug!(
-                    //     "#{}: Will upload {} to {}.",
-                    //     task_index,
-                    //     &file_to_upload.local_path.display(),
-                    //     &file_to_upload.remote_path.display()
-                    // );
-                    let result = uploader.upload_file(&file_to_upload).await;
-                    // debug!(
-                    //     "Uploading result for {}: {:?}",
-                    //     &file_to_upload.local_path.display(),
-                    //     result
-                    // );
-                    result_sender.send(result).unwrap();
-                }
-                debug!("Upload worker #{} finished.", task_index);
-                Ok(())
-            };
-
-            debug!("Spawning the upload worker #{}.", task_index);
-            global::spawn("uploader", task);
+        for index in 0..options.file_concurrency {
+            let span = debug_span!("Upload worker", index).entered();
+            let worker_task = upload_worker(
+                self.cancel.clone(),
+                work_rx.clone(),
+                self.uploader(options),
+                result_tx.clone(),
+            )
+            .map(Result::Ok);
+            debug!("Spawning the worker task.");
+            global::spawn(format!("uploader {index}"), worker_task.instrument(span.exit()));
         }
 
         drop(result_tx);
 
-        let collect_results = result_rx
-            .into_stream()
-            .fold(0, |len_so_far, result| ready(len_so_far + result.total_size));
-
-        let uploaded = collect_results.await;
-        debug!("Uploaded in total {} bytes.", uploaded);
-        self.total_size.fetch_add(uploaded, Ordering::SeqCst);
-        Ok(())
+        let results = result_rx.into_stream().collect::<Vec<_>>().await;
+        let uploaded_size = results.iter().fold(0, |acc, r| acc + r.total_size);
+        debug!("Uploaded in total {} bytes.", uploaded_size);
+        self.total_size.fetch_add(uploaded_size, Ordering::SeqCst);
+        let errors = results.into_iter().filter_map(|r| r.result.err()).collect_vec();
+        if !errors.is_empty() {
+            let mut error = anyhow!("Not all file uploads were successful.");
+            for cause in errors {
+                error = error.context(cause);
+            }
+            Err(error)
+        } else {
+            Ok(())
+        }
     }
 
     pub async fn patch_artifact_size(&self) -> Result<PatchArtifactSizeResponse> {
@@ -137,6 +124,41 @@ impl ArtifactUploader {
     }
 }
 
+pub fn upload_worker(
+    cancellation_token: tokio_util::sync::CancellationToken,
+    job_receiver: flume::Receiver<FileToUpload>,
+    uploader: FileUploader,
+    result_sender: flume::Sender<UploadResult>,
+) -> impl Future<Output = ()> {
+    async move {
+        debug!("Upload worker spawned.");
+        let mut on_cancelled = cancellation_token.cancelled().boxed().fuse();
+        let mut job_receiver = job_receiver.into_stream();
+        loop {
+            select! {
+                _ = on_cancelled => {
+                    debug!("Upload worker has been cancelled.");
+                    break;
+                },
+                job = job_receiver.next() => {
+                    match job {
+                        Some(job) => {
+                            let result = uploader.upload_file(&job).await;
+                            result_sender.send(result).unwrap();
+                        }
+                        None => {
+                            debug!("Upload worker completed all available work.");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        debug!("Upload worker finished.");
+    }
+}
+
+#[derive(Derivative)]
 pub struct FileUploader {
     pub url:           Url,
     pub client:        Client,
@@ -156,14 +178,14 @@ impl FileUploader {
         .await;
         match uploading_res {
             Ok(len) => UploadResult {
-                is_success:             true,
+                result:                 Ok(()),
                 total_size:             len,
                 successful_upload_size: len,
             },
             Err(e) => {
                 debug!("Upload failed: {:?}", e);
                 UploadResult {
-                    is_success:             false,
+                    result:                 Err(e),
                     total_size:             0,
                     successful_upload_size: 0,
                 }
@@ -209,65 +231,9 @@ impl FileToUpload {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct UploadResult {
-    pub is_success:             bool,
+    pub result:                 Result,
     pub successful_upload_size: usize,
     pub total_size:             usize,
-}
-
-#[derive(Debug, Default)]
-struct State {
-    pub to_upload:        VecDeque<FileToUpload>,
-    pub upload_file_size: usize,
-    pub total_file_size:  usize,
-    pub abort:            bool,
-}
-
-impl State {
-    pub fn next_job(&mut self) -> Option<FileToUpload> {
-        if self.abort {
-            None
-        } else {
-            self.to_upload.pop_front()
-        }
-    }
-
-    pub fn process_result(&mut self, continue_on_error: bool, result: UploadResult) {
-        self.upload_file_size += result.successful_upload_size;
-        self.total_file_size += result.total_size;
-        if !result.is_success && !continue_on_error {
-            self.abort = true
-        }
-    }
-
-    pub fn add_tasks(&mut self, tasks: impl IntoIterator<Item = FileToUpload>) {
-        self.to_upload.extend(tasks)
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct StateHandle(Arc<Mutex<State>>);
-
-impl StateHandle {
-    fn with<R>(&self, f: impl FnOnce(&mut State) -> R) -> R {
-        let mut guard = self.0.lock().unwrap();
-        f(guard.deref_mut())
-    }
-
-    pub fn next_job(&self) -> Option<FileToUpload> {
-        self.with(|s| s.next_job())
-    }
-
-    pub fn process_result(&self, continue_on_error: bool, result: UploadResult) {
-        self.with(|s| s.process_result(continue_on_error, result))
-    }
-
-    pub fn add_tasks(&self, tasks: impl IntoIterator<Item = FileToUpload>) {
-        self.with(|s| s.add_tasks(tasks))
-    }
-
-    pub fn get_total_size(&self) -> usize {
-        self.with(|s| s.total_file_size)
-    }
 }

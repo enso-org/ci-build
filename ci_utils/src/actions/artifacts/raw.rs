@@ -158,8 +158,8 @@ pub fn decode_content_length(headers: &HeaderMap) -> Option<usize> {
     text.parse::<usize>().ok()
 }
 
-
 #[context("Failed to upload the file '{}' to path '{}'.", local_path.as_ref().display(), remote_path.as_ref().display())]
+#[instrument(skip_all, err, fields(local_path = %local_path.as_ref().display(), remote_path = %remote_path.as_ref().display(), %upload_url))]
 pub async fn upload_file(
     client: &reqwest::Client,
     chunk_size: usize,
