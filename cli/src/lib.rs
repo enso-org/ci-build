@@ -1,4 +1,3 @@
-#![feature(explicit_generic_args_with_impl_trait)]
 #![feature(option_result_contains)]
 #![feature(once_cell)]
 #![feature(default_free_fn)]

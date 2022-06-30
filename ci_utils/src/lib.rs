@@ -13,13 +13,11 @@
 #![feature(default_free_fn)]
 #![feature(trait_alias)]
 #![feature(io_error_other)]
-#![feature(bool_to_option)]
 #![feature(string_remove_matches)]
 #![feature(once_cell)]
 #![feature(duration_constants)]
 #![feature(const_trait_impl)]
 #![feature(is_some_with)]
-#![feature(explicit_generic_args_with_impl_trait)]
 #![feature(pin_macro)]
 
 pub mod actions;
