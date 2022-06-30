@@ -152,6 +152,7 @@ pub fn upload_worker(
                         }
                     }
                 }
+                complete => break,
             }
         }
         debug!("Upload worker finished.");
