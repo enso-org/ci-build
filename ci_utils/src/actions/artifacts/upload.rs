@@ -1,7 +1,6 @@
 use crate::actions::artifacts::models::PatchArtifactSizeResponse;
 use crate::prelude::*;
 use anyhow::Context;
-use futures_util::select;
 use reqwest::Client;
 use std::sync::atomic::Ordering;
 
@@ -132,15 +131,18 @@ pub fn upload_worker(
 ) -> impl Future<Output = ()> {
     async move {
         debug!("Upload worker spawned.");
-        let mut on_cancelled = cancellation_token.cancelled().boxed().fuse();
         let mut job_receiver = job_receiver.into_stream();
         loop {
+            trace!("Waiting for input.");
+            let mut on_cancelled = pin!(cancellation_token.cancelled().fuse());
             select! {
                 _ = on_cancelled => {
                     debug!("Upload worker has been cancelled.");
                     break;
                 },
-                job = job_receiver.next() => {
+                (job, tail) = job_receiver.into_future() => {
+                    job_receiver = tail;
+                    trace!("Got job: {job:?}.");
                     match job {
                         Some(job) => {
                             let result = uploader.upload_file(&job).await;
@@ -151,8 +153,12 @@ pub fn upload_worker(
                             break;
                         }
                     }
+                    trace!("Job complete.");
                 }
-                complete => break,
+                complete => {
+                    trace!("Complete.");
+                    break;
+                },
             }
         }
         debug!("Upload worker finished.");
@@ -183,14 +189,11 @@ impl FileUploader {
                 total_size:             len,
                 successful_upload_size: len,
             },
-            Err(e) => {
-                debug!("Upload failed: {:?}", e);
-                UploadResult {
-                    result:                 Err(e),
-                    total_size:             0,
-                    successful_upload_size: 0,
-                }
-            }
+            Err(e) => UploadResult {
+                result:                 Err(e),
+                total_size:             0,
+                successful_upload_size: 0,
+            },
         }
     }
 }
@@ -237,4 +240,41 @@ pub struct UploadResult {
     pub result:                 Result,
     pub successful_upload_size: usize,
     pub total_size:             usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::actions::artifacts;
+    use crate::actions::artifacts::models::CreateArtifactResponse;
+    use crate::log::setup_logging;
+
+    #[tokio::test]
+    async fn test_upload() -> Result {
+        use warp::Filter;
+        setup_logging()?;
+
+        let response1 = CreateArtifactResponse {
+            name: "test-artifact".to_string(),
+            url: "http://localhost:8080/artifacts/test-artifact".try_into()?,
+            container_id: 1,
+            size: 0,
+            file_container_resource_url: "http://localhost:8080/artifacts/test-artifact/files"
+                .try_into()?,
+            r#type: "file".to_string(),
+            expires_on: default(),
+            signed_content: None,
+        };
+
+        let routes = warp::any().map(move || serde_json::to_string(&response1).unwrap());
+        tokio::spawn(warp::serve(routes).run(([127, 0, 0, 1], 8080)));
+
+        debug!("Hello!");
+        std::env::set_var("ACTIONS_RUNTIME_URL", "http://localhost:8080");
+        std::env::set_var("ACTIONS_RUNTIME_TOKEN", "test-token");
+        std::env::set_var("GITHUB_RUN_ID", "123");
+        let result = artifacts::upload_single_file("file", "name").await;
+        dbg!(result)?;
+        Ok(())
+    }
 }

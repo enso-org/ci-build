@@ -20,6 +20,7 @@
 #![feature(const_trait_impl)]
 #![feature(is_some_with)]
 #![feature(explicit_generic_args_with_impl_trait)]
+#![feature(pin_macro)]
 
 pub mod actions;
 pub mod anyhow;
@@ -61,6 +62,7 @@ pub mod prelude {
     pub use derive_more::Display;
     pub use fn_error_context::context;
     pub use futures_util::future::BoxFuture;
+    pub use futures_util::select;
     pub use futures_util::stream::BoxStream;
     pub use futures_util::AsyncWrite;
     pub use futures_util::FutureExt as _;
@@ -108,6 +110,7 @@ pub mod prelude {
     pub use std::ops::Range;
     pub use std::path::Path;
     pub use std::path::PathBuf;
+    pub use std::pin::pin;
     pub use std::pin::Pin;
     pub use std::sync::Arc;
     pub use tokio::io::AsyncWriteExt as _;
