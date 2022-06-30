@@ -201,7 +201,7 @@ pub struct CiCheckBackend;
 impl JobArchetype for CiCheckBackend {
     fn job(os: OS) -> Job {
         let mut ret = plain_job(&os, "Engine", "backend ci-check");
-        ret.steps.push(step::test_reporter());
+        ret.steps.push(step::test_reporter(os));
         ret
     }
 }
