@@ -4,7 +4,6 @@
 #![feature(default_free_fn)]
 
 pub mod arg;
-pub mod args;
 pub mod ci_gen;
 
 pub mod prelude {
@@ -41,19 +40,20 @@ use anyhow::Context;
 use clap::Parser;
 use derivative::Derivative;
 use enso_build::context::BuildContext;
+use enso_build::engine::BuildMode;
 use enso_build::paths::TargetTriple;
 use enso_build::prettier;
 use enso_build::project;
 use enso_build::project::backend;
 use enso_build::project::backend::Backend;
-use enso_build::project::engine;
-use enso_build::project::engine::Engine;
+// use enso_build::project::engine;
+// use enso_build::project::engine::Engine;
 use enso_build::project::gui;
 use enso_build::project::gui::Gui;
 use enso_build::project::ide;
 use enso_build::project::ide::Ide;
-use enso_build::project::project_manager;
-use enso_build::project::project_manager::ProjectManager;
+// use enso_build::project::project_manager;
+// use enso_build::project::project_manager::ProjectManager;
 use enso_build::project::wasm;
 use enso_build::project::wasm::Wasm;
 use enso_build::project::IsTarget;
@@ -329,16 +329,16 @@ impl Processor {
         }
     }
 
-    pub fn handle_engine(&self, engine: arg::engine::Target) -> BoxFuture<'static, Result> {
-        self.get(engine.source).void_ok().boxed()
-    }
-
-    pub fn handle_project_manager(
-        &self,
-        project_manager: arg::project_manager::Target,
-    ) -> BoxFuture<'static, Result> {
-        self.get(project_manager.source).void_ok().boxed()
-    }
+    // pub fn handle_engine(&self, engine: arg::engine::Target) -> BoxFuture<'static, Result> {
+    //     self.get(engine.source).void_ok().boxed()
+    // }
+    //
+    // pub fn handle_project_manager(
+    //     &self,
+    //     project_manager: arg::project_manager::Target,
+    // ) -> BoxFuture<'static, Result> {
+    //     self.get(project_manager.source).void_ok().boxed()
+    // }
 
     pub fn handle_gui(&self, gui: arg::gui::Target) -> BoxFuture<'static, Result> {
         match gui.command {
@@ -355,7 +355,6 @@ impl Processor {
                 let input = enso_build::project::Backend::resolve(self, input);
                 let repo = self.remote_repo.clone();
                 let context = self.context();
-
                 async move {
                     let input = input.await?;
                     let operation = enso_build::engine::Operation::Release(
@@ -365,11 +364,11 @@ impl Processor {
                         },
                     );
                     let config = enso_build::engine::BuildConfigurationFlags {
+                        mode: BuildMode::NightlyRelease,
                         build_engine_package: true,
                         build_launcher_bundle: true,
                         build_project_manager_bundle: true,
-                        clean_repo: false,
-                        ..enso_build::engine::NIGHTLY
+                        ..default()
                     };
                     let context = input.prepare_context(context, operation, config)?;
                     context.execute().await?;
@@ -377,33 +376,57 @@ impl Processor {
                 }
                 .boxed()
             }
-            arg::backend::Command::CiCheck {} => {
-                let operation =
-                    enso_build::engine::Operation::Build(enso_build::engine::BuildOperation {});
-                debug!("Operation to perform: {:?}", operation);
-                let paths =
-                    enso_build::paths::Paths::new_triple(&self.source_root, self.triple.clone());
+            arg::backend::Command::Benchmark { which } => {
                 let config = enso_build::engine::BuildConfigurationFlags {
-                    clean_repo: false,
-                    ..enso_build::engine::DEV
-                }
-                .into();
-                let octocrab = self.octocrab.clone();
+                    execute_benchmarks: which.into_iter().collect(),
+                    ..default()
+                };
+                let context = self.prepare_backend_context(config);
                 async move {
-                    let paths = paths?;
-                    let goodies = ide_ci::goodie::GoodieDatabase::new()?;
-                    let inner = crate::project::Context {
-                        upload_artifacts: true,
-                        octocrab,
-                        cache: Cache::new_default().await?,
-                    };
-                    let context =
-                        enso_build::engine::RunContext { inner, config, paths, goodies, operation };
+                    let context = context.await?;
+                    context.execute().await
+                }
+                .boxed()
+            }
+            arg::backend::Command::CiCheck {} => {
+                let config = enso_build::engine::BuildConfigurationFlags {
+                    mode: BuildMode::Development,
+                    test_scala: true,
+                    test_standard_library: true,
+                    build_benchmarks: true,
+                    build_js_parser: matches!(TARGET_OS, OS::Linux),
+                    ..default()
+                };
+                let context = self.prepare_backend_context(config);
+                async move {
+                    let mut context = context.await?;
+                    context.upload_artifacts = true;
                     context.execute().await
                 }
                 .boxed()
             }
         }
+    }
+
+    pub fn prepare_backend_context(
+        &self,
+        config: enso_build::engine::BuildConfigurationFlags,
+    ) -> BoxFuture<'static, Result<enso_build::engine::RunContext>> {
+        let operation = enso_build::engine::Operation::Build;
+        let paths = enso_build::paths::Paths::new_triple(&self.source_root, self.triple.clone());
+        let config = config.into();
+        let octocrab = self.octocrab.clone();
+        async move {
+            let paths = paths?;
+            let goodies = ide_ci::goodie::GoodieDatabase::new()?;
+            let inner = crate::project::Context {
+                upload_artifacts: true,
+                octocrab,
+                cache: Cache::new_default().await?,
+            };
+            Ok(enso_build::engine::RunContext { inner, config, paths, goodies, operation })
+        }
+        .boxed()
     }
 
     pub fn handle_ide(&self, ide: arg::ide::Target) -> BoxFuture<'static, Result> {
@@ -604,37 +627,37 @@ impl Resolvable for Backend {
     }
 }
 
-impl Resolvable for ProjectManager {
-    fn prepare_target(_context: &Processor) -> Result<Self> {
-        Ok(ProjectManager)
-    }
-
-    fn resolve(
-        ctx: &Processor,
-        _from: <Self as IsTargetSource>::BuildInput,
-    ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
-        ok_ready_boxed(project_manager::BuildInput {
-            repo_root: ctx.repo_root().path,
-            versions:  ctx.triple.versions.clone(),
-        })
-    }
-}
-
-impl Resolvable for Engine {
-    fn prepare_target(_context: &Processor) -> Result<Self> {
-        Ok(Engine)
-    }
-
-    fn resolve(
-        ctx: &Processor,
-        _from: <Self as IsTargetSource>::BuildInput,
-    ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
-        ok_ready_boxed(engine::BuildInput {
-            repo_root: ctx.repo_root().path,
-            versions:  ctx.triple.versions.clone(),
-        })
-    }
-}
+// impl Resolvable for ProjectManager {
+//     fn prepare_target(_context: &Processor) -> Result<Self> {
+//         Ok(ProjectManager)
+//     }
+//
+//     fn resolve(
+//         ctx: &Processor,
+//         _from: <Self as IsTargetSource>::BuildInput,
+//     ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
+//         ok_ready_boxed(project_manager::BuildInput {
+//             repo_root: ctx.repo_root().path,
+//             versions:  ctx.triple.versions.clone(),
+//         })
+//     }
+// }
+//
+// impl Resolvable for Engine {
+//     fn prepare_target(_context: &Processor) -> Result<Self> {
+//         Ok(Engine)
+//     }
+//
+//     fn resolve(
+//         ctx: &Processor,
+//         _from: <Self as IsTargetSource>::BuildInput,
+//     ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
+//         ok_ready_boxed(engine::BuildInput {
+//             repo_root: ctx.repo_root().path,
+//             versions:  ctx.triple.versions.clone(),
+//         })
+//     }
+// }
 
 pub trait WatchResolvable: Resolvable + IsWatchableSource + IsWatchable {
     fn resolve_watch(
@@ -689,9 +712,9 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
     match cli.target {
         Target::Wasm(wasm) => ctx.handle_wasm(wasm).await?,
         Target::Gui(gui) => ctx.handle_gui(gui).await?,
-        Target::ProjectManager(project_manager) =>
-            ctx.handle_project_manager(project_manager).await?,
-        Target::Engine(engine) => ctx.handle_engine(engine).await?,
+        // Target::ProjectManager(project_manager) =>
+        //     ctx.handle_project_manager(project_manager).await?,
+        // Target::Engine(engine) => ctx.handle_engine(engine).await?,
         Target::Backend(backend) => ctx.handle_backend(backend).await?,
         Target::Ide(ide) => ctx.handle_ide(ide).await?,
         // TODO: consider if out-of-source ./dist should be removed

@@ -22,6 +22,7 @@ pub mod job;
 pub mod step;
 
 pub struct DeluxeRunner;
+pub struct BenchmarkRunner;
 
 pub const PRIMARY_OS: OS = OS::Linux;
 
@@ -31,7 +32,15 @@ impl RunsOn for DeluxeRunner {
     fn runs_on(&self) -> Vec<RunnerLabel> {
         vec![RunnerLabel::MwuDeluxe]
     }
+    fn os_name(&self) -> Option<String> {
+        None
+    }
+}
 
+impl RunsOn for BenchmarkRunner {
+    fn runs_on(&self) -> Vec<RunnerLabel> {
+        vec![RunnerLabel::Benchmark]
+    }
     fn os_name(&self) -> Option<String> {
         None
     }
@@ -154,7 +163,6 @@ pub fn nightly() -> Result<Workflow> {
     for (var_name, value) in global_env {
         workflow.env(var_name, value);
     }
-    workflow.env("ENSO_BUILD_SKIP_VERSION_CHECK", "true");
     Ok(workflow)
 }
 
@@ -172,7 +180,6 @@ pub fn typical_check_triggers() -> Event {
 pub fn gui() -> Result<Workflow> {
     let on = typical_check_triggers();
     let mut workflow = Workflow { name: "GUI CI".into(), on, ..default() };
-    workflow.env("ENSO_BUILD_SKIP_VERSION_CHECK", "true");
     workflow.add::<job::AssertChangelog>(PRIMARY_OS);
     workflow.add::<job::CancelWorkflow>(PRIMARY_OS);
     workflow.add::<job::Lint>(PRIMARY_OS);
@@ -196,7 +203,6 @@ pub fn gui() -> Result<Workflow> {
 pub fn backend() -> Result<Workflow> {
     let on = typical_check_triggers();
     let mut workflow = Workflow { name: "Engine CI".into(), on, ..default() };
-    workflow.env("ENSO_BUILD_SKIP_VERSION_CHECK", "true");
     workflow.add::<job::CancelWorkflow>(PRIMARY_OS);
     for os in TARGETED_SYSTEMS {
         workflow.add::<job::CiCheckBackend>(os);
@@ -204,9 +210,25 @@ pub fn backend() -> Result<Workflow> {
     Ok(workflow)
 }
 
+pub fn benchmark() -> Result<Workflow> {
+    let on = Event {
+        workflow_dispatch: Some(WorkflowDispatch {}),
+        schedule: vec![Schedule::new("0 5 * * 2-6")?],
+        ..default()
+    };
+    let mut workflow = Workflow { name: "Benchmark Engine".into(), on, ..default() };
+
+    let benchmark_job =
+        plain_job(&BenchmarkRunner, "Benchmark Engine", "backend benchmark runtime");
+    workflow.add_job(benchmark_job);
+    Ok(workflow)
+}
+
+
 pub fn generate(repo_root: &enso_build::paths::generated::RepoRootGithubWorkflows) -> Result {
     repo_root.nightly_yml.write_as_yaml(&nightly()?)?;
     repo_root.scala_new_yml.write_as_yaml(&backend()?)?;
     repo_root.gui_yml.write_as_yaml(&gui()?)?;
+    repo_root.benchmark_yml.write_as_yaml(&benchmark()?)?;
     Ok(())
 }

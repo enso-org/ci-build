@@ -1,8 +1,9 @@
+use enso_build::prelude::*;
+
 use crate::arg::Source;
 use crate::source_args_hlp;
 use clap::Args;
 use clap::Subcommand;
-use enso_build::prelude::*;
 use enso_build::project::backend::Backend;
 
 #[derive(Args, Clone, Debug, PartialEq)]
@@ -26,6 +27,11 @@ pub enum Command {
     Upload {
         #[clap(flatten)]
         input: BuildInput,
+    },
+    /// Execute benchmarks.
+    Benchmark {
+        #[clap(arg_enum)]
+        which: Vec<enso_build::engine::Benchmarks>,
     },
     CiCheck {},
 }

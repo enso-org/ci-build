@@ -373,30 +373,26 @@ pub fn spawn_log_processor(
 ) -> JoinHandle<Result> {
     tokio::task::spawn(
         async move {
-            let mut bufread = BufReader::new(out);
-            let mut line_buffer = String::new();
-
-            loop {
-                line_buffer.clear();
-                match bufread.read_line(&mut line_buffer).await {
-                    Ok(0) => break,
-                    Ok(_) => {
-                        let line = line_buffer.trim_end_matches(|c| c == '\n' || c == '\r');
+            info!("{prefix} <START>");
+            let bufread = BufReader::new(out);
+            let mut lines = bufread.split(b'\n');
+            while let Some(line_bytes) = lines.next_segment().await? {
+                match String::from_utf8(line_bytes) {
+                    Ok(line) => {
+                        let line = line.trim_end_matches('\r');
                         info!("{prefix} {line}");
                     }
                     Err(e) => {
                         error!("{prefix} Failed to decode a line from output: {e}");
-                        let mut raw_buffer = Vec::new();
-                        bufread.read_until('\n' as u8, &mut raw_buffer).await?;
                         warn!(
                             "{prefix} Raw buffer: {:?}. Decoded with placeholders: {}",
-                            raw_buffer,
-                            String::from_utf8_lossy(&raw_buffer)
+                            e.as_bytes(),
+                            String::from_utf8_lossy(e.as_bytes())
                         );
                     }
                 }
             }
-
+            info!("{prefix} <ENDUT>");
             Result::Ok(())
         }
         .inspect_err(|e| error!("Fatal error while processing process output: {e}")),

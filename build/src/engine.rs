@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use std::collections::BTreeSet;
 
 use crate::paths::ComponentPaths;
 use crate::paths::Paths;
@@ -57,7 +58,22 @@ pub enum BuildMode {
     NightlyRelease,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, clap::ArgEnum)]
+pub enum Benchmarks {
+    All,
+    Runtime,
+}
+
+impl Benchmarks {
+    pub fn sbt_task(self) -> &'static str {
+        match self {
+            Benchmarks::All => "bench",
+            Benchmarks::Runtime => "runtime/bench",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct BuildConfigurationFlags {
     /// If true, repository shall be cleaned at the build start.
     ///
@@ -71,7 +87,8 @@ pub struct BuildConfigurationFlags {
     /// Whether benchmarks are compiled.
     ///
     /// Note that this does not run the benchmarks, only ensures that they are buildable.
-    pub benchmark_compilation: bool,
+    pub build_benchmarks: bool,
+    pub execute_benchmarks: BTreeSet<Benchmarks>,
     pub build_js_parser: bool,
     pub build_engine_package: bool,
     pub build_launcher_package: bool,
@@ -126,33 +143,24 @@ impl BuildConfigurationFlags {
     }
 }
 
-pub const DEV: BuildConfigurationFlags = BuildConfigurationFlags {
-    clean_repo: true,
-    mode: BuildMode::Development,
-    test_scala: true,
-    test_standard_library: true,
-    benchmark_compilation: true,
-    build_js_parser: matches!(TARGET_OS, OS::Linux),
-    build_engine_package: false,
-    build_launcher_package: false,
-    build_project_manager_package: false,
-    build_launcher_bundle: false,
-    build_project_manager_bundle: false,
-};
-
-pub const NIGHTLY: BuildConfigurationFlags = BuildConfigurationFlags {
-    clean_repo: true,
-    mode: BuildMode::NightlyRelease,
-    test_scala: false,
-    test_standard_library: false,
-    benchmark_compilation: false,
-    build_js_parser: false,
-    build_engine_package: false,
-    build_launcher_package: false,
-    build_project_manager_package: false,
-    build_launcher_bundle: false,
-    build_project_manager_bundle: false,
-};
+impl Default for BuildConfigurationFlags {
+    fn default() -> Self {
+        Self {
+            clean_repo: false,
+            mode: BuildMode::Development,
+            test_scala: false,
+            test_standard_library: false,
+            build_benchmarks: false,
+            execute_benchmarks: default(),
+            build_js_parser: false,
+            build_engine_package: false,
+            build_launcher_package: false,
+            build_project_manager_package: false,
+            build_launcher_bundle: false,
+            build_project_manager_bundle: false,
+        }
+    }
+}
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ReleaseCommand {
@@ -172,17 +180,11 @@ pub struct RunOperation {
 
 impl RunOperation {}
 
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct BuildOperation {}
-
-impl BuildOperation {}
-
 #[derive(Clone, PartialEq, Debug)]
 pub enum Operation {
     Release(ReleaseOperation),
     Run(RunOperation),
-    Build(BuildOperation),
+    Build,
 }
 
 #[derive(Clone, PartialEq, Debug, Default)]

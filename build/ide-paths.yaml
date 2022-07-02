@@ -4,6 +4,7 @@
 <repo_root>/:
   .github/:
     workflows/:
+      benchmark.yml:
       gui.yml:
       nightly.yml:
       scala-new.yml:

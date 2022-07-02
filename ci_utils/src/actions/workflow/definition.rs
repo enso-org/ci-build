@@ -106,7 +106,7 @@ impl Concurrency {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Workflow {
     pub name:        String,
@@ -118,6 +118,22 @@ pub struct Workflow {
     pub env:         BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub concurrency: Option<Concurrency>,
+}
+
+impl Default for Workflow {
+    fn default() -> Self {
+        let mut ret = Self {
+            name:        default(),
+            description: default(),
+            on:          default(),
+            jobs:        default(),
+            env:         default(),
+            concurrency: default(),
+        };
+        // By default CI should never check program versions.
+        ret.env("ENSO_BUILD_SKIP_VERSION_CHECK", "true");
+        ret
+    }
 }
 
 impl Workflow {
@@ -402,6 +418,8 @@ pub enum RunnerLabel {
     X64,
     #[serde(rename = "mwu-deluxe")]
     MwuDeluxe,
+    #[serde(rename = "benchmark")]
+    Benchmark,
     #[serde(rename = "${{ matrix.os }}")]
     MatrixOs,
 }

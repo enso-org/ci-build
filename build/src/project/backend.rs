@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
 use crate::engine::BuildConfigurationFlags;
-use crate::engine::BuildOperation;
 use crate::engine::Operation;
 use crate::project::Context;
 use crate::project::IsArtifact;
@@ -137,11 +136,11 @@ impl IsTarget for Backend {
                 target_os == TARGET_OS,
                 "Enso Project Manager cannot be built on '{target_os}' for target '{TARGET_OS}'.",
             );
-            let operation = crate::engine::Operation::Build(BuildOperation {});
+            let operation = crate::engine::Operation::Build;
             let config = BuildConfigurationFlags {
-                clean_repo: false,
                 build_project_manager_bundle: true,
-                ..crate::engine::NIGHTLY
+                mode: crate::engine::BuildMode::NightlyRelease,
+                ..default()
             };
             let context = inner.prepare_context(context, operation, config)?;
             let artifacts = context.build().await?;

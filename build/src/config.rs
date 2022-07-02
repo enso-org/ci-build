@@ -8,7 +8,7 @@ pub fn load_yaml(yaml_text: &str) -> Result<Config> {
     raw.try_into()
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, strum::EnumString)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Hash, Serialize, Deserialize, strum::EnumString)]
 pub enum RecognizedProgram {
     #[strum(default)]
     Other(String),
@@ -41,14 +41,14 @@ impl Config {
             let found = program.version().await?;
             if !version_req.matches(&found) {
                 bail!(
-                    "Found program {:?} in version {} that does not fulfill requirement {}.",
+                    "Found program {} in version {} that does not fulfill requirement {}.",
                     program,
                     found,
                     version_req
                 );
             } else {
                 info!(
-                    "Found program {:?} in supported version {} (required {}).",
+                    "Found program {} in supported version {} (required {}).",
                     program, found, version_req
                 );
             }

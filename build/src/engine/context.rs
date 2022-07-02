@@ -37,9 +37,10 @@ use ide_ci::programs::Flatc;
 use ide_ci::programs::Git;
 use ide_ci::programs::Sbt;
 
-#[derive(Clone, Debug, derive_more::Deref)]
+#[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut)]
 pub struct RunContext {
     #[deref]
+    #[deref_mut]
     pub inner:     crate::project::Context,
     pub config:    BuildConfigurationResolved,
     pub paths:     Paths,
@@ -231,12 +232,16 @@ impl RunContext {
             // This just compiles benchmarks, not run them. At least we'll know that they can be
             // run. Actually running them, as part of this routine, would be too heavy.
             // TODO [mwu] It should be possible to run them through context config option.
-            if self.config.benchmark_compilation {
+            if self.config.build_benchmarks {
                 tasks.extend([
                     "runtime/Benchmark/compile",
                     "language-server/Benchmark/compile",
                     "searcher/Benchmark/compile",
                 ]);
+            }
+
+            for benchmark in &self.config.execute_benchmarks {
+                tasks.push(benchmark.sbt_task());
             }
 
             let build_stuff = Sbt::concurrent_tasks(tasks);
@@ -266,7 +271,7 @@ impl RunContext {
             // Prepare Project Manager Distribution
             sbt.call_arg("buildProjectManagerDistribution").await?;
 
-            if self.config.benchmark_compilation {
+            if self.config.build_benchmarks {
                 // Check Runtime Benchmark Compilation
                 sbt.call_arg("runtime/Benchmark/compile").await?;
 
@@ -275,6 +280,10 @@ impl RunContext {
 
                 // Check Searcher Benchmark Compilation
                 sbt.call_arg("searcher/Benchmark/compile").await?;
+            }
+
+            for benchmark in &self.config.execute_benchmarks {
+                sbt.call_arg(benchmark.sbt_task()).await?;
             }
         }
         if self.config.test_scala {
@@ -443,7 +452,7 @@ impl RunContext {
                     shell.wait_ok().await?;
                 }
             }
-            Operation::Build(_) => {
+            Operation::Build => {
                 self.build().boxed().await?;
             }
         };

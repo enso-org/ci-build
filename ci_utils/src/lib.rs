@@ -89,6 +89,7 @@ pub mod prelude {
     pub use std::borrow::BorrowMut;
     pub use std::borrow::Cow;
     pub use std::collections::BTreeMap;
+    pub use std::collections::BTreeSet;
     pub use std::collections::HashMap;
     pub use std::collections::HashSet;
     pub use std::default::default;
