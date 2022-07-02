@@ -212,6 +212,7 @@ pub fn backend() -> Result<Workflow> {
 
 pub fn benchmark() -> Result<Workflow> {
     let on = Event {
+        push: Some(default()),
         workflow_dispatch: Some(WorkflowDispatch {}),
         schedule: vec![Schedule::new("0 5 * * 2-6")?],
         ..default()
