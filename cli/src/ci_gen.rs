@@ -66,7 +66,7 @@ pub fn setup_script_and_steps(command_line: impl AsRef<str>) -> Vec<Step> {
     let list_everything_on_failure = Step {
         name: Some("List files if failed".into()),
         r#if: Some("failure()".into()),
-        run: Some("ls -R".into()),
+        run: Some("ls -lR".into()),
         ..default()
     };
     let mut steps = setup_script_steps();
@@ -189,11 +189,17 @@ pub fn gui() -> Result<Workflow> {
         job.needs.insert(job::BuildBackend::key(PRIMARY_OS));
     });
 
+    // Because WASM upload happens only for the Linux build, all other platforms needs to depend on
+    // it.
+    let wasm_job_linux = workflow.add::<job::BuildWasm>(OS::Linux);
     for os in TARGETED_SYSTEMS {
-        let wasm_job = workflow.add::<job::BuildWasm>(os);
+        if os != OS::Linux {
+            // Linux was already added above.
+            let _wasm_job = workflow.add::<job::BuildWasm>(os);
+        }
         let project_manager_job = workflow.add::<job::BuildBackend>(os);
         workflow.add_customized::<job::PackageIde>(os, |job| {
-            job.needs.insert(wasm_job);
+            job.needs.insert(wasm_job_linux.clone());
             job.needs.insert(project_manager_job);
         });
     }
