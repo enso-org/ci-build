@@ -28,6 +28,8 @@ pub const PRIMARY_OS: OS = OS::Linux;
 
 pub const TARGETED_SYSTEMS: [OS; 3] = [OS::Windows, OS::Linux, OS::MacOS];
 
+pub const DEFAULT_BRANCH_NAME: &str = "develop";
+
 impl RunsOn for DeluxeRunner {
     fn runs_on(&self) -> Vec<RunnerLabel> {
         vec![RunnerLabel::MwuDeluxe]
@@ -44,6 +46,10 @@ impl RunsOn for BenchmarkRunner {
     fn os_name(&self) -> Option<String> {
         None
     }
+}
+
+pub fn on_develop_push() -> Push {
+    Push { branches: vec![DEFAULT_BRANCH_NAME.to_string()], ..default() }
 }
 
 pub fn runs_on(os: OS) -> Vec<RunnerLabel> {
@@ -167,12 +173,10 @@ pub fn nightly() -> Result<Workflow> {
 }
 
 pub fn typical_check_triggers() -> Event {
-    let branches =
-        ["develop", "unstable", "stable"].into_iter().map(ToString::to_string).collect_vec();
     Event {
         pull_request: Some(PullRequest {}),
         workflow_dispatch: Some(WorkflowDispatch {}),
-        push: Some(Push { branches, ..default() }),
+        push: Some(on_develop_push()),
         ..default()
     }
 }
@@ -218,7 +222,7 @@ pub fn backend() -> Result<Workflow> {
 
 pub fn benchmark() -> Result<Workflow> {
     let on = Event {
-        push: Some(default()),
+        push: Some(on_develop_push()),
         workflow_dispatch: Some(WorkflowDispatch {}),
         schedule: vec![Schedule::new("0 5 * * 2-6")?],
         ..default()
