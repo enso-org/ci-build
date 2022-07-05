@@ -439,8 +439,9 @@ impl RunContext {
                 self.prepare_build_env().await?;
                 let mut run = run.command_pieces.iter();
                 if let Some(program) = run.next() {
-                    debug!("Spawning program {}.", program.to_str().unwrap());
-                    tokio::process::Command::new(program)
+                    debug!("Resolving program: {}", program.as_str());
+                    let exe_path = ide_ci::program::lookup(program.as_str())?;
+                    ide_ci::program::Command::new(exe_path)
                         .args(run)
                         .current_dir(&self.paths.repo_root)
                         .spawn()?

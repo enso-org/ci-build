@@ -400,6 +400,21 @@ impl Processor {
                 let context = self.prepare_backend_context(config);
                 async move { context.await?.execute().await }.boxed()
             }
+            arg::backend::Command::Sbt { command } => {
+                let context = self.prepare_backend_context(default());
+                async move {
+                    let mut command_pieces = vec![OsString::from("sbt")];
+                    command_pieces.extend(command.into_iter().map(into));
+
+                    let mut context = context.await?;
+                    context.operation =
+                        enso_build::engine::Operation::Run(enso_build::engine::RunOperation {
+                            command_pieces,
+                        });
+                    context.execute().await
+                }
+                .boxed()
+            }
             arg::backend::Command::CiCheck {} => {
                 let config = enso_build::engine::BuildConfigurationFlags {
                     mode: BuildMode::Development,

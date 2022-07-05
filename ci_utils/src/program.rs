@@ -195,3 +195,7 @@ impl Program for Unknown {
         &self.0
     }
 }
+
+pub fn lookup(executable_name: impl AsRef<str>) -> Result<PathBuf> {
+    Resolver::<()>::new(vec![executable_name.as_ref()], vec![])?.lookup()
+}

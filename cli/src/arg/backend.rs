@@ -33,10 +33,15 @@ pub enum Command {
         #[clap(arg_enum)]
         which: Vec<enso_build::engine::Benchmarks>,
     },
-    /// Execute benchmarks.
+    /// Run the tests.
     Test {
         #[clap(arg_enum, required = true)]
         which: Vec<enso_build::engine::Tests>,
+    },
+    /// Run the tests.
+    Sbt {
+        #[clap(last = true)]
+        command: Vec<String>,
     },
     CiCheck {},
 }
