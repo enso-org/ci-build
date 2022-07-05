@@ -64,6 +64,13 @@ pub enum Benchmarks {
     Runtime,
 }
 
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, clap::ArgEnum)]
+pub enum Tests {
+    Scala,
+    #[clap(alias = "stdlib")]
+    StandardLibrary,
+}
+
 impl Benchmarks {
     pub fn sbt_task(self) -> &'static str {
         match self {

@@ -41,6 +41,7 @@ use clap::Parser;
 use derivative::Derivative;
 use enso_build::context::BuildContext;
 use enso_build::engine::BuildMode;
+use enso_build::engine::Tests;
 use enso_build::paths::TargetTriple;
 use enso_build::prettier;
 use enso_build::project;
@@ -387,6 +388,17 @@ impl Processor {
                     context.execute().await
                 }
                 .boxed()
+            }
+            arg::backend::Command::Test { which } => {
+                let mut config = enso_build::engine::BuildConfigurationFlags::default();
+                for arg in which {
+                    match arg {
+                        Tests::Scala => config.test_scala = true,
+                        Tests::StandardLibrary => config.test_standard_library = true,
+                    }
+                }
+                let context = self.prepare_backend_context(config);
+                async move { context.await?.execute().await }.boxed()
             }
             arg::backend::Command::CiCheck {} => {
                 let config = enso_build::engine::BuildConfigurationFlags {

@@ -244,8 +244,10 @@ impl RunContext {
                 tasks.push(benchmark.sbt_task());
             }
 
-            let build_stuff = Sbt::concurrent_tasks(tasks);
-            sbt.call_arg(build_stuff).await?;
+            if !tasks.is_empty() {
+                let build_stuff = Sbt::concurrent_tasks(tasks);
+                sbt.call_arg(build_stuff).await?;
+            }
         } else {
             // Compile
             sbt.call_arg("compile").await?;
