@@ -309,7 +309,7 @@ pub struct Watcher<Target: IsWatchable, Proc> {
     pub artifact:      Target::Artifact,
     /// The process performing the watch.
     ///
-    /// In this case, an instance of cargo-watch.
+    /// For example, an instance of cargo-watch.
     pub watch_process: Proc,
 }
 
