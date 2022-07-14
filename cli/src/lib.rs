@@ -398,6 +398,7 @@ impl Processor {
                         Tests::StandardLibrary => config.test_standard_library = true,
                     }
                 }
+                config.test_java_generated_from_rust = true;
                 let context = self.prepare_backend_context(config);
                 async move { context.await?.execute().await }.boxed()
             }
@@ -421,6 +422,7 @@ impl Processor {
                     mode: BuildMode::Development,
                     test_scala: true,
                     test_standard_library: true,
+                    test_java_generated_from_rust: true,
                     build_benchmarks: true,
                     build_js_parser: matches!(TARGET_OS, OS::Linux),
                     ..default()

@@ -131,6 +131,10 @@ impl BuildConfigurationResolved {
             config.build_engine_package = true;
         }
 
+        if config.test_java_generated_from_rust {
+            config.generate_java_from_rust = true;
+        }
+
         Self(config)
     }
 }
@@ -167,7 +171,7 @@ impl Default for BuildConfigurationFlags {
             build_project_manager_package: false,
             build_launcher_bundle: false,
             build_project_manager_bundle: false,
-            generate_java_from_rust: false,
+            generate_java_from_rust: true,
             test_java_generated_from_rust: false,
         }
     }
