@@ -21,6 +21,7 @@
 #![feature(is_some_with)]
 #![feature(explicit_generic_args_with_impl_trait)]
 #![feature(pin_macro)]
+#![feature(result_option_inspect)]
 
 pub mod actions;
 pub mod anyhow;

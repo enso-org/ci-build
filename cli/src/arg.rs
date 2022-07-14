@@ -4,6 +4,7 @@ pub mod backend;
 pub mod engine;
 pub mod gui;
 pub mod ide;
+pub mod java_gen;
 pub mod project_manager;
 pub mod release;
 pub mod wasm;
@@ -119,6 +120,8 @@ pub enum Target {
     Release(release::Target),
     /// Regenerate GitHub Actions workflows.
     CiGen,
+    /// Regenerate `syntax2` library (new parser).
+    JavaGen(java_gen::Target),
 }
 
 /// Build, test and package Enso Engine.

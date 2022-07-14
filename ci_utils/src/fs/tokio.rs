@@ -44,3 +44,23 @@ pub async fn copy_to_file(
     let mut output = crate::fs::tokio::create(output_path).await?;
     tokio::io::copy(&mut content, &mut output).await.anyhow_err()
 }
+
+/// Remove a directory with all its subtree.
+///
+/// Does not fail if the directory is not found.
+pub async fn remove_dir_if_exists(path: impl AsRef<Path>) -> Result {
+    let path = path.as_ref();
+    let result = tokio::fs::remove_dir_all(&path).await;
+    match result {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        result => result.context(format!("Failed to remove directory {}.", path.display())),
+    }
+}
+
+/// Recreate directory, so it exists and is empty.
+pub async fn reset_dir(path: impl AsRef<Path>) -> Result {
+    let path = path.as_ref();
+    remove_dir_if_exists(&path).await?;
+    create_dir_if_missing(&path).await?;
+    Ok(())
+}

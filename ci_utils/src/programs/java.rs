@@ -1,5 +1,25 @@
 use crate::prelude::*;
 
+use crate::program::command::Manipulator;
+
+#[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut)]
+pub struct Classpath(pub Vec<PathBuf>);
+
+impl Classpath {
+    pub fn new(paths: impl IntoIterator<Item: AsRef<Path>>) -> Self {
+        Classpath(paths.into_iter().map(|p| p.as_ref().to_path_buf()).collect())
+    }
+}
+
+impl Manipulator for Classpath {
+    fn apply<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) {
+        // Java uses same separator for classpaths entries as native PATH separator.
+        let paths = std::env::join_paths(&self.0)
+            .expect(&format!("Invalid character in paths: {:?}", &self.0));
+        command.arg("--class-path").arg(paths);
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Option {
     EnableAssertions,

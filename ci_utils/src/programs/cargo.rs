@@ -105,3 +105,24 @@ impl Manipulator for Options {
         }
     }
 }
+
+/// Options for the `cargo run` command.
+#[derive(Clone, PartialEq, Debug, strum::AsRefStr)]
+#[strum(serialize_all = "kebab-case")]
+pub enum RunOption {
+    /// Name of the bin target to run.
+    Bin(String),
+}
+
+impl Manipulator for RunOption {
+    fn apply<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) {
+        let base_arg = format!("--{}", self.as_ref());
+        command.arg(base_arg);
+        use RunOption::*;
+        match self {
+            Bin(binary_name) => {
+                command.arg(binary_name.as_str());
+            }
+        }
+    }
+}

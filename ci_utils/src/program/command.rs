@@ -13,6 +13,7 @@ use tokio::io::AsyncRead;
 use tokio::io::BufReader;
 use tokio::process::Child;
 use tokio::task::JoinHandle;
+use tracing::field;
 
 #[macro_export]
 macro_rules! new_command_type {
@@ -276,15 +277,12 @@ impl Command {
         self.stdout(Stdio::piped());
         self.stderr(Stdio::piped());
 
-        let pretty = self.describe();
         let program = self.inner.as_std().get_program();
         let program = Path::new(program).file_stem().unwrap_or_default().to_os_string();
         let program = program.to_string_lossy();
-        info!("Spawning child process: {}", pretty);
-        let mut child = self.inner.spawn()?;
-        if let Some(pid) = child.id() {
-            tracing::Span::current().record("pid", &pid);
-        }
+
+        let mut child = self.spawn()?;
+
         // FIXME unwraps
         spawn_log_processor(format!("{program}ℹ️"), child.stdout.take().unwrap());
         spawn_log_processor(format!("{program}⚠️"), child.stderr.take().unwrap());
@@ -297,7 +295,7 @@ impl Command {
             "Running process.",
             status = tracing::field::Empty,
             pid = tracing::field::Empty,
-            command = %self.describe()
+            command = tracing::field::Empty,
         )
         .entered();
         let child = self.spawn_intercepting();
@@ -318,6 +316,14 @@ impl Command {
 
     pub fn output_ok(&mut self) -> BoxFuture<'static, Result<Output>> {
         let pretty = self.describe();
+        let span = info_span!(
+            "Running process for the output.",
+            status = tracing::field::Empty,
+            pid = tracing::field::Empty,
+            command = tracing::field::Empty,
+        )
+        .entered();
+
         self.stdout(Stdio::piped());
         self.stderr(Stdio::piped());
         let child = self.spawn();
@@ -326,6 +332,7 @@ impl Command {
             let child = child?;
             let output =
                 child.wait_with_output().await.context("Failed while waiting for output.")?;
+            tracing::Span::current().record("status", &output.status.code());
             status_checker(output.status).with_context(|| {
                 format!(
                     "Stdout:\n{}\n\nStderr:\n{}\n",
@@ -336,6 +343,7 @@ impl Command {
             Result::Ok(output)
         }
         .map_err(move |e| e.context(format!("Failed to get output of the command: {}", pretty)))
+        .instrument(span.exit())
         .boxed()
     }
 
@@ -352,8 +360,20 @@ impl Command {
 
     pub fn spawn(&mut self) -> Result<Child> {
         let pretty = self.describe();
-        debug!("Spawning {}", pretty);
-        self.inner.spawn().context(format!("Failed to spawn: {}", pretty))
+
+        let current_span = tracing::Span::current();
+        if current_span.field("command").is_some() {
+            tracing::Span::current().record("command", &field::display(&pretty));
+            debug!("Spawning.");
+        } else {
+            debug!("Spawning {}.", pretty);
+        }
+
+        self.inner.spawn().context(format!("Failed to spawn: {}", pretty)).inspect(|child| {
+            if let Some(pid) = child.id() {
+                current_span.record("pid", &pid);
+            }
+        })
     }
 
     // pub fn status(&mut self) -> BoxFuture<'static, Result<ExitStatus>> {

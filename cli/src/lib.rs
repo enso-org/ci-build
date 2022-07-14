@@ -29,6 +29,7 @@ impl Variable for BuildKind {
 // #![feature(adt_const_params)]
 
 
+use crate::arg::java_gen;
 use crate::arg::release::Action;
 use crate::arg::BuildJob;
 use crate::arg::Cli;
@@ -735,7 +736,7 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
         remove_if_exists(cli.repo_path.join("ci-build"))?;
     }
 
-    let ctx = Processor::new(&cli).instrument(info_span!("Building context.")).await?;
+    let ctx: Processor = Processor::new(&cli).instrument(info_span!("Building context.")).await?;
     match cli.target {
         Target::Wasm(wasm) => ctx.handle_wasm(wasm).await?,
         Target::Gui(gui) => ctx.handle_gui(gui).await?,
@@ -785,6 +786,22 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
         Target::CiGen => ci_gen::generate(
             &enso_build::paths::generated::RepoRootGithubWorkflows::new(cli.repo_path),
         )?,
+        Target::JavaGen(command) => {
+            let repo_root = ctx.repo_root();
+            async move {
+                let generate_job = enso_build::rust::parser::generate_java(&repo_root);
+                match command.action {
+                    java_gen::Command::Build => generate_job.await,
+                    java_gen::Command::Test => {
+                        generate_job.await?;
+                        let backend_context = ctx.prepare_backend_context(default()).await?;
+                        backend_context.prepare_build_env().await?;
+                        enso_build::rust::parser::run_self_tests(&repo_root).await
+                    }
+                }
+            }
+            .await?;
+        }
     };
     info!("Completed main job.");
     global::complete_tasks().await?;

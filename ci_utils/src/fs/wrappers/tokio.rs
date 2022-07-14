@@ -27,3 +27,13 @@ pub async fn create_dir_all(path: impl AsRef<Path>) -> Result {
 pub async fn read_dir(path: impl AsRef<Path>) -> Result<tokio::fs::ReadDir> {
     tokio::fs::read_dir(&path).await.anyhow_err()
 }
+
+#[context("Failed to remove directory with the subtree: {}", path.as_ref().display())]
+pub async fn remove_dir_all(path: impl AsRef<Path>) -> Result {
+    tokio::fs::remove_dir_all(&path).await.anyhow_err()
+}
+
+#[context("Failed to write file: {}", path.as_ref().display())]
+pub async fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result {
+    tokio::fs::write(&path, &contents).await.anyhow_err()
+}

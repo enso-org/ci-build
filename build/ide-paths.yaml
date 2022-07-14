@@ -45,6 +45,14 @@
   distribution/:
     editions/:
       <edition>.yaml:
+  lib/:
+    rust/:
+      parser/:
+        generate-java/:
+          java/:
+  target/:
+    generated-java/:
+      GeneratedFormatTests.java:
   tools/:
     simple-library-server/:
   run:

@@ -46,6 +46,7 @@ pub mod project;
 pub mod project_manager;
 pub mod release;
 pub mod repo;
+pub mod rust;
 pub mod source;
 pub mod version;
 

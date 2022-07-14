@@ -102,6 +102,8 @@ pub struct BuildConfigurationFlags {
     pub build_project_manager_package: bool,
     pub build_launcher_bundle: bool,
     pub build_project_manager_bundle: bool,
+    pub generate_java_from_rust: bool,
+    pub test_java_generated_from_rust: bool,
 }
 
 impl From<BuildConfigurationFlags> for BuildConfigurationResolved {
@@ -165,6 +167,8 @@ impl Default for BuildConfigurationFlags {
             build_project_manager_package: false,
             build_launcher_bundle: false,
             build_project_manager_bundle: false,
+            generate_java_from_rust: false,
+            test_java_generated_from_rust: false,
         }
     }
 }

@@ -24,6 +24,10 @@ pub const ARCHIVE_EXTENSION: &str = match TARGET_OS {
     _ => "tar.gz",
 };
 
+pub fn new_repo_root(repo_root: impl Into<PathBuf>, triple: &TargetTriple) -> generated::RepoRoot {
+    generated::RepoRoot::new_root(repo_root, triple.to_string(), triple.versions.edition_name())
+}
+
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct ComponentPaths {
     // e.g. `enso-engine-0.0.0-SNAPSHOT.2022-01-19-windows-amd64`
@@ -117,7 +121,7 @@ impl Display for TargetTriple {
 
 #[derive(Clone, Debug)]
 pub struct Paths {
-    pub repo_root:       PathBuf,
+    pub repo_root:       generated::RepoRoot,
     pub build_dist_root: PathBuf,
     pub target:          PathBuf,
     pub launcher:        ComponentPaths,
@@ -135,6 +139,7 @@ impl Paths {
     /// Create a new set of paths for building the Enso with a given version number.
     pub fn new_triple(repo_root: impl Into<PathBuf>, triple: TargetTriple) -> Result<Self> {
         let repo_root: PathBuf = repo_root.into().absolutize()?.into();
+        let repo_root = new_repo_root(repo_root, &triple);
         let build_dist_root = repo_root.join("built-distribution");
         let target = repo_root.join("target");
         let launcher = ComponentPaths::new(&build_dist_root, "enso-launcher", "enso", &triple);

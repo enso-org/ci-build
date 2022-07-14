@@ -71,14 +71,11 @@ impl RunContext {
 
         let prepare_simple_library_server = {
             if self.config.test_scala {
-                let simple_server_path =
-                    crate::paths::generated::RepoRootToolsSimpleLibraryServer::new(
-                        &self.paths.repo_root,
-                    );
-                ide_ci::programs::Git::new(&simple_server_path).cmd()?.clean().run_ok().await?;
+                let simple_server_path = &self.paths.repo_root.tools.simple_library_server;
+                ide_ci::programs::Git::new(simple_server_path).cmd()?.clean().run_ok().await?;
                 ide_ci::programs::Npm
                     .cmd()?
-                    .current_dir(&simple_server_path)
+                    .current_dir(simple_server_path)
                     .install()
                     .run_ok()
                     .left_future()
@@ -183,9 +180,15 @@ impl RunContext {
             git.args(["checkout"])?.arg(lib_src).run_ok().await?;
         }
 
+        // We want to start this earlier, and await only before Engine build starts.
+        let perhaps_generate_java_from_rust_job =
+            ide_ci::future::perhaps(self.config.generate_java_from_rust, || {
+                crate::rust::parser::generate_java(&self.paths.repo_root)
+            });
+
         // Download Project Template Files
         let client = reqwest::Client::new();
-        download_project_templates(client.clone(), self.paths.repo_root.clone()).await?;
+        download_project_templates(client.clone(), self.paths.repo_root.path.clone()).await?;
 
         let sbt = WithCwd::new(Sbt, &self.paths.repo_root);
 
@@ -199,6 +202,12 @@ impl RunContext {
         // Build packages.
         debug!("Bootstrapping Enso project.");
         sbt.call_arg("bootstrap").await?;
+
+        perhaps_generate_java_from_rust_job.await.transpose()?;
+        let perhaps_test_java_generated_from_rust_job =
+            ide_ci::future::perhaps(self.config.test_java_generated_from_rust, || {
+                crate::rust::parser::run_self_tests(&self.paths.repo_root)
+            });
 
         // If we have much memory, we can try building everything in a single batch. Reducing number
         // of SBT invocations significantly helps build time. However, it is more memory heavy, so
@@ -292,6 +301,8 @@ impl RunContext {
             // Test Enso
             sbt.call_arg("set Global / parallelExecution := false; test").await?;
         }
+
+        perhaps_test_java_generated_from_rust_job.await.transpose()?;
 
         // === Build Distribution ===
         if self.config.mode == BuildMode::Development {

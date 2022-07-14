@@ -139,6 +139,7 @@ impl IsTarget for Backend {
             let operation = crate::engine::Operation::Build;
             let config = BuildConfigurationFlags {
                 build_project_manager_bundle: true,
+                generate_java_from_rust: true,
                 mode: crate::engine::BuildMode::NightlyRelease,
                 ..default()
             };
