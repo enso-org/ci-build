@@ -11,6 +11,8 @@ const GENERATOR_CRATE_NAME: &str = "enso-parser-generate-java";
 const GENERATOR_BIN_NAME: &str = GENERATOR_CRATE_NAME;
 const TEST_GENERATOR_BIN_NAME: &str = "java-tests";
 const GENERATED_CODE_NAMESPACE: [&str; 3] = ["org", "enso", "syntax2"];
+const GENERATED_TEST_CLASS: &str = "GeneratedFormatTests";
+const JAVA_EXTENSION: &str = ".java";
 
 pub fn cargo_run_generator_cmd(repo_root: &Path, binary_name: &str) -> Result<Command> {
     let mut ret = Cargo.cmd()?;
@@ -44,29 +46,28 @@ pub async fn generate_java(repo_root: &RepoRoot) -> Result {
 pub async fn run_self_tests(repo_root: &RepoRoot) -> Result {
     let base = &repo_root.target.generated_java;
     let lib = &repo_root.lib.rust.parser.generate_java.java;
+    let package = repo_root.target.generated_java.join_iter(GENERATED_CODE_NAMESPACE);
+    let test = package.join(GENERATED_TEST_CLASS).with_extension(JAVA_EXTENSION);
+    let mut test_class = GENERATED_CODE_NAMESPACE.into_iter().chain(Some(GENERATED_TEST_CLASS));
 
     let tests_code = cargo_run_generator_cmd(repo_root, TEST_GENERATOR_BIN_NAME)?
         .output_ok()
         .await?
         .into_stdout_string()?;
     trace!("Generated test code:\n{tests_code}");
-    ide_ci::fs::tokio::write(&base.generated_format_tests_java, tests_code).await?;
+    ide_ci::fs::tokio::write(&test, tests_code).await?;
 
     Javac
         .cmd()?
         .apply(&javac::Classpath::new([lib.as_path(), base.as_path()]))
         .apply(&javac::Options::Directory(base.into()))
-        .arg(&base.generated_format_tests_java)
+        .arg(&test)
         .run_ok()
         .await?;
 
     Java.cmd()?
         .apply(&java::Classpath::new([&base]))
-        .arg(
-            base.generated_format_tests_java
-                .file_stem()
-                .context("Path to file with tests must contain filename stem.")?,
-        )
+        .arg(&test_class.join("."))
         .run_ok()
         .await?;
 
