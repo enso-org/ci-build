@@ -11,7 +11,7 @@ use clap::ArgEnum;
 use clap::Args;
 use clap::Subcommand;
 use enso_build::project::wasm::Wasm;
-use std::lazy::SyncOnceCell;
+use std::sync::OnceLock;
 
 pub use enso_build::project::wasm::Profile;
 
@@ -21,7 +21,7 @@ impl IsWatchableSource for Wasm {
     type WatchInput = WatchInput;
 }
 
-static DEFAULT_WASM_SIZE_LIMIT: SyncOnceCell<String> = SyncOnceCell::new();
+static DEFAULT_WASM_SIZE_LIMIT: OnceLock<String> = OnceLock::new();
 
 pub fn initialize_default_wasm_size_limit(limit: byte_unit::Byte) -> Result {
     DEFAULT_WASM_SIZE_LIMIT
