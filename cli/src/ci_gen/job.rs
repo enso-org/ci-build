@@ -93,23 +93,28 @@ echo "::set-output name=list::'$list'"
         let omit_in_pr_body = "contains(github.event.pull_request.body,'[ci no changelog needed]')";
         let is_dependabot = "github.event.pull_request.user.login == 'dependabot'";
 
-        Job {
-                name: "Assert if CHANGELOG.md was updated (on pull request)".into(),
-                runs_on: runs_on(os),
-                steps: vec![
-                    checkout_repo_step(),
-                    Step {
-                        id: Some(changed_files_id.into()),
-                        run: Some(changed_files),
-                        ..default()
-                    },
-                    Step {
-                        run: Some(format!("if [[ ${{{{ {changelog_was_changed} || {omit_in_commit_msg} || {omit_in_pr_body} || {is_dependabot} }}}} == false ]]; then exit 1; fi")),
-                        r#if: Some("github.base_ref == 'develop' || github.base_ref == 'unstable' || github.base_ref == 'stable'".into()),
-                        ..default()
-                    }],
+        let steps = {
+            let mut steps = vec![];
+            steps.extend(checkout_repo_step());
+            steps.push(Step {
+                id: Some(changed_files_id.into()),
+                run: Some(changed_files),
                 ..default()
-            }
+            });
+            steps.push(                Step {
+                run: Some(format!("if [[ ${{{{ {changelog_was_changed} || {omit_in_commit_msg} || {omit_in_pr_body} || {is_dependabot} }}}} == false ]]; then exit 1; fi")),
+                r#if: Some("github.base_ref == 'develop' || github.base_ref == 'unstable' || github.base_ref == 'stable'".into()),
+                ..default()
+            });
+            steps
+        };
+
+        Job {
+            name: "Assert if CHANGELOG.md was updated (on pull request)".into(),
+            runs_on: runs_on(os),
+            steps,
+            ..default()
+        }
     }
 }
 

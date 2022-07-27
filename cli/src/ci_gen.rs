@@ -62,8 +62,8 @@ pub fn runs_on(os: OS) -> Vec<RunnerLabel> {
 }
 
 pub fn setup_script_steps() -> Vec<Step> {
-    let mut ret =
-        vec![setup_conda(), setup_wasm_pack_step(), setup_artifact_api(), checkout_repo_step()];
+    let mut ret = vec![setup_conda(), setup_wasm_pack_step(), setup_artifact_api()];
+    ret.extend(checkout_repo_step());
     ret.push(run("--help").with_name("Build Script Setup"));
     ret
 }
