@@ -115,6 +115,7 @@ pub struct BuildInput {
     /// Path to the crate to be compiled to WAM. Relative to the repository root.
     pub crate_path:          PathBuf,
     pub wasm_opt_options:    Vec<String>,
+    pub skip_wasm_opt:       bool,
     pub extra_cargo_options: Vec<String>,
     pub profile:             Profile,
     pub profiling_level:     Option<ProfilingLevel>,
@@ -186,6 +187,7 @@ impl IsTarget for Wasm {
                 repo_root,
                 crate_path,
                 wasm_opt_options,
+                skip_wasm_opt,
                 extra_cargo_options,
                 profile,
                 profiling_level,
@@ -220,26 +222,7 @@ impl IsTarget for Wasm {
             }
             command.run_ok().await?;
 
-            if *profile != Profile::Dev {
-                let mut wasm_opt_command = WasmOpt.cmd()?;
-                let has_custom_opt_level = wasm_opt_options.iter().any(|opt| {
-                    wasm_opt::OptimizationLevel::from_str(opt.trim_start_matches('-')).is_ok()
-                });
-                if !has_custom_opt_level {
-                    wasm_opt_command.apply(&profile.optimization_level());
-                }
-                wasm_opt_command
-                    .args(wasm_opt_options)
-                    .arg(&temp_dist.wasm_main_raw)
-                    .apply(&wasm_opt::Output(&temp_dist.wasm_main))
-                    .run_ok()
-                    .await?;
-            } else {
-                debug!("Skipping wasm-opt invocation, as it is not part of profile {profile}.");
-                copy_file_if_different(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
-            }
-
-            // ide_ci::fs::rename(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
+            Self::finalize_wasm(wasm_opt_options, *skip_wasm_opt, *profile, &temp_dist).await?;
             patch_js_glue_in_place(&temp_dist.wasm_glue)?;
 
             ide_ci::fs::create_dir_if_missing(&destination)?;
@@ -279,6 +262,7 @@ impl IsWatchable for Wasm {
                 repo_root,
                 crate_path,
                 wasm_opt_options,
+                skip_wasm_opt,
                 extra_cargo_options,
                 profile,
                 profiling_level,
@@ -305,6 +289,7 @@ impl IsWatchable for Wasm {
                 // parsing/generation. Rather than using `cargo watch` this should
                 // be implemented directly in Rust.
                 .arg(current_exe)
+                .arg("--skip-version-check") // We already checked in the parent process.
                 .args(["--repo-path", repo_root.as_str()])
                 .arg("wasm")
                 .arg("build")
@@ -316,6 +301,9 @@ impl IsWatchable for Wasm {
             }
             for wasm_opt_option in wasm_opt_options {
                 watch_cmd.args(["--wasm-opt-option", &wasm_opt_option]);
+            }
+            if skip_wasm_opt {
+                watch_cmd.args(["--skip-wasm-opt"]);
             }
             if let Some(wasm_size_limit) = wasm_size_limit {
                 watch_cmd.args(["--wasm-size-limit", wasm_size_limit.to_string().as_str()]);
@@ -430,6 +418,45 @@ impl Wasm {
             .run_ok()
             .await
         // PM will be automatically killed by dropping the handle.
+    }
+
+    /// Process "raw" WASM (as compiled) by optionally invoking wasm-opt.
+    pub async fn finalize_wasm(
+        wasm_opt_options: &[String],
+        skip_wasm_opt: bool,
+        profile: Profile,
+        temp_dist: &RepoRootDistWasm,
+    ) -> Result {
+        let should_call_wasm_opt = {
+            if profile == Profile::Dev {
+                debug!("Skipping wasm-opt invocation, as it is not part of profile {profile}.");
+                false
+            } else if skip_wasm_opt {
+                debug!("Skipping wasm-opt invocation, as it was explicitly requested.");
+                false
+            } else {
+                true
+            }
+        };
+
+        if should_call_wasm_opt {
+            let mut wasm_opt_command = WasmOpt.cmd()?;
+            let has_custom_opt_level = wasm_opt_options.iter().any(|opt| {
+                wasm_opt::OptimizationLevel::from_str(opt.trim_start_matches('-')).is_ok()
+            });
+            if !has_custom_opt_level {
+                wasm_opt_command.apply(&profile.optimization_level());
+            }
+            wasm_opt_command
+                .args(wasm_opt_options)
+                .arg(&temp_dist.wasm_main_raw)
+                .apply(&wasm_opt::Output(&temp_dist.wasm_main))
+                .run_ok()
+                .await?;
+        } else {
+            copy_file_if_different(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
+        }
+        Ok(())
     }
 }
 

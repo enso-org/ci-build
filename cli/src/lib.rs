@@ -611,11 +611,13 @@ impl Resolvable for Wasm {
             cargo_options,
             profiling_level,
             wasm_size_limit,
+            skip_wasm_opt,
         } = from;
         ok_ready_boxed(wasm::BuildInput {
             repo_root: ctx.repo_root(),
             crate_path,
             wasm_opt_options,
+            skip_wasm_opt,
             extra_cargo_options: cargo_options,
             profile: wasm_profile.into(),
             profiling_level: profiling_level.map(into),
