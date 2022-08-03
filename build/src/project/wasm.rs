@@ -32,16 +32,13 @@ pub mod env;
 pub mod js_patcher;
 pub mod test;
 
-pub const BINARYEN_VERSION_TO_INSTALL: usize = 108;
+pub const BINARYEN_VERSION_TO_INSTALL: u32 = 108;
 
 pub const DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub const INTEGRATION_TESTS_CRATE_NAME: &str = "enso-integration-test";
 
 pub const OUTPUT_NAME: &str = "ide";
-
-/// wasm-pack version we require.
-pub const WASM_PACK_VERSION_REQ: &str = ">=0.10.1";
 
 /// Name of the artifact that will be uploaded as part of CI run.
 pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
@@ -181,7 +178,7 @@ impl IsTarget for Wasm {
         async move {
             // Old wasm-pack does not pass trailing `build` command arguments to the Cargo.
             // We want to be able to pass --profile this way.
-            WasmPack.require_present_that(&VersionReq::parse(">=0.10.1")?).await?;
+            WasmPack.require_present_that(VersionReq::parse(">=0.10.1")?).await?;
 
             let BuildInput {
                 repo_root,
@@ -195,7 +192,7 @@ impl IsTarget for Wasm {
             } = &inner;
 
             cache::goodie::binaryen::Binaryen { version: BINARYEN_VERSION_TO_INSTALL }
-                .install_if_missing(&cache, WasmOpt)
+                .install_if_missing(&cache)
                 .await?;
 
             info!("Building wasm.");
@@ -465,7 +462,6 @@ mod tests {
     use super::*;
     use ide_ci::io::read_length;
     use ide_ci::programs::Cargo;
-    use semver::VersionReq;
 
     #[tokio::test]
     async fn check_wasm_size() -> Result {
@@ -473,12 +469,6 @@ mod tests {
         let file = tokio::io::BufReader::new(ide_ci::fs::tokio::open(&path).await?);
         let encoded_stream = async_compression::tokio::bufread::GzipEncoder::new(file);
         dbg!(read_length(encoded_stream).await?);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn check_wasm_pack_version() -> Result {
-        WasmPack.require_present_that(&VersionReq::parse(WASM_PACK_VERSION_REQ)?).await?;
         Ok(())
     }
 

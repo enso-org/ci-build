@@ -2,8 +2,10 @@ use crate::prelude::*;
 
 use crate::program::command::MyCommand;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut, PartialEq)]
 pub struct Location<P> {
+    #[deref]
+    #[deref_mut]
     pub executable_path: PathBuf,
     pub phantom_data:    PhantomData<P>,
 }

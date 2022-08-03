@@ -27,9 +27,9 @@ use crate::engine::sbt::verify_generated_package;
 use crate::enso::BuiltEnso;
 use crate::enso::IrCaches;
 
+use ide_ci::cache;
+use ide_ci::cache::goodie::graalvm;
 use ide_ci::goodie::GoodieDatabase;
-use ide_ci::goodies;
-use ide_ci::goodies::graalvm;
 use ide_ci::platform::DEFAULT_SHELL;
 use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::graal;
@@ -59,7 +59,7 @@ impl RunContext {
         }
 
         // Setup SBT
-        self.goodies.require(&goodies::sbt::Sbt).await?;
+        cache::goodie::sbt::Sbt.install_if_missing(&self.cache).await?;
         ide_ci::programs::Sbt.require_present().await?;
 
         // Other programs.
@@ -131,13 +131,13 @@ impl RunContext {
         // Setup GraalVM
         let build_sbt_content = ide_ci::fs::read_to_string(self.paths.build_sbt())?;
         let graalvm = graalvm::GraalVM {
-            client:        &self.octocrab,
+            client:        self.octocrab.clone(),
             graal_version: get_graal_version(&build_sbt_content)?,
             java_version:  get_java_major_version(&build_sbt_content)?,
             os:            TARGET_OS,
             arch:          TARGET_ARCH,
         };
-        self.goodies.require(&graalvm).await?;
+        graalvm.install_if_missing(&self.cache).await?;
         graal::Gu.require_present().await?;
 
         // Make sure that Graal has installed the optional components that we need.

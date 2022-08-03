@@ -38,7 +38,7 @@ impl Edition {
     pub fn is_nightly(&self) -> bool {
         // TRANSITION: old nightlies
         self.0.contains("nightly")
-            || ide_ci::program::version::find_in_text(self)
+            || Version::find_in_text(self)
                 .as_ref()
                 .map_or(false, |version| BuildKind::Nightly.matches(version))
     }

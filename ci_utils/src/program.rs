@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use semver::VersionReq;
 
 pub mod command;
 pub mod location;
@@ -31,6 +30,8 @@ pub const EMPTY_ARGS: [&str; 0] = [];
 #[async_trait]
 pub trait Program: Sized + 'static {
     type Command: MyCommand<Self> + Send + Sync + IsCommandWrapper = Command;
+
+    type Version: version::IsVersion = semver::Version;
 
     /// The name used to find and invoke the program.
     ///
@@ -75,7 +76,7 @@ pub trait Program: Sized + 'static {
         .boxed()
     }
 
-    async fn require_present_at(&self, required_version: &Version) -> Result {
+    async fn require_present_at(&self, required_version: &Self::Version) -> Result {
         let found_version = self.version().await?;
         if &found_version != required_version {
             bail!(
@@ -85,18 +86,6 @@ pub trait Program: Sized + 'static {
                 found_version
             )
         }
-        Ok(())
-    }
-
-    async fn require_present_that(&self, required_version: &VersionReq) -> Result {
-        let found_version = self.version().await?;
-        ensure!(
-            required_version.matches(&found_version),
-            "Failed to find {} in version that satisfied requirement {}. Found version: {}",
-            self.executable_name(),
-            required_version,
-            found_version
-        );
         Ok(())
     }
 
@@ -140,8 +129,7 @@ pub trait Program: Sized + 'static {
         .boxed()
     }
 
-    // TODO if such need appears, likely Version should be made an associated type
-    async fn version(&self) -> Result<Version> {
+    async fn version(&self) -> Result<Self::Version> {
         let stdout = self.version_string().await?;
         self.parse_version(&stdout)
     }
@@ -150,12 +138,28 @@ pub trait Program: Sized + 'static {
     /// `version_string`.
     ///
     /// Some programs do not follow semver for versioning, for them this method is unspecified.
-    fn parse_version(&self, version_text: &str) -> Result<Version> {
-        version::find_in_text(version_text)
+    fn parse_version(&self, version_text: &str) -> Result<Self::Version> {
+        Self::Version::find_in_text(version_text)
     }
 }
 
+#[async_trait]
 pub trait ProgramExt: Program {
+    async fn require_present_that(
+        &self,
+        required_version: impl version::IsVersionPredicate<Version = Self::Version>,
+    ) -> Result {
+        let found_version = self.version().await?;
+        ensure!(
+            required_version.matches(&found_version),
+            "Failed to find {} in version that satisfied requirement {}. Found version: {}",
+            self.executable_name(),
+            required_version,
+            found_version
+        );
+        Ok(())
+    }
+
     fn executable_names(&self) -> Vec<&str> {
         let mut ret = vec![self.executable_name()];
         ret.extend(Self::executable_name_fallback());

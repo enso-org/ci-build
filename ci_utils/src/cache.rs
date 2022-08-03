@@ -13,17 +13,29 @@ use sha2::Digest;
 
 pub use goodie::Goodie;
 
+/// Format of the hashing scheme.
+///
+/// This value can be bumped to invalidate all the hashes.
 pub const VERSION: u8 = 1;
 
+/// Default location of the cache root.
 pub fn default_path() -> Result<PathBuf> {
     Ok(dirs::home_dir().context("Cannot locate home directory.")?.join_iter([".enso-ci", "cache"]))
 }
 
+/// Description of the entity that can be cached.
 pub trait Storable: Debug + Send + Sync + 'static {
+    /// Data necessary to construct output from a disk storage.
     type Metadata: Serialize + DeserializeOwned + Send + Sync + 'static;
+    /// An instance of the cached entity.
     type Output: Clone + Send + Sync + 'static;
+    /// A key used to generate a hash.
     type Key: Clone + Debug + Serialize + DeserializeOwned + Send + Sync + 'static;
 
+    /// Fill the cache store with this entity.
+    ///
+    /// The cache `store` parameter is an existing, writable, empty directory. The store path should
+    /// not be assumed to be constant for this entry, metadata should not include it in any way.
     fn generate(&self, cache: Cache, store: PathBuf) -> BoxFuture<'static, Result<Self::Metadata>>;
 
     fn adapt(
@@ -73,6 +85,11 @@ pub struct Cache {
 impl Cache {
     pub async fn new_default() -> Result<Self> {
         Self::new(default_path()?).await
+    }
+
+    /// Path to the cache root.
+    pub fn path(&self) -> &Path {
+        &self.root
     }
 
     pub async fn new(path: impl Into<PathBuf>) -> Result<Self> {

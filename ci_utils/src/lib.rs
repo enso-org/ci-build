@@ -158,6 +158,7 @@ pub mod prelude {
     pub use crate::extensions::iterator::TryIteratorExt;
     pub use crate::extensions::output::OutputExt as _;
     pub use crate::extensions::path::PathExt as _;
+    pub use crate::program::version::IsVersion as _;
     pub use crate::program::ProgramExt as _;
 
     pub fn into<T, U>(u: U) -> T
