@@ -4,6 +4,9 @@ use crate::programs;
 
 const DOWNLOAD_URL_TEXT: &str = "https://github.com/sbt/sbt/releases/download/v1.5.5/sbt-1.5.5.tgz";
 
+crate::define_env_var! {
+    SBT_HOME, PathBuf
+}
 
 #[derive(Debug, Clone, PartialEq, Display)]
 pub struct Sbt;
@@ -18,6 +21,10 @@ impl cache::Goodie for Sbt {
     }
 
     fn activate(&self, package_path: PathBuf) -> Result {
-        crate::env::prepend_to_path(package_path.join("bin"))
+        let sbt_home = package_path.join("sbt");
+        // Yeah, it is needed. Sbt will fail, if not set.
+        SBT_HOME.set(&sbt_home)?;
+        crate::env::prepend_to_path(sbt_home.join("bin"))?;
+        Ok(())
     }
 }
