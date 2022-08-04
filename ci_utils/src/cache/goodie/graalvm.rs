@@ -83,6 +83,7 @@ impl Goodie for GraalVM {
     }
 
     fn activate(&self, package_path: PathBuf) -> Result {
+        let package_path = package_path.join(self.root_directory_name());
         let root = match TARGET_OS {
             OS::MacOS => package_path.join_iter(["Contents", "Home"]),
             _ => package_path.clone(),
@@ -114,23 +115,35 @@ impl GraalVM {
         let java_version = format!("java{}", java_version.0);
         format!("{}-{}-{}-{}", PACKAGE_PREFIX, java_version, os_name, arch_name)
     }
+
+    pub fn root_directory_name(&self) -> PathBuf {
+        PathBuf::from(format!("{}-{}-{}", PACKAGE_PREFIX, self.java_version, self.graal_version))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache;
+    use crate::log::setup_logging;
+    use crate::programs::graal::Gu;
     use crate::programs::Java;
 
     #[tokio::test]
     async fn test_is_enabled() -> Result {
+        setup_logging()?;
         let graal_version = Version::parse("21.3.0").unwrap();
         let java_version = java::LanguageVersion(11);
-        let os = OS::Linux;
+        let os = TARGET_OS;
         let arch = Arch::X86_64;
         let client = Octocrab::default();
         let graalvm = GraalVM { graal_version, java_version, os, arch, client };
-        let graalvm = graalvm.is_active().await?;
-        assert!(graalvm);
+
+        graalvm.install_if_missing(&cache::Cache::new_default().await?).await?;
+
+        Gu.require_present().await?;
+        // let graalvm = graalvm.is_active().await?;
+        // assert!(graalvm);
         Ok(())
     }
 
