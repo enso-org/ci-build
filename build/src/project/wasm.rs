@@ -137,9 +137,11 @@ impl BuildInput {
             } else {
                 ensure!(
                     compressed_size < wasm_size_limit,
-                    "Compressed WASM size {} exceeds the limit of {}.",
+                    "Compressed WASM size ~{} ({} bytes) exceeds the limit of {} ({} bytes).",
                     compressed_size,
-                    wasm_size_limit
+                    compressed_size.get_byte(),
+                    wasm_size_limit,
+                    wasm_size_limit.get_byte(),
                 )
             }
         }
