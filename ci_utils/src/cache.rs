@@ -20,7 +20,9 @@ pub const VERSION: u8 = 2;
 
 /// Default location of the cache root.
 pub fn default_path() -> Result<PathBuf> {
-    Ok(dirs::home_dir().context("Cannot locate home directory.")?.join_iter([".enso-ci", "cache"]))
+    Ok(dirs::data_local_dir()
+        .context("Cannot locate user's local data directory.")?
+        .join_iter([".enso-ci", "cache"]))
 }
 
 /// Description of the entity that can be cached.
