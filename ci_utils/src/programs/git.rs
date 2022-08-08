@@ -1,7 +1,10 @@
-use crate::new_command_type;
 use crate::prelude::*;
 
-use crate::program::command::Manipulator;
+use crate::new_command_type;
+
+pub mod clean;
+
+pub use clean::Clean;
 
 #[derive(Clone, Debug, Default)]
 pub struct Git {
@@ -57,52 +60,16 @@ impl AsRef<OsStr> for Command {
     }
 }
 
-pub enum Clean {
-    /// Normally, when no path is specified, `git clean` will not recurse into untracked
-    /// directories to avoid removing too much. Specify this option to have it recurse into such
-    /// directories as well. If any paths are specified, this option is irrelevant; all untracked
-    /// files matching the specified paths (with exceptions for nested git directories mentioned
-    /// under `Force`) will be removed.
-    UntrackedDirectories,
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::log::setup_logging;
 
-    /// If the Git configuration variable clean.requireForce is not set to false, git clean will
-    /// refuse to delete files or directories unless given `Force` or `Interactive`. Git will
-    /// refuse to modify untracked nested git repositories (directories with a .git subdirectory)
-    /// unless a second `Force` is given.
-    Force,
-
-    /// Show what would be done and clean files interactively.
-    Interactive,
-
-    /// Don’t actually remove anything, just show what would be done.
-    DryRun,
-
-    /// Use the given exclude pattern in addition to the standard ignore rules.
-    Exclude(String),
-
-    /// Don’t use the standard ignore rules, but still use the ignore rules given with `Exclude`
-    /// options from the command line. This allows removing all untracked files, including build
-    /// products. This can be used (possibly in conjunction with git restore or git reset) to
-    /// create a pristine working directory to test a clean build.
-    Ignored,
-
-    /// Remove only files ignored by Git. This may be useful to rebuild everything from scratch,
-    /// but keep manually created files.
-    OnlyIgnored,
-}
-
-impl Manipulator for Clean {
-    fn apply<C: IsCommandWrapper + ?Sized>(&self, command: &mut C) {
-        // fn apply<'a, C: IsCommandWrapper + ?Sized>(&self, c: &'a mut C) -> &'a mut C {
-        let args: Vec<&str> = match self {
-            Clean::UntrackedDirectories => vec!["-d"],
-            Clean::Force => vec!["-f"],
-            Clean::Interactive => vec!["-i"],
-            Clean::DryRun => vec!["-n"],
-            Clean::Exclude(pattern) => vec!["-e", pattern.as_ref()],
-            Clean::Ignored => vec!["-x"],
-            Clean::OnlyIgnored => vec!["-X"],
-        };
-        command.args(args);
+    #[tokio::test]
+    async fn nice_clean_test() -> Result {
+        setup_logging()?;
+        let git = Git::new(r"H:\NBO\enso5");
+        git.clean_except_for([".idea", "target/enso-build"]).await?;
+        Ok(())
     }
 }
