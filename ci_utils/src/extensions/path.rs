@@ -46,11 +46,13 @@ pub trait PathExt: AsRef<Path> {
     }
 
     fn write_as_json<T: Serialize>(&self, value: &T) -> Result {
+        trace!("Writing JSON to {}.", self.as_ref().display());
         let file = crate::fs::create(self)?;
         serde_json::to_writer(file, value).anyhow_err()
     }
 
     fn write_as_yaml<T: Serialize>(&self, value: &T) -> Result {
+        trace!("Writing YAML to {}.", self.as_ref().display());
         let file = crate::fs::create(self)?;
         serde_yaml::to_writer(file, value).anyhow_err()
     }

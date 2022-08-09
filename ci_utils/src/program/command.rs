@@ -81,6 +81,13 @@ pub trait IsCommandWrapper {
         self
     }
 
+    fn apply_iter(&mut self, iter: impl IntoIterator<Item = impl Manipulator>) -> &mut Self {
+        for manipulator in iter {
+            self.apply(&manipulator);
+        }
+        self
+    }
+
     fn apply_opt<M: Manipulator>(&mut self, manipulator: Option<&M>) -> &mut Self {
         if let Some(m) = manipulator {
             self.apply(m);

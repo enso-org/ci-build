@@ -51,6 +51,6 @@ impl GoodieDatabase {
                 return Ok(entry.path());
             }
         }
-        Err(anyhow!("no directory by name {} in the database.", expected_dir_name.display()))
+        bail!("no directory by name {} in the database.", expected_dir_name.display())
     }
 }

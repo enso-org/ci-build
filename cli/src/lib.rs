@@ -72,6 +72,7 @@ use enso_build::source::ReleaseSource;
 use enso_build::source::Source;
 use enso_build::source::WatchTargetJob;
 use enso_build::source::WithDestination;
+use futures_util::future::try_join;
 use ide_ci::actions::workflow::is_in_env;
 use ide_ci::cache::Cache;
 use ide_ci::fs::remove_if_exists;
@@ -80,9 +81,9 @@ use ide_ci::global;
 use ide_ci::log::setup_logging;
 use ide_ci::ok_ready_boxed;
 use ide_ci::programs::cargo;
+use ide_ci::programs::git::clean;
 use ide_ci::programs::rustc;
 use ide_ci::programs::Cargo;
-use ide_ci::programs::Git;
 use std::time::Duration;
 use tempfile::tempdir;
 use tokio::process::Child;
@@ -611,11 +612,13 @@ impl Resolvable for Wasm {
             cargo_options,
             profiling_level,
             wasm_size_limit,
+            skip_wasm_opt,
         } = from;
         ok_ready_boxed(wasm::BuildInput {
             repo_root: ctx.repo_root(),
             crate_path,
             wasm_opt_options,
+            skip_wasm_opt,
             extra_cargo_options: cargo_options,
             profile: wasm_profile.into(),
             profiling_level: profiling_level.map(into),
@@ -748,7 +751,21 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
         Target::Backend(backend) => ctx.handle_backend(backend).await?,
         Target::Ide(ide) => ctx.handle_ide(ide).await?,
         // TODO: consider if out-of-source ./dist should be removed
-        Target::GitClean => Git::new(ctx.repo_root()).cmd()?.nice_clean().run_ok().await?,
+        Target::GitClean(options) => {
+            let mut exclusions = vec![".idea"];
+            if !options.build_script {
+                exclusions.push("target/enso-build");
+            }
+
+            let git_clean = clean::clean_except_for(ctx.repo_root(), exclusions);
+            let clean_cache = async {
+                if options.cache {
+                    ide_ci::fs::tokio::remove_dir_if_exists(ctx.cache.path()).await?;
+                }
+                Result::Ok(())
+            };
+            try_join(git_clean, clean_cache).await?;
+        }
         Target::Lint => {
             Cargo
                 .cmd()?

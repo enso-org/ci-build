@@ -48,6 +48,7 @@ pub async fn copy_to_file(
 /// Remove a directory with all its subtree.
 ///
 /// Does not fail if the directory is not found.
+#[instrument(fields(path = %path.as_ref().display()), err, level = "trace")]
 pub async fn remove_dir_if_exists(path: impl AsRef<Path>) -> Result {
     let path = path.as_ref();
     let result = tokio::fs::remove_dir_all(&path).await;

@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use crate::program::command::Manipulator;
+use crate::program::version::IsVersion;
 
 #[derive(Clone, Copy, Debug, strum::Display, strum::EnumString)]
 pub enum OptimizationLevel {
@@ -41,7 +42,40 @@ impl Manipulator for Output<'_> {
 pub struct WasmOpt;
 
 impl Program for WasmOpt {
+    type Version = Version;
     fn executable_name(&self) -> &str {
         "wasm-opt"
+    }
+}
+
+// wasm-opt (like the whole binaryen) uses a single number as a version.
+#[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Shrinkwrap, Eq)]
+pub struct Version(pub u32);
+
+impl std::str::FromStr for Version {
+    type Err = <u32 as std::str::FromStr>::Err;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        std::str::FromStr::from_str(s).map(Self)
+    }
+}
+
+impl IsVersion for Version {
+    fn find_in_text_internal(text: &str) -> Result<Self> {
+        let number_regex = regex::Regex::new(r#"\d+"#)?;
+        let number_match = number_regex.find(text).context("No number in the given text.")?;
+        let number_text = number_match.as_str();
+        number_text.parse2()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_parsing() -> Result {
+        let sample_version_string = "wasm-opt version 108 (version_108)";
+        assert_eq!(WasmOpt.parse_version(&sample_version_string)?, Version(108));
+        Ok(())
     }
 }
