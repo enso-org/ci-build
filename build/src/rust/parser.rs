@@ -48,7 +48,8 @@ pub async fn run_self_tests(repo_root: &RepoRoot) -> Result {
     let lib = &repo_root.lib.rust.parser.generate_java.java;
     let package = repo_root.target.generated_java.join_iter(GENERATED_CODE_NAMESPACE);
     let test = package.join(GENERATED_TEST_CLASS).with_extension(JAVA_EXTENSION);
-    let mut test_class = GENERATED_CODE_NAMESPACE.into_iter().chain(Some(GENERATED_TEST_CLASS));
+    let test_class =
+        GENERATED_CODE_NAMESPACE.into_iter().chain(Some(GENERATED_TEST_CLASS)).join(".");
 
     let tests_code = cargo_run_generator_cmd(repo_root, TEST_GENERATOR_BIN_NAME)?
         .output_ok()
@@ -65,11 +66,7 @@ pub async fn run_self_tests(repo_root: &RepoRoot) -> Result {
         .run_ok()
         .await?;
 
-    Java.cmd()?
-        .apply(&java::Classpath::new([&base]))
-        .arg(&test_class.join("."))
-        .run_ok()
-        .await?;
+    Java.cmd()?.apply(&java::Classpath::new([&base])).arg(&test_class).run_ok().await?;
 
     Ok(())
 }
