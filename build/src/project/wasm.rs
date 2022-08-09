@@ -227,8 +227,6 @@ impl IsTarget for Wasm {
             ide_ci::fs::create_dir_if_missing(&destination)?;
             let ret = RepoRootDistWasm::new_root(&destination);
             ide_ci::fs::copy(&temp_dist, &ret)?;
-            // copy_if_different(&temp_dist, &ret).await?;
-            // copy_if_different(&temp_dist.wasm_main_raw, &ret.wasm_main)?;
             inner.perhaps_check_size(&ret.wasm_main).await?;
             Ok(Artifact(ret))
         }
@@ -249,10 +247,28 @@ impl IsWatchable for Wasm {
 
     fn watch(
         &self,
-        _context: Context,
+        context: Context,
         job: WatchTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Watcher>> {
+        let span = debug_span!("Watching WASM.", ?job).entered();
+
+        // The esbuild watcher must succeed in its first build, or it will prematurely exit.
+        // See the issue: https://github.com/evanw/esbuild/issues/1063
+        //
+        // Because of this, we run first build of wasm manually, rather through cargo-watch.
+        // After it is completed, the cargo-watch gets spawned and this method yields the watcher.
+        // This forces esbuild watcher (whose setup requires the watcher artifacts) to wait until
+        // all wasm build outputs are in place, so the build won't crash.
+        //
+        // In general, much neater workaround should be possible, if we stop relying on cargo-watch
+        // and do the WASM watch directly in the build script.
+        let first_build_job = self
+            .build(context.clone(), job.build.clone())
+            .instrument(debug_span!("Initial single build of WASM before setting up cargo-watch."));
+
         async move {
+            let first_build_output = first_build_job.await?;
+
             let WatchTargetJob {
                 watch_input: WatchInput { cargo_watch_options: cargo_watch_flags },
                 build: WithDestination { inner, destination },
@@ -268,8 +284,9 @@ impl IsWatchable for Wasm {
                 wasm_size_limit,
             } = inner;
 
+
             let current_exe = std::env::current_exe()?;
-            // Cargo watch apparently cannot handle verbatim path prefix. We remove it and hope for
+            // cargo-watch apparently cannot handle verbatim path prefix. We remove it and hope for
             // the best.
             let current_exe = current_exe.without_verbatim_prefix();
 
@@ -282,14 +299,22 @@ impl IsWatchable for Wasm {
                 .arg("watch")
                 .args(["--ignore", "README.md"])
                 .args(cargo_watch_flags)
-                .arg("--")
+                .arg("--");
+
+            // === Build Script top-level options ===
+            watch_cmd
                 // TODO [mwu]
                 // This is not nice, as this module should not be aware of the CLI
                 // parsing/generation. Rather than using `cargo watch` this should
                 // be implemented directly in Rust.
                 .arg(current_exe)
                 .arg("--skip-version-check") // We already checked in the parent process.
-                .args(["--repo-path", repo_root.as_str()])
+                .args(["--cache-path", context.cache.path().as_str()])
+                .args(["--upload-artifacts", context.upload_artifacts.to_string().as_str()])
+                .args(["--repo-path", repo_root.as_str()]);
+
+            // === Build Script command and its options ===
+            watch_cmd
                 .arg("wasm")
                 .arg("build")
                 .args(["--crate-path", crate_path.as_str()])
@@ -307,19 +332,27 @@ impl IsWatchable for Wasm {
             if let Some(wasm_size_limit) = wasm_size_limit {
                 watch_cmd.args(["--wasm-size-limit", wasm_size_limit.to_string().as_str()]);
             }
+
+            // === cargo-watch options ===
             watch_cmd.arg("--").args(extra_cargo_options);
 
             let watch_process = watch_cmd.spawn_intercepting()?;
             let artifact = Artifact(RepoRootDistWasm::new_root(&destination));
+            ensure!(
+                artifact == first_build_output,
+                "First build output does not match general watch build output. First build output: \
+                {first_build_output:?}, general watch build output: {artifact:?}",
+            );
             Ok(Self::Watcher { artifact, watch_process })
         }
+        .instrument(span.exit())
         .boxed()
     }
 }
 
 
 
-#[derive(Clone, Debug, Display)]
+#[derive(Clone, Debug, Display, PartialEq)]
 pub struct Artifact(RepoRootDistWasm);
 
 impl Artifact {
