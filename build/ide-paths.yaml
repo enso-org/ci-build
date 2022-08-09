@@ -52,7 +52,6 @@
           java/:
   target/:
     generated-java/:
-      GeneratedFormatTests.java:
   tools/:
     simple-library-server/:
   run:
