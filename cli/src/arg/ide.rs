@@ -6,13 +6,15 @@ use crate::arg::WatchJob;
 use crate::source_args_hlp;
 use enso_build::project::backend::Backend;
 use enso_build::project::gui::Gui;
+use enso_build::project::ide;
 use enso_build::project::wasm::DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT;
 
 use clap::Args;
 use clap::Subcommand;
 use octocrab::models::ReleaseId;
 
-source_args_hlp!(Target, "ide", BuildInput);
+source_args_hlp!(ide::Packed, "ide", BuildInput);
+source_args_hlp!(ide::Unpacked, "ide", BuildInput);
 
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInput {
@@ -21,7 +23,10 @@ pub struct BuildInput {
     #[clap(flatten)]
     pub project_manager: Source<Backend>,
     #[clap(flatten)]
-    pub output_path:     OutputPath<Target>,
+    pub output_path:     OutputPath<ide::Unpacked>,
+    /// Prevents packing the IDE into a single file. Output shall be a directory subtree.
+    #[clap(long, enso_env())]
+    pub unpacked:        bool,
 }
 
 #[derive(Subcommand, Clone, Debug)]

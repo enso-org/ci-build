@@ -252,6 +252,7 @@ impl IdeDesktop {
         project_manager: &crate::project::backend::Artifact,
         output_path: impl AsRef<Path>,
         target_os: OS,
+        packed: bool,
     ) -> Result {
         self.npm()?.install().run_ok().await?;
 

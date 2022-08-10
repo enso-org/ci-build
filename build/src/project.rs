@@ -28,7 +28,6 @@ pub mod wasm;
 
 pub use backend::Backend;
 pub use gui::Gui;
-pub use ide::Ide;
 pub use wasm::Wasm;
 
 // FIXME: this works for Project Manager bundle-style archives only, not all.

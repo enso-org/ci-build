@@ -53,9 +53,10 @@ use enso_build::project::backend::Backend;
 use enso_build::project::gui;
 use enso_build::project::gui::Gui;
 use enso_build::project::ide;
-use enso_build::project::ide::Ide;
+use enso_build::project::ide::unpacked::Ide;
 // use enso_build::project::project_manager;
 // use enso_build::project::project_manager::ProjectManager;
+use enso_build::project::ide::IsIdeArtifactExt;
 use enso_build::project::wasm;
 use enso_build::project::wasm::Wasm;
 use enso_build::project::IsTarget;
@@ -469,9 +470,10 @@ impl Processor {
                 let client = self.octocrab.client.clone();
                 async move {
                     let artifacts = build_job.await?;
-                    upload_asset(&remote_repo, &client, release_id, &artifacts.image).await?;
-                    upload_asset(&remote_repo, &client, release_id, &artifacts.image_checksum)
-                        .await?;
+                    // FIXME!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    // upload_asset(&remote_repo, &client, release_id, &artifacts.image).await?;
+                    // upload_asset(&remote_repo, &client, release_id, &artifacts.image_checksum)
+                    //     .await?;
                     Ok(())
                 }
                 .boxed()
@@ -563,23 +565,23 @@ impl Processor {
         &self,
         params: arg::ide::BuildInput,
     ) -> BoxFuture<'static, Result<ide::Artifact>> {
-        let arg::ide::BuildInput { gui, project_manager, output_path } = params;
-        let input = ide::BuildInput {
-            gui:             self.get(gui),
-            project_manager: self.get(project_manager),
-            repo_root:       self.repo_root(),
-            version:         self.triple.versions.version.clone(),
-        };
-        let target = Ide { target_os: self.triple.os, target_arch: self.triple.arch };
-        let build_job = target.build(input, output_path);
-        async move {
-            let artifacts = build_job.await?;
-            if is_in_env() {
-                artifacts.upload_as_ci_artifact().await?;
-            }
-            Ok(artifacts)
+        if params.unpacked {
+            self.build_ide2::<ide::Unpacked>(params)
+                .map_ok(|artifact| ide::Artifact::Unpacked(artifact))
+                .boxed()
+        } else {
+            self.build_ide2::<ide::Packed>(params)
+                .map_ok(|artifact| ide::Artifact::Packed(artifact))
+                .boxed()
         }
-        .boxed()
+    }
+
+    pub fn build_ide2<T: IsTargetSource + IsTarget>(
+        &self,
+        params: arg::ide::BuildInput,
+    ) -> BoxFuture<'static, Result<T::Artifact>> {
+        let job = arg::BuildJob { output_path: params.output_path.clone(), input: params };
+        self.build(job)
     }
 
     pub fn target<Target: Resolvable>(&self) -> Result<Target> {
@@ -657,6 +659,26 @@ impl Resolvable for Backend {
             repo_root: ctx.repo_root().path,
             versions:  ctx.triple.versions.clone(),
         })
+    }
+}
+
+impl Resolvable for ide::Unpacked {
+    fn prepare_target(context: &Processor) -> Result<Self> {
+        Ok(ide::unpacked::Ide { target_os: context.triple.os, target_arch: context.triple.arch })
+    }
+
+    fn resolve(
+        ctx: &Processor,
+        from: <Self as IsTargetSource>::BuildInput,
+    ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
+        let arg::ide::BuildInput { gui, project_manager, output_path, unpacked } = from;
+        let input = ide::BuildInput {
+            gui:             ctx.get(gui),
+            project_manager: ctx.get(project_manager),
+            repo_root:       ctx.repo_root(),
+            version:         ctx.triple.versions.version.clone(),
+        };
+        ok_ready_boxed(input)
     }
 }
 

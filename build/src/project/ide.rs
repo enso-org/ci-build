@@ -1,77 +1,70 @@
 use crate::prelude::*;
 
-use crate::paths::generated::RepoRoot;
+pub mod packed;
+pub mod unpacked;
 
-use futures_util::future::try_join;
-use ide_ci::actions::artifacts::upload_compressed_directory;
-use ide_ci::actions::artifacts::upload_single_file;
-use ide_ci::actions::workflow::is_in_env;
+pub use packed::Ide as Packed;
+pub use unpacked::BuildInput;
+pub use unpacked::Ide as Unpacked;
 
-#[derive(Clone, Debug)]
-pub struct Artifact {
-    /// Directory with unpacked client distribution.
-    pub unpacked:            PathBuf,
-    /// Entry point within an unpacked client distribution.
-    pub unpacked_executable: PathBuf,
-    /// File with the compressed client image (like installer or AppImage).
-    pub image:               PathBuf,
-    /// File with the checksum of the image.
-    pub image_checksum:      PathBuf,
+pub enum Artifact {
+    Packed(packed::Artifact),
+    Unpacked(unpacked::Artifact),
 }
 
-impl Artifact {
-    fn new(
-        target_os: OS,
-        target_arch: Arch,
-        version: &Version,
-        dist_dir: impl AsRef<Path>,
-    ) -> Self {
-        let unpacked = dist_dir.as_ref().join(match target_os {
-            OS::Linux => "linux-unpacked",
-            OS::MacOS if target_arch == Arch::AArch64 => "mac-arm64",
-            OS::MacOS if target_arch == Arch::X86_64 => "mac",
-            OS::Windows => "win-unpacked",
-            _ => todo!("{target_os}-{target_arch} combination is not supported"),
-        });
-        let unpacked_executable = match target_os {
-            OS::Linux => "enso",
-            OS::MacOS => "Enso.app",
-            OS::Windows => "Enso.exe",
-            _ => todo!("{target_os}-{target_arch} combination is not supported"),
-        }
-        .into();
-        let image = dist_dir.as_ref().join(match target_os {
-            OS::Linux => format!("enso-linux-{}.AppImage", version),
-            OS::MacOS => format!("enso-mac-{}.dmg", version),
-            OS::Windows => format!("enso-win-{}.exe", version),
-            _ => todo!("{target_os}-{target_arch} combination is not supported"),
-        });
 
-        Self {
-            image_checksum: image.with_extension("sha256"),
-            image,
-            unpacked,
-            unpacked_executable,
+
+//
+// pub trait IsIdeTarget {}
+//
+// // pub trait IsIdeTargetExt: IsIdeTarget {
+// //     fn start_unpacked(&self, extra_ide_options: impl IntoIterator<Item: AsRef<OsStr>>) ->
+// Command // {         let application_path = self.unpacked.join(&self.unpacked_executable);
+// //         let mut command = if TARGET_OS == OS::MacOS {
+// //             let mut ret = Command::new("open");
+// //             ret.arg(application_path);
+// //             ret
+// //         } else {
+// //             Command::new(application_path)
+// //         };
+// //         command.args(extra_ide_options);
+// //         command
+// //     }
+// // }
+//
+pub trait IsIdeArtifact {
+    fn unpacked_executable(&self) -> PathBuf;
+    // fn upload_artifacts_job(&self) -> BoxFuture<Result>;
+}
+
+impl IsIdeArtifact for unpacked::Artifact {
+    fn unpacked_executable(&self) -> PathBuf {
+        self.unpacked.join(&self.unpacked_executable)
+    }
+    //
+    // fn upload_artifacts_job(&self) -> BoxFuture<Result> {
+    //     todo!()
+    // }
+}
+
+impl IsIdeArtifact for packed::Artifact {
+    fn unpacked_executable(&self) -> PathBuf {
+        self.unpacked.unpacked_executable()
+    }
+}
+
+impl IsIdeArtifact for Artifact {
+    fn unpacked_executable(&self) -> PathBuf {
+        match self {
+            Artifact::Packed(artifact) => artifact.unpacked_executable(),
+            Artifact::Unpacked(artifact) => artifact.unpacked_executable(),
         }
     }
+}
 
-    pub async fn upload_as_ci_artifact(&self) -> Result {
-        if is_in_env() {
-            upload_compressed_directory(&self.unpacked, format!("ide-unpacked-{}", TARGET_OS))
-                .await?;
-            upload_single_file(&self.image, format!("ide-{}", TARGET_OS)).await?;
-            upload_single_file(&self.image_checksum, format!("ide-{}", TARGET_OS)).await?;
-        } else {
-            info!("Not in the CI environment, will not upload the artifacts.")
-        }
-        Ok(())
-    }
-
-    pub fn start_unpacked(
-        &self,
-        extra_ide_options: impl IntoIterator<Item: AsRef<OsStr>>,
-    ) -> Command {
-        let application_path = self.unpacked.join(&self.unpacked_executable);
+pub trait IsIdeArtifactExt: IsIdeArtifact {
+    fn start_unpacked(&self, extra_ide_options: impl IntoIterator<Item: AsRef<OsStr>>) -> Command {
+        let application_path = self.unpacked_executable();
         let mut command = if TARGET_OS == OS::MacOS {
             let mut ret = Command::new("open");
             ret.arg(application_path);
@@ -84,78 +77,18 @@ impl Artifact {
     }
 }
 
-#[derive(derivative::Derivative)]
-#[derivative(Debug)]
-pub struct BuildInput {
-    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
-    pub repo_root:       RepoRoot,
-    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
-    pub version:         Version,
-    #[derivative(Debug = "ignore")]
-    pub project_manager: BoxFuture<'static, Result<crate::project::backend::Artifact>>,
-    #[derivative(Debug = "ignore")]
-    pub gui:             BoxFuture<'static, Result<crate::project::gui::Artifact>>,
-}
+impl<T> IsIdeArtifactExt for T where T: IsIdeArtifact {}
 
-#[derive(Clone, Debug)]
-pub enum OutputPath {
-    /// The job must place the artifact under given path.
-    Required(PathBuf),
-    /// THe job may place the artifact anywhere, though it should use the suggested path if it has
-    /// no "better idea" (like reusing existing cache).
-    Suggested(PathBuf),
-    /// The job is responsible for finding a place for artifacts.
-    Whatever,
-}
-
-
-#[derive(Clone, Copy, Debug)]
-pub struct Ide {
-    pub target_os:   OS,
-    pub target_arch: Arch,
-}
-
-impl Ide {
-    pub fn build(
-        &self,
-        input: BuildInput,
-        output_path: impl AsRef<Path> + Send + Sync + 'static,
-    ) -> BoxFuture<'static, Result<Artifact>> {
-        let BuildInput { repo_root, version, project_manager, gui } = input;
-        let ide_desktop = crate::ide::web::IdeDesktop::new(&repo_root.app.ide_desktop);
-        let target_os = self.target_os;
-        let target_arch = self.target_arch;
-        async move {
-            let (gui, project_manager) = try_join(gui, project_manager).await?;
-            ide_desktop.dist(&gui, &project_manager, &output_path, target_os).await?;
-            Ok(Artifact::new(target_os, target_arch, &version, output_path))
-        }
-        .boxed()
-    }
-}
-
-// impl IsTarget for Ide {
-//     type BuildInput = BuildInput;
-//     type Output = Artifact;
+// impl IsIdeArtifact
 //
-//     fn artifact_name(&self) -> &str {
-//         // Version is not part of the name intentionally. We want to refer to PM bundles as
-//         // artifacts without knowing their version.
-//         static NAME: SyncLazy<String> = SyncLazy::new(|| format!("gui-{}", TARGET_OS));
-//         &*NAME
-//     }
-//
-//     fn build(
-//         &self,
-//         input: Self::BuildInput,
-//         output_path: impl AsRef<Path> + Send + Sync + 'static,
-//     ) -> BoxFuture<'static, Result<Self::Output>> {
-//         let ide_desktop = crate::ide::web::IdeDesktop::new(&input.repo_root.app.ide_desktop);
+//     fn upload_as_ci_artifact(&self) -> BoxFuture<Result> {
 //         async move {
-//             let (gui, project_manager) = try_join(input.gui, input.project_manager).await?;
-//             ide_desktop.dist(&gui, &project_manager, &output_path).await?;
-//             Ok(Artifact::new(&input.version, output_path.as_ref()))
+//             if is_in_env() {
+//                 self.upload_artifacts_job().await?;
+//             } else {
+//                 info!("Not in the CI environment, will not upload the artifacts.")
+//             }
+//             Ok(())
 //         }
-//         .boxed()
 //     }
 // }
