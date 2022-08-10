@@ -29,6 +29,9 @@ pub struct ConfigRaw {
     pub required_versions: HashMap<String, String>,
 }
 
+/// The configuration of the script that is being provided by the external environment.
+///
+/// In our case, it is usually a configuration file in the main repository.
 #[derive(Clone, Debug, Default)]
 pub struct Config {
     pub wasm_size_limit:   Option<Byte>,

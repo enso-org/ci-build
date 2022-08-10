@@ -2,6 +2,8 @@ use crate::ci_gen::job::plain_job;
 use crate::ci_gen::job::RunsOn;
 use crate::prelude::*;
 use ide_ci::actions::workflow::definition::checkout_repo_step;
+use ide_ci::actions::workflow::definition::is_non_windows_runner;
+use ide_ci::actions::workflow::definition::is_windows_runner;
 use ide_ci::actions::workflow::definition::run;
 use ide_ci::actions::workflow::definition::setup_artifact_api;
 use ide_ci::actions::workflow::definition::setup_conda;
@@ -68,16 +70,28 @@ pub fn setup_script_steps() -> Vec<Step> {
     ret
 }
 
-pub fn setup_script_and_steps(command_line: impl AsRef<str>) -> Vec<Step> {
-    let list_everything_on_failure = Step {
-        name: Some("List files if failed".into()),
-        r#if: Some("failure()".into()),
-        run: Some("ls -lR".into()),
+pub fn list_everything_on_failure() -> impl IntoIterator<Item = Step> {
+    let win = Step {
+        name: Some("List files if failed (Windows)".into()),
+        r#if: Some(format!("failure() && {}", is_windows_runner())),
+        run: Some("Get-ChildItem -Force -Recurse".into()),
         ..default()
     };
+
+    let non_win = Step {
+        name: Some("List files if failed (non-Windows)".into()),
+        r#if: Some(format!("failure() && {}", is_non_windows_runner())),
+        run: Some("ls -lAR".into()),
+        ..default()
+    };
+
+    [win, non_win]
+}
+
+pub fn setup_script_and_steps(command_line: impl AsRef<str>) -> Vec<Step> {
     let mut steps = setup_script_steps();
     steps.push(run(command_line));
-    steps.push(list_everything_on_failure);
+    steps.extend(list_everything_on_failure());
     steps
 }
 

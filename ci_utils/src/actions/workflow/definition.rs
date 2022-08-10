@@ -462,12 +462,18 @@ pub fn checkout_repo_step() -> impl IntoIterator<Item = Step> {
         run: Some(format!(r#""c:\Program Files\Git\bin\bash.exe" -c "{}""#, git_bash_command)),
         shell: Some(Shell::Cmd),
         r#if: Some(is_windows_runner()),
+        name: Some(
+            "Workaround for https://github.com/actions/checkout/issues/590 (Windows)".into(),
+        ),
         ..default()
     };
     let submodules_workaround_linux = Step {
         run: Some(git_bash_command.into()),
         shell: Some(Shell::Bash),
         r#if: Some(is_non_windows_runner()),
+        name: Some(
+            "Workaround for  https://github.com/actions/checkout/issues/590 (non-Windows)".into(),
+        ),
         ..default()
     };
     let actual_checkout = Step {
