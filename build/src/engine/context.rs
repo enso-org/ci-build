@@ -308,6 +308,21 @@ impl RunContext {
                 sbt.call_arg(benchmark.sbt_task()).await?;
             }
         }
+
+        // If we were running any benchmarks, they are complete by now. Upload the report.
+        if is_in_env() {
+            let path = &self.paths.repo_root.engine.runtime.bench_report_xml;
+            if path.exists() {
+                ide_ci::actions::artifacts::upload_single_file(
+                    &self.paths.repo_root.engine.runtime.bench_report_xml,
+                    "Runtime Benchmark Report",
+                )
+                .await?;
+            } else {
+                info!("No benchmark file found at {}, nothing to upload.", path.display());
+            }
+        }
+
         if self.config.test_scala {
             // Test Enso
             sbt.call_arg("set Global / parallelExecution := false; test").await?;

@@ -45,6 +45,9 @@
   distribution/:
     editions/:
       <edition>.yaml:
+  engine/:
+    runtime/:
+      bench-report.xml:
   lib/:
     rust/:
       parser/:

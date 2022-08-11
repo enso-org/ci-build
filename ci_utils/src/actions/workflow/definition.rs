@@ -224,6 +224,7 @@ impl Schedule {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
 pub enum WorkflowDispatchInputType {
     String {
