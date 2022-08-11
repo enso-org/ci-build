@@ -41,6 +41,25 @@ impl Sbt {
     }
 }
 
+pub struct SystemProperty {
+    pub name:  String,
+    pub value: String,
+}
+
+impl SystemProperty {
+    pub fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self { name: name.into(), value: value.into() }
+    }
+}
+
+impl<'a> IntoIterator for &'a SystemProperty {
+    type Item = String;
+    type IntoIter = std::iter::Once<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        std::iter::once(format!("-D{}={}", self.name, self.value))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

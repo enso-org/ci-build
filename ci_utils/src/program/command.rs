@@ -15,6 +15,8 @@ use tokio::process::Child;
 use tokio::task::JoinHandle;
 use tracing::field;
 
+pub mod provider;
+
 #[macro_export]
 macro_rules! new_command_type {
     ($program_name:ident, $command_name:ident) => {

@@ -96,6 +96,8 @@ pub struct BuildConfigurationFlags {
     /// Note that this does not run the benchmarks, only ensures that they are buildable.
     pub build_benchmarks: bool,
     pub execute_benchmarks: BTreeSet<Benchmarks>,
+    /// Used to check that benchmarks do not fail on runtime, rather than obtaining the results.
+    pub execute_benchmarks_once: bool,
     pub build_js_parser: bool,
     pub build_engine_package: bool,
     pub build_launcher_package: bool,
@@ -165,6 +167,7 @@ impl Default for BuildConfigurationFlags {
             test_standard_library: false,
             build_benchmarks: false,
             execute_benchmarks: default(),
+            execute_benchmarks_once: false,
             build_js_parser: false,
             build_engine_package: false,
             build_launcher_package: false,

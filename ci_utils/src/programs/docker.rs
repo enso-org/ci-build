@@ -122,7 +122,7 @@ impl Docker {
     }
 
     pub async fn kill(&self, target: impl AsRef<str>) -> Result {
-        Docker.call_args(["kill", target.as_ref()]).await
+        Docker.cmd()?.args(["kill", target.as_ref()]).run_ok().await
     }
 
     pub async fn upload(

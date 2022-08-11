@@ -223,9 +223,74 @@ impl Schedule {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum WorkflowDispatchInputType {
+    String {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default: Option<String>,
+    },
+    Choice {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default: Option<String>,
+        choices: Vec<String>, // should be non-empty
+    },
+    Boolean {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default: Option<bool>,
+    },
+    Environment {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default: Option<String>,
+    },
+}
+
+impl Default for WorkflowDispatchInputType {
+    fn default() -> Self {
+        Self::String { default: None }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowDispatchInput {
+    /// A string description of the input parameter.
+    pub description:         String,
+    /// A string shown to users using the deprecated input.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deprecation_message: Option<String>,
+    /// A boolean to indicate whether the action requires the input parameter. Set to true when the
+    /// parameter is required.
+    pub required:            bool,
+    /// A string representing the type of the input.
+    #[serde(flatten)]
+    pub r#type:              WorkflowDispatchInputType,
+}
+
+impl WorkflowDispatchInput {
+    pub fn new(description: impl Into<String>, required: bool) -> Self {
+        Self {
+            description: description.into(),
+            deprecation_message: None,
+            required,
+            r#type: Default::default(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct WorkflowDispatch {}
+pub struct WorkflowDispatch {
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub inputs: BTreeMap<String, WorkflowDispatchInput>,
+}
+
+impl WorkflowDispatch {
+    pub fn with_input<S: Into<String>>(mut self, name: S, input: WorkflowDispatchInput) -> Self {
+        self.inputs.insert(name.into(), input);
+        self
+    }
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

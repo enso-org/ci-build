@@ -1,5 +1,6 @@
 use enso_build::prelude::*;
 
+use crate::arg::ArgExt;
 use crate::arg::Source;
 use crate::source_args_hlp;
 use clap::Args;
@@ -30,8 +31,10 @@ pub enum Command {
     },
     /// Execute benchmarks.
     Benchmark {
+        #[clap(long, enso_env())]
+        minimal_run: bool,
         #[clap(arg_enum)]
-        which: Vec<enso_build::engine::Benchmarks>,
+        which:       Vec<enso_build::engine::Benchmarks>,
     },
     /// Run the tests.
     Test {
