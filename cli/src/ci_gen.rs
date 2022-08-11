@@ -249,7 +249,6 @@ pub fn benchmark() -> Result<Workflow> {
             WorkflowDispatch::default().with_input(just_check_input_name, just_check_input),
         ),
         schedule: vec![Schedule::new("0 5 * * 2-6")?],
-        pull_request: Some(PullRequest {}),
         ..default()
     };
     let mut workflow = Workflow { name: "Benchmark Engine".into(), on, ..default() };
