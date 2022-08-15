@@ -1,7 +1,8 @@
 use crate::prelude::*;
 
-use futures_util::future;
+use futures_util::future::ErrInto;
 use futures_util::future::Map;
+use futures_util::future::MapErr;
 use futures_util::future::MapOk;
 use futures_util::stream;
 use futures_util::FutureExt as _;
@@ -18,23 +19,37 @@ pub trait FutureExt: Future {
 
 impl<T: ?Sized> FutureExt for T where T: Future {}
 
+type FlattenResultFn<T, E> =
+    fn(std::result::Result<std::result::Result<T, E>, E>) -> std::result::Result<T, E>;
+
 pub trait TryFutureExt: TryFuture {
     fn void_ok(self) -> MapOk<Self, fn(Self::Ok) -> ()>
     where Self: Sized {
         self.map_ok(void)
     }
 
-    fn anyhow_err(self) -> future::MapErr<Self, fn(Self::Error) -> anyhow::Error>
+    fn anyhow_err(self) -> MapErr<Self, fn(Self::Error) -> anyhow::Error>
     where
         Self: Sized,
         // TODO: we should rely on `into` rather than `from`
         anyhow::Error: From<Self::Error>, {
         self.map_err(anyhow::Error::from)
     }
+
+    fn and_then_sync<T2, E2, F>(
+        self,
+        f: F,
+    ) -> Map<MapOk<ErrInto<Self, E2>, F>, FlattenResultFn<T2, E2>>
+    where
+        Self: Sized,
+        F: FnOnce(Self::Ok) -> std::result::Result<T2, E2>,
+        Self::Error: Into<E2>,
+    {
+        self.err_into().map_ok(f).map(std::result::Result::flatten)
+    }
 }
 
 impl<T: ?Sized> TryFutureExt for T where T: TryFuture {}
-
 
 
 pub fn receiver_to_stream<T>(

@@ -1,3 +1,5 @@
+#![feature(derive_default_enum)]
+#![feature(result_flattening)]
 #![feature(const_fmt_arguments_new)]
 #![feature(hash_set_entry)]
 #![feature(let_chains)]
@@ -43,6 +45,7 @@ pub mod io;
 pub mod log;
 pub mod models;
 pub mod os;
+pub mod path;
 pub mod paths;
 pub mod platform;
 pub mod program;
@@ -141,6 +144,7 @@ pub mod prelude {
     pub use crate::goodie::Goodie;
     pub use crate::os::target::TARGET_ARCH;
     pub use crate::os::target::TARGET_OS;
+    pub use crate::program::command::provider::CommandProvider;
     pub use crate::program::command::Command;
     pub use crate::program::command::IsCommandWrapper;
     pub use crate::program::command::MyCommand;
@@ -158,6 +162,9 @@ pub mod prelude {
     pub use crate::extensions::iterator::TryIteratorExt;
     pub use crate::extensions::output::OutputExt as _;
     pub use crate::extensions::path::PathExt as _;
+    pub use crate::extensions::result::ResultExt as _;
+    pub use crate::program::command::provider::CommandProviderExt as _;
+    pub use crate::program::version::IsVersion as _;
     pub use crate::program::ProgramExt as _;
 
     pub fn into<T, U>(u: U) -> T

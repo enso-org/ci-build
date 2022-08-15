@@ -1,8 +1,9 @@
 //! This module wraps SBT commands that are provided by the Enso Engine's SBT build scripts.
 
 use crate::prelude::*;
+use ide_ci::program::command::provider::CommandProviderExt;
 
-use ide_ci::program::with_cwd::WithCwd;
+use ide_ci::programs::sbt;
 use ide_ci::programs::Sbt;
 
 pub fn verify_generated_package_task(package: &str, path: impl AsRef<Path>) -> String {
@@ -13,11 +14,30 @@ pub fn verify_generated_package_task(package: &str, path: impl AsRef<Path>) -> S
     )
 }
 
-
-pub async fn verify_generated_package(
-    sbt: &WithCwd<Sbt>,
-    package: &str,
-    path: impl AsRef<Path>,
-) -> Result {
-    sbt.cmd()?.arg(verify_generated_package_task(package, path)).run_ok().await
+pub trait SbtCommandProvider: CommandProvider {
+    fn verify_generated_package(
+        &self,
+        package: &str,
+        path: impl AsRef<Path>,
+    ) -> BoxFuture<'static, Result> {
+        self.call_arg(verify_generated_package_task(package, path))
+    }
 }
+
+pub struct Context {
+    pub repo_root:         PathBuf,
+    pub system_properties: Vec<sbt::SystemProperty>,
+}
+
+impl CommandProvider for Context {
+    fn command(&self) -> Result<Command> {
+        let mut cmd = Sbt.cmd()?;
+        cmd.current_dir(&self.repo_root);
+        for property in &self.system_properties {
+            cmd.args(property);
+        }
+        Ok(cmd)
+    }
+}
+
+impl SbtCommandProvider for Context {}

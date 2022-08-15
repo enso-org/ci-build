@@ -64,6 +64,10 @@ pub struct BuildInput {
     #[clap(long, allow_hyphen_values = true, enso_env())]
     pub wasm_opt_option: Vec<String>,
 
+    /// Do not invoke wasm-opt, even if it is part of current profile.
+    #[clap(long, conflicts_with = "wasm-opt-option", enso_env())]
+    pub skip_wasm_opt: bool,
+
     /// Additional options to be passed to Cargo.
     #[clap(last = true, enso_env())]
     pub cargo_options: Vec<String>,

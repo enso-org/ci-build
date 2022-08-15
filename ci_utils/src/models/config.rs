@@ -86,7 +86,6 @@ pub struct RepoContext {
     pub name:  String,
 }
 
-
 impl RepoPointer for RepoContext {
     fn owner(&self) -> &str {
         &self.owner

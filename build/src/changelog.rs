@@ -55,7 +55,7 @@ impl<'a> Changelog<'a> {
 
     pub fn last_release(&self) -> Result<Version> {
         self.iterate_headers()
-            .find_map(|header| ide_ci::program::version::find_in_text(header.text).ok())
+            .find_map(|header| Version::find_in_text(header.text).ok())
             .context("No release header with version number was found.")
     }
 

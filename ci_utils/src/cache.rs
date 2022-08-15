@@ -13,17 +13,31 @@ use sha2::Digest;
 
 pub use goodie::Goodie;
 
-pub const VERSION: u8 = 1;
+/// Format of the hashing scheme.
+///
+/// This value can be bumped to invalidate all the hashes.
+pub const VERSION: u8 = 2;
 
+/// Default location of the cache root.
 pub fn default_path() -> Result<PathBuf> {
-    Ok(dirs::home_dir().context("Cannot locate home directory.")?.join_iter([".enso-ci", "cache"]))
+    Ok(dirs::data_local_dir()
+        .context("Cannot locate user's local data directory.")?
+        .join_iter([".enso-ci", "cache"]))
 }
 
+/// Description of the entity that can be cached.
 pub trait Storable: Debug + Send + Sync + 'static {
-    type Metadata: Serialize + DeserializeOwned + Send + Sync + 'static;
+    /// Data necessary to construct output from a disk storage.
+    type Metadata: Clone + Debug + Serialize + DeserializeOwned + Send + Sync + 'static;
+    /// An instance of the cached entity.
     type Output: Clone + Send + Sync + 'static;
+    /// A key used to generate a hash.
     type Key: Clone + Debug + Serialize + DeserializeOwned + Send + Sync + 'static;
 
+    /// Fill the cache store with this entity.
+    ///
+    /// The cache `store` parameter is an existing, writable, empty directory. The store path should
+    /// not be assumed to be constant for this entry, metadata should not include it in any way.
     fn generate(&self, cache: Cache, store: PathBuf) -> BoxFuture<'static, Result<Self::Metadata>>;
 
     fn adapt(
@@ -35,10 +49,36 @@ pub trait Storable: Debug + Send + Sync + 'static {
     fn key(&self) -> Self::Key;
 }
 
+/// The required metadata for a cache entry. Used when reading the cache.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EntryIndex<S: Storable> {
+pub struct EntryIndexRequired<S: Storable> {
     pub metadata: S::Metadata,
-    pub key:      S::Key,
+}
+
+/// The metadata for a cache entry with additional information to help debugging.
+#[derive(Clone, Debug, Serialize, Deserialize, derive_more::Deref, derive_more::DerefMut)]
+#[serde(bound = "S:")]
+pub struct EntryIndexExtended<S: Storable> {
+    #[serde(flatten)]
+    #[deref]
+    #[deref_mut]
+    pub inner:          EntryIndexRequired<S>,
+    pub key:            Option<S::Key>,
+    pub r#type:         Option<String>,
+    pub key_type:       Option<String>,
+    pub schema_version: Option<u8>,
+}
+
+impl<S: Storable> EntryIndexExtended<S> {
+    pub fn new(metadata: S::Metadata, key: S::Key) -> Self {
+        Self {
+            inner:          EntryIndexRequired { metadata },
+            key:            Some(key),
+            r#type:         Some(std::any::type_name::<S>().into()),
+            key_type:       Some(std::any::type_name::<S::Key>().into()),
+            schema_version: Some(VERSION),
+        }
+    }
 }
 
 pub struct HashToDigest<'a, D: Digest>(&'a mut D);
@@ -75,6 +115,11 @@ impl Cache {
         Self::new(default_path()?).await
     }
 
+    /// Path to the cache root.
+    pub fn path(&self) -> &Path {
+        &self.root
+    }
+
     pub async fn new(path: impl Into<PathBuf>) -> Result<Self> {
         let root = path.into();
         crate::fs::tokio::create_dir_if_missing(&root).await?;
@@ -86,38 +131,42 @@ impl Cache {
     where S: Storable {
         let this = self.clone();
         async move {
-            // FIXME trace
-            let code = digest(&storable)?;
-            let entry_dir = this.root.join(&code);
+            let digest = digest(&storable)?;
+            tracing::Span::current().record("digest", &digest.as_str());
+            let entry_dir = this.root.join(&digest);
             let entry_meta = entry_dir.with_appended_extension("json");
 
             let retrieve = async {
-                let info = entry_meta.read_to_json::<EntryIndex<S>>()?;
+                let info = entry_meta.read_to_json::<EntryIndexRequired<S>>()?;
                 crate::fs::require_exist(&entry_dir)?;
                 storable.adapt(entry_dir.clone(), info.metadata).await
             };
 
             match retrieve.await {
                 Ok(out) => {
-                    debug!("Found in cache, skipping generation.");
+                    trace!("Found in cache, skipping generation.");
                     return Ok(out);
                 }
                 Err(e) => {
-                    debug!("Value cannot be retrieved from cache because: {e}");
+                    trace!("Value cannot be retrieved from cache because: {e}");
                     crate::fs::reset_dir(&entry_dir)?;
                     let key = storable.key();
-                    let info = EntryIndex::<S> {
-                        metadata: storable
-                            .generate(this, entry_dir.clone())
-                            .instrument(info_span!("Generating value to be cached.", ?key))
-                            .await?,
-                        key:      key.clone(),
-                    };
+                    tracing::Span::current().record("key", &tracing::field::debug(&key));
+                    let metadata = storable
+                        .generate(this, entry_dir.clone())
+                        .instrument(info_span!("Generating value to fill the cache."))
+                        .await?;
+                    let info = EntryIndexExtended::<S>::new(metadata, key);
                     entry_meta.write_as_json(&info)?;
-                    storable.adapt(entry_dir, info.metadata).await
+                    storable.adapt(entry_dir, info.inner.metadata).await
                 }
             }
         }
+        .instrument(trace_span!(
+            "Getting a value from cache.",
+            digest = tracing::field::Empty,
+            key = tracing::field::Empty
+        ))
         .boxed()
     }
 }

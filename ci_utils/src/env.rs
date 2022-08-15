@@ -37,15 +37,22 @@ pub mod new {
     use super::*;
     use crate::program::command::FallibleManipulator;
 
+    /// An environment variable of known type.
     pub trait RawVariable {
+        /// The name of this environment variable.
         fn name(&self) -> &str;
 
+        /// Has this variable been set?
+        ///
+        /// Note that a variable may be set to the empty string.
         fn is_set(&self) -> bool {
             std::env::var(self.name()) != Err(std::env::VarError::NotPresent)
         }
+
         fn get_raw(&self) -> Result<String> {
             expect_var(self.name())
         }
+
         fn get_raw_os(&self) -> Result<OsString> {
             expect_var_os(self.name())
         }

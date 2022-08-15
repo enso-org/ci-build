@@ -60,6 +60,14 @@ pub fn setup_artifact_api() -> Step {
     }
 }
 
+pub fn is_windows_runner() -> String {
+    "runner.os == 'Windows'".into()
+}
+
+pub fn is_non_windows_runner() -> String {
+    "runner.os != 'Windows'".into()
+}
+
 pub fn shell_os(os: OS, command_line: impl Into<String>) -> Step {
     Step {
         run: Some(command_line.into()),
@@ -215,9 +223,75 @@ impl Schedule {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub enum WorkflowDispatchInputType {
+    String {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default: Option<String>,
+    },
+    Choice {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default: Option<String>,
+        choices: Vec<String>, // should be non-empty
+    },
+    Boolean {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default: Option<bool>,
+    },
+    Environment {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        default: Option<String>,
+    },
+}
+
+impl Default for WorkflowDispatchInputType {
+    fn default() -> Self {
+        Self::String { default: None }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowDispatchInput {
+    /// A string description of the input parameter.
+    pub description:         String,
+    /// A string shown to users using the deprecated input.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deprecation_message: Option<String>,
+    /// A boolean to indicate whether the action requires the input parameter. Set to true when the
+    /// parameter is required.
+    pub required:            bool,
+    /// A string representing the type of the input.
+    #[serde(flatten)]
+    pub r#type:              WorkflowDispatchInputType,
+}
+
+impl WorkflowDispatchInput {
+    pub fn new(description: impl Into<String>, required: bool) -> Self {
+        Self {
+            description: description.into(),
+            deprecation_message: None,
+            required,
+            r#type: Default::default(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct WorkflowDispatch {}
+pub struct WorkflowDispatch {
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub inputs: BTreeMap<String, WorkflowDispatchInput>,
+}
+
+impl WorkflowDispatch {
+    pub fn with_input<S: Into<String>>(mut self, name: S, input: WorkflowDispatchInput) -> Self {
+        self.inputs.insert(name.into(), input);
+        self
+    }
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -353,6 +427,14 @@ pub fn github_token_env() -> (String, String) {
     ("GITHUB_TOKEN".into(), "${{ secrets.GITHUB_TOKEN }}".into())
 }
 
+impl IntoIterator for Step {
+    type Item = Step;
+    type IntoIter = std::iter::Once<Self>;
+    fn into_iter(self) -> Self::IntoIter {
+        std::iter::once(self)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Shell {
@@ -424,15 +506,51 @@ pub enum RunnerLabel {
     MatrixOs,
 }
 
-pub fn checkout_repo_step() -> Step {
-    Step {
+pub fn checkout_repo_step() -> impl IntoIterator<Item = Step> {
+    // This is a workaround for a bug in GH actions/checkout. If a submodule is added and removed,
+    // it effectively breaks any future builds of this repository on a given self-hosted runner.
+    // The workaround step below comes from:
+    // https://github.com/actions/checkout/issues/590#issuecomment-970586842
+    //
+    // As an exception to general rule, we use here bash even on Windows. As the bash us the one
+    // coming from a git installation, we can assume that git works nicely with it.
+    // Having this rewritten to github-script might have been nicer but it does not seem
+    // effort-worthy.
+    //
+    // See:
+    // https://github.com/actions/checkout/issues/590
+    // https://github.com/actions/checkout/issues/788
+    // and many other duplicate reports.
+    let git_bash_command = "git checkout -f $(git -c user.name=x -c user.email=x@x commit-tree $(git hash-object -t tree /dev/null) < /dev/null) || :";
+    let submodules_workaround_win = Step {
+        // We can't add git-bash to PATH because this would break the Rust build.
+        // Instead we manually spawn the bash with a given command from CMD shell.
+        run: Some(format!(r#""c:\Program Files\Git\bin\bash.exe" -c "{}""#, git_bash_command)),
+        shell: Some(Shell::Cmd),
+        r#if: Some(is_windows_runner()),
+        name: Some(
+            "Workaround for https://github.com/actions/checkout/issues/590 (Windows)".into(),
+        ),
+        ..default()
+    };
+    let submodules_workaround_linux = Step {
+        run: Some(git_bash_command.into()),
+        shell: Some(Shell::Bash),
+        r#if: Some(is_non_windows_runner()),
+        name: Some(
+            "Workaround for  https://github.com/actions/checkout/issues/590 (non-Windows)".into(),
+        ),
+        ..default()
+    };
+    let actual_checkout = Step {
         name: Some("Checking out the repository".into()),
         // FIXME: Check what is wrong with v3. Seemingly Engine Tests fail because there's only a
         //        shallow copy of the repo.
         uses: Some("actions/checkout@v2".into()),
-        with: Some(step::Argument::Checkout { clean: Some(false) }),
+        with: Some(step::Argument::Checkout { clean: Some(true) }),
         ..default()
-    }
+    };
+    [submodules_workaround_win, submodules_workaround_linux, actual_checkout]
 }
 
 pub trait JobArchetype {

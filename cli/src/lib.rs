@@ -41,6 +41,7 @@ use anyhow::Context;
 use clap::Parser;
 use derivative::Derivative;
 use enso_build::context::BuildContext;
+use enso_build::engine::Benchmarks;
 use enso_build::engine::BuildMode;
 use enso_build::engine::Tests;
 use enso_build::paths::TargetTriple;
@@ -72,6 +73,7 @@ use enso_build::source::ReleaseSource;
 use enso_build::source::Source;
 use enso_build::source::WatchTargetJob;
 use enso_build::source::WithDestination;
+use futures_util::future::try_join;
 use ide_ci::actions::workflow::is_in_env;
 use ide_ci::cache::Cache;
 use ide_ci::fs::remove_if_exists;
@@ -80,9 +82,9 @@ use ide_ci::global;
 use ide_ci::log::setup_logging;
 use ide_ci::ok_ready_boxed;
 use ide_ci::programs::cargo;
+use ide_ci::programs::git::clean;
 use ide_ci::programs::rustc;
 use ide_ci::programs::Cargo;
-use ide_ci::programs::Git;
 use std::time::Duration;
 use tempfile::tempdir;
 use tokio::process::Child;
@@ -155,39 +157,35 @@ impl Processor {
         let span = info_span!("Resolving.", ?target, ?source).entered();
         let destination = source.output_path.output_path;
         let source = match source.source {
-            arg::SourceKind::Build => {
-                let resolved = T::resolve(self, source.build_args);
-                async move { Ok(Source::BuildLocally(resolved.await?)) }.boxed()
-            }
+            arg::SourceKind::Build =>
+                T::resolve(self, source.build_args).map_ok(Source::BuildLocally).boxed(),
             arg::SourceKind::Local =>
-                ready(Ok(Source::External(ExternalSource::LocalFile(source.path.clone())))).boxed(),
+                ok_ready_boxed(Source::External(ExternalSource::LocalFile(source.path.clone()))),
             arg::SourceKind::CiRun => {
                 let run_id = source.run_id.context(format!(
                     "Missing run ID, please provide {} argument.",
                     T::RUN_ID_NAME
                 ));
-                ready(run_id.map(|run_id| {
+                let source = run_id.map(|run_id| {
                     Source::External(ExternalSource::CiRun(CiRunSource {
                         run_id,
                         repository: self.remote_repo.clone(),
                         artifact_name: resolve_artifact_name(source.artifact_name.clone(), &target),
                     }))
-                }))
-                .boxed()
+                });
+                ready(source).boxed()
             }
             arg::SourceKind::CurrentCiRun =>
-                ready(Ok(Source::External(ExternalSource::OngoingCiRun(OngoingCiRunSource {
+                ok_ready_boxed(Source::External(ExternalSource::OngoingCiRun(OngoingCiRunSource {
                     artifact_name: resolve_artifact_name(source.artifact_name.clone(), &target),
-                }))))
-                .boxed(),
+                }))),
             arg::SourceKind::Release => {
                 let designator = source
                     .release
                     .context(format!("Missing {} argument.", T::RELEASE_DESIGNATOR_NAME));
-                let resolved =
-                    designator.map(|designator| self.resolve_release_source(target, designator));
-                async move { Ok(Source::External(ExternalSource::Release(resolved?.await?))) }
-                    .boxed()
+                let resolved = designator
+                    .and_then_async(|designator| self.resolve_release_source(target, designator));
+                resolved.map_ok(|source| Source::External(ExternalSource::Release(source))).boxed()
             }
         };
         async move { Ok(GetTargetJob { inner: source.await?, destination }) }
@@ -201,22 +199,22 @@ impl Processor {
         target: T,
         designator: String,
     ) -> BoxFuture<'static, Result<ReleaseSource>> {
-        let release = self.deref().resolve_release_designator(designator);
         let repository = self.remote_repo.clone();
-        async move {
-            let release = release.await?;
-            Ok(ReleaseSource {
-                repository,
-                asset_id: target
-                    .find_asset(release.assets)
-                    .context(format!(
-                        "Failed to find a relevant asset in the release '{}'.",
-                        release.tag_name
-                    ))?
-                    .id,
+        let release = self.resolve_release_designator(designator);
+        release
+            .and_then_sync(move |release| {
+                Ok(ReleaseSource {
+                    repository,
+                    asset_id: target
+                        .find_asset(release.assets)
+                        .context(format!(
+                            "Failed to find a relevant asset in the release '{}'.",
+                            release.tag_name
+                        ))?
+                        .id,
+                })
             })
-        }
-        .boxed()
+            .boxed()
     }
 
     pub fn js_build_info(&self) -> BoxFuture<'static, Result<gui::BuildInfo>> {
@@ -378,9 +376,10 @@ impl Processor {
                 }
                 .boxed()
             }
-            arg::backend::Command::Benchmark { which } => {
+            arg::backend::Command::Benchmark { which, minimal_run } => {
                 let config = enso_build::engine::BuildConfigurationFlags {
                     execute_benchmarks: which.into_iter().collect(),
+                    execute_benchmarks_once: minimal_run,
                     ..default()
                 };
                 let context = self.prepare_backend_context(config);
@@ -424,6 +423,8 @@ impl Processor {
                     test_standard_library: true,
                     test_java_generated_from_rust: true,
                     build_benchmarks: true,
+                    execute_benchmarks: once(Benchmarks::Runtime).collect(),
+                    execute_benchmarks_once: true,
                     build_js_parser: matches!(TARGET_OS, OS::Linux),
                     ..default()
                 };
@@ -438,6 +439,7 @@ impl Processor {
         }
     }
 
+    #[instrument]
     pub fn prepare_backend_context(
         &self,
         config: enso_build::engine::BuildConfigurationFlags,
@@ -611,11 +613,13 @@ impl Resolvable for Wasm {
             cargo_options,
             profiling_level,
             wasm_size_limit,
+            skip_wasm_opt,
         } = from;
         ok_ready_boxed(wasm::BuildInput {
             repo_root: ctx.repo_root(),
             crate_path,
             wasm_opt_options,
+            skip_wasm_opt,
             extra_cargo_options: cargo_options,
             profile: wasm_profile.into(),
             profiling_level: profiling_level.map(into),
@@ -748,7 +752,21 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
         Target::Backend(backend) => ctx.handle_backend(backend).await?,
         Target::Ide(ide) => ctx.handle_ide(ide).await?,
         // TODO: consider if out-of-source ./dist should be removed
-        Target::GitClean => Git::new(ctx.repo_root()).cmd()?.nice_clean().run_ok().await?,
+        Target::GitClean(options) => {
+            let mut exclusions = vec![".idea"];
+            if !options.build_script {
+                exclusions.push("target/enso-build");
+            }
+
+            let git_clean = clean::clean_except_for(ctx.repo_root(), exclusions);
+            let clean_cache = async {
+                if options.cache {
+                    ide_ci::fs::tokio::remove_dir_if_exists(ctx.cache.path()).await?;
+                }
+                Result::Ok(())
+            };
+            try_join(git_clean, clean_cache).await?;
+        }
         Target::Lint => {
             Cargo
                 .cmd()?

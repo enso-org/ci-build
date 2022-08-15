@@ -2,6 +2,7 @@ use enso_build::prelude::*;
 
 pub mod backend;
 pub mod engine;
+pub mod git_clean;
 pub mod gui;
 pub mod ide;
 pub mod java_gen;
@@ -111,7 +112,7 @@ pub enum Target {
     Ide(ide::Target),
     /// Clean the repository. Keeps the IntelliJ's .idea directory intact. WARNING: This removes
     /// files that are not under version control in the repository subtree.
-    GitClean,
+    GitClean(git_clean::Options),
     /// Lint the codebase.
     Lint,
     /// Apply automatic formatters on the repository.

@@ -93,7 +93,7 @@ pub trait RepoPointer: Display {
             .context(format!("Failed to find release by id `{release_id}` in `{self}`."))
     }
 
-    #[tracing::instrument(skip(client), fields(%self, %text), err, ret)]
+    #[tracing::instrument(skip(client), fields(%self, %text), err)]
     async fn find_release_by_text(
         &self,
         client: &Octocrab,
@@ -103,6 +103,7 @@ pub trait RepoPointer: Display {
             .await?
             .into_iter()
             .find(|release| release.tag_name.contains(text))
+            .inspect(|release| info!("Found release at: {} (id={}).", release.html_url, release.id))
             .context(format!("No release with tag matching `{text}` in {self}."))
     }
 

@@ -2,10 +2,13 @@ use crate::ci_gen::job::plain_job;
 use crate::ci_gen::job::RunsOn;
 use crate::prelude::*;
 use ide_ci::actions::workflow::definition::checkout_repo_step;
+use ide_ci::actions::workflow::definition::is_non_windows_runner;
+use ide_ci::actions::workflow::definition::is_windows_runner;
 use ide_ci::actions::workflow::definition::run;
 use ide_ci::actions::workflow::definition::setup_artifact_api;
 use ide_ci::actions::workflow::definition::setup_conda;
 use ide_ci::actions::workflow::definition::setup_wasm_pack_step;
+use ide_ci::actions::workflow::definition::wrap_expression;
 use ide_ci::actions::workflow::definition::Concurrency;
 use ide_ci::actions::workflow::definition::Event;
 use ide_ci::actions::workflow::definition::Job;
@@ -17,6 +20,8 @@ use ide_ci::actions::workflow::definition::Schedule;
 use ide_ci::actions::workflow::definition::Step;
 use ide_ci::actions::workflow::definition::Workflow;
 use ide_ci::actions::workflow::definition::WorkflowDispatch;
+use ide_ci::actions::workflow::definition::WorkflowDispatchInput;
+use ide_ci::actions::workflow::definition::WorkflowDispatchInputType;
 
 pub mod job;
 pub mod step;
@@ -62,22 +67,34 @@ pub fn runs_on(os: OS) -> Vec<RunnerLabel> {
 }
 
 pub fn setup_script_steps() -> Vec<Step> {
-    let mut ret =
-        vec![setup_conda(), setup_wasm_pack_step(), setup_artifact_api(), checkout_repo_step()];
+    let mut ret = vec![setup_conda(), setup_wasm_pack_step(), setup_artifact_api()];
+    ret.extend(checkout_repo_step());
     ret.push(run("--help").with_name("Build Script Setup"));
     ret
 }
 
-pub fn setup_script_and_steps(command_line: impl AsRef<str>) -> Vec<Step> {
-    let list_everything_on_failure = Step {
-        name: Some("List files if failed".into()),
-        r#if: Some("failure()".into()),
-        run: Some("ls -lR".into()),
+pub fn list_everything_on_failure() -> impl IntoIterator<Item = Step> {
+    let win = Step {
+        name: Some("List files if failed (Windows)".into()),
+        r#if: Some(format!("failure() && {}", is_windows_runner())),
+        run: Some("Get-ChildItem -Force -Recurse".into()),
         ..default()
     };
+
+    let non_win = Step {
+        name: Some("List files if failed (non-Windows)".into()),
+        r#if: Some(format!("failure() && {}", is_non_windows_runner())),
+        run: Some("ls -lAR".into()),
+        ..default()
+    };
+
+    [win, non_win]
+}
+
+pub fn setup_script_and_steps(command_line: impl AsRef<str>) -> Vec<Step> {
     let mut steps = setup_script_steps();
     steps.push(run(command_line));
-    steps.push(list_everything_on_failure);
+    steps.extend(list_everything_on_failure());
     steps
 }
 
@@ -130,7 +147,7 @@ impl JobArchetype for UploadIde {
 
 pub fn nightly() -> Result<Workflow> {
     let on = Event {
-        workflow_dispatch: Some(WorkflowDispatch {}),
+        workflow_dispatch: Some(default()),
         // 5am (UTC) from Tuesday to Saturday (i.e. after every workday)
         schedule: vec![Schedule::new("0 5 * * 2-6")?],
         ..default()
@@ -175,7 +192,7 @@ pub fn nightly() -> Result<Workflow> {
 pub fn typical_check_triggers() -> Event {
     Event {
         pull_request: Some(PullRequest {}),
-        workflow_dispatch: Some(WorkflowDispatch {}),
+        workflow_dispatch: Some(default()),
         push: Some(on_develop_push()),
         ..default()
     }
@@ -221,13 +238,22 @@ pub fn backend() -> Result<Workflow> {
 }
 
 pub fn benchmark() -> Result<Workflow> {
+    let just_check_input_name = "just-check";
+    let just_check_input = WorkflowDispatchInput {
+        r#type: WorkflowDispatchInputType::Boolean{default: Some(false)},
+        ..WorkflowDispatchInput::new("If set, benchmarks will be only checked to run correctly, not to measure actual performance.", true)
+    };
     let on = Event {
         push: Some(on_develop_push()),
-        workflow_dispatch: Some(WorkflowDispatch {}),
+        workflow_dispatch: Some(
+            WorkflowDispatch::default().with_input(just_check_input_name, just_check_input),
+        ),
         schedule: vec![Schedule::new("0 5 * * 2-6")?],
         ..default()
     };
     let mut workflow = Workflow { name: "Benchmark Engine".into(), on, ..default() };
+    workflow
+        .env("ENSO_BUILD_MINIMAL_RUN", wrap_expression(format!("inputs.{just_check_input_name}")));
 
     let benchmark_job =
         plain_job(&BenchmarkRunner, "Benchmark Engine", "backend benchmark runtime");

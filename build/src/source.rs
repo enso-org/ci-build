@@ -54,7 +54,7 @@ pub struct ReleaseSource {
     pub asset_id:   AssetId,
 }
 
-#[derive(Debug, derive_more::Deref, derive_more::DerefMut)]
+#[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut)]
 pub struct WithDestination<T> {
     #[deref]
     #[deref_mut]

@@ -129,7 +129,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let FetchTargetJob { inner: source, destination } = job;
         let this = self.clone();
-        let span = info_span!("Getting artifact from an external source");
+        let span = debug_span!("Getting artifact from an external source");
         match source {
             ExternalSource::OngoingCiRun(OngoingCiRunSource { artifact_name }) => async move {
                 ide_ci::actions::artifacts::retrieve_compressed_directory(
@@ -158,7 +158,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         context: Context,
         job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let span = info_span!("Building.", ?self, ?context, ?job).entered();
+        let span = debug_span!("Building.", ?self, ?context, ?job).entered();
         let upload_artifacts = context.upload_artifacts;
         let artifact_fut = self.build_internal(context, job);
         let this = self.clone();
@@ -177,7 +177,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
 
     fn perhaps_upload_artifact(&self, artifact: &Self::Artifact) -> BoxFuture<'static, Result> {
         let should_upload_artifact = ide_ci::actions::workflow::is_in_env();
-        info!("Got target {:?}, should it be uploaded? {}", self, should_upload_artifact);
+        trace!("Got target {:?}, should it be uploaded? {}", self, should_upload_artifact);
         if should_upload_artifact {
             self.upload_artifact(ready(Ok(artifact.clone())))
         } else {

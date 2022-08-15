@@ -10,5 +10,6 @@ pub mod os;
 pub mod output;
 pub mod path;
 pub mod reqwest;
+pub mod result;
 pub mod str;
 pub mod version;

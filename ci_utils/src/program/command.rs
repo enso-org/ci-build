@@ -15,6 +15,8 @@ use tokio::process::Child;
 use tokio::task::JoinHandle;
 use tracing::field;
 
+pub mod provider;
+
 #[macro_export]
 macro_rules! new_command_type {
     ($program_name:ident, $command_name:ident) => {
@@ -78,6 +80,13 @@ pub trait IsCommandWrapper {
 
     fn apply<M: Manipulator>(&mut self, manipulator: &M) -> &mut Self {
         manipulator.apply(self);
+        self
+    }
+
+    fn apply_iter(&mut self, iter: impl IntoIterator<Item = impl Manipulator>) -> &mut Self {
+        for manipulator in iter {
+            self.apply(&manipulator);
+        }
         self
     }
 

@@ -32,16 +32,13 @@ pub mod env;
 pub mod js_patcher;
 pub mod test;
 
-pub const BINARYEN_VERSION_TO_INSTALL: usize = 108;
+pub const BINARYEN_VERSION_TO_INSTALL: u32 = 108;
 
 pub const DEFAULT_INTEGRATION_TESTS_WASM_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub const INTEGRATION_TESTS_CRATE_NAME: &str = "enso-integration-test";
 
 pub const OUTPUT_NAME: &str = "ide";
-
-/// wasm-pack version we require.
-pub const WASM_PACK_VERSION_REQ: &str = ">=0.10.1";
 
 /// Name of the artifact that will be uploaded as part of CI run.
 pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
@@ -115,6 +112,7 @@ pub struct BuildInput {
     /// Path to the crate to be compiled to WAM. Relative to the repository root.
     pub crate_path:          PathBuf,
     pub wasm_opt_options:    Vec<String>,
+    pub skip_wasm_opt:       bool,
     pub extra_cargo_options: Vec<String>,
     pub profile:             Profile,
     pub profiling_level:     Option<ProfilingLevel>,
@@ -139,9 +137,11 @@ impl BuildInput {
             } else {
                 ensure!(
                     compressed_size < wasm_size_limit,
-                    "Compressed WASM size {} exceeds the limit of {}.",
+                    "Compressed WASM size ~{} ({} bytes) exceeds the limit of {} ({} bytes).",
                     compressed_size,
-                    wasm_size_limit
+                    compressed_size.get_byte(),
+                    wasm_size_limit,
+                    wasm_size_limit.get_byte(),
                 )
             }
         }
@@ -180,12 +180,13 @@ impl IsTarget for Wasm {
         async move {
             // Old wasm-pack does not pass trailing `build` command arguments to the Cargo.
             // We want to be able to pass --profile this way.
-            WasmPack.require_present_that(&VersionReq::parse(">=0.10.1")?).await?;
+            WasmPack.require_present_that(VersionReq::parse(">=0.10.1")?).await?;
 
             let BuildInput {
                 repo_root,
                 crate_path,
                 wasm_opt_options,
+                skip_wasm_opt,
                 extra_cargo_options,
                 profile,
                 profiling_level,
@@ -193,7 +194,7 @@ impl IsTarget for Wasm {
             } = &inner;
 
             cache::goodie::binaryen::Binaryen { version: BINARYEN_VERSION_TO_INSTALL }
-                .install_if_missing(&cache, WasmOpt)
+                .install_if_missing(&cache)
                 .await?;
 
             info!("Building wasm.");
@@ -220,33 +221,12 @@ impl IsTarget for Wasm {
             }
             command.run_ok().await?;
 
-            if *profile != Profile::Dev {
-                let mut wasm_opt_command = WasmOpt.cmd()?;
-                let has_custom_opt_level = wasm_opt_options.iter().any(|opt| {
-                    wasm_opt::OptimizationLevel::from_str(opt.trim_start_matches('-')).is_ok()
-                });
-                if !has_custom_opt_level {
-                    wasm_opt_command.apply(&profile.optimization_level());
-                }
-                wasm_opt_command
-                    .args(wasm_opt_options)
-                    .arg(&temp_dist.wasm_main_raw)
-                    .apply(&wasm_opt::Output(&temp_dist.wasm_main))
-                    .run_ok()
-                    .await?;
-            } else {
-                debug!("Skipping wasm-opt invocation, as it is not part of profile {profile}.");
-                copy_file_if_different(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
-            }
-
-            // ide_ci::fs::rename(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
+            Self::finalize_wasm(wasm_opt_options, *skip_wasm_opt, *profile, &temp_dist).await?;
             patch_js_glue_in_place(&temp_dist.wasm_glue)?;
 
             ide_ci::fs::create_dir_if_missing(&destination)?;
             let ret = RepoRootDistWasm::new_root(&destination);
             ide_ci::fs::copy(&temp_dist, &ret)?;
-            // copy_if_different(&temp_dist, &ret).await?;
-            // copy_if_different(&temp_dist.wasm_main_raw, &ret.wasm_main)?;
             inner.perhaps_check_size(&ret.wasm_main).await?;
             Ok(Artifact(ret))
         }
@@ -267,10 +247,28 @@ impl IsWatchable for Wasm {
 
     fn watch(
         &self,
-        _context: Context,
+        context: Context,
         job: WatchTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Watcher>> {
+        let span = debug_span!("Watching WASM.", ?job).entered();
+
+        // The esbuild watcher must succeed in its first build, or it will prematurely exit.
+        // See the issue: https://github.com/evanw/esbuild/issues/1063
+        //
+        // Because of this, we run first build of wasm manually, rather through cargo-watch.
+        // After it is completed, the cargo-watch gets spawned and this method yields the watcher.
+        // This forces esbuild watcher (whose setup requires the watcher artifacts) to wait until
+        // all wasm build outputs are in place, so the build won't crash.
+        //
+        // In general, much neater workaround should be possible, if we stop relying on cargo-watch
+        // and do the WASM watch directly in the build script.
+        let first_build_job = self
+            .build(context.clone(), job.build.clone())
+            .instrument(debug_span!("Initial single build of WASM before setting up cargo-watch."));
+
         async move {
+            let first_build_output = first_build_job.await?;
+
             let WatchTargetJob {
                 watch_input: WatchInput { cargo_watch_options: cargo_watch_flags },
                 build: WithDestination { inner, destination },
@@ -279,14 +277,16 @@ impl IsWatchable for Wasm {
                 repo_root,
                 crate_path,
                 wasm_opt_options,
+                skip_wasm_opt,
                 extra_cargo_options,
                 profile,
                 profiling_level,
                 wasm_size_limit,
             } = inner;
 
+
             let current_exe = std::env::current_exe()?;
-            // Cargo watch apparently cannot handle verbatim path prefix. We remove it and hope for
+            // cargo-watch apparently cannot handle verbatim path prefix. We remove it and hope for
             // the best.
             let current_exe = current_exe.without_verbatim_prefix();
 
@@ -299,13 +299,22 @@ impl IsWatchable for Wasm {
                 .arg("watch")
                 .args(["--ignore", "README.md"])
                 .args(cargo_watch_flags)
-                .arg("--")
+                .arg("--");
+
+            // === Build Script top-level options ===
+            watch_cmd
                 // TODO [mwu]
                 // This is not nice, as this module should not be aware of the CLI
                 // parsing/generation. Rather than using `cargo watch` this should
                 // be implemented directly in Rust.
                 .arg(current_exe)
-                .args(["--repo-path", repo_root.as_str()])
+                .arg("--skip-version-check") // We already checked in the parent process.
+                .args(["--cache-path", context.cache.path().as_str()])
+                .args(["--upload-artifacts", context.upload_artifacts.to_string().as_str()])
+                .args(["--repo-path", repo_root.as_str()]);
+
+            // === Build Script command and its options ===
+            watch_cmd
                 .arg("wasm")
                 .arg("build")
                 .args(["--crate-path", crate_path.as_str()])
@@ -317,22 +326,33 @@ impl IsWatchable for Wasm {
             for wasm_opt_option in wasm_opt_options {
                 watch_cmd.args(["--wasm-opt-option", &wasm_opt_option]);
             }
+            if skip_wasm_opt {
+                watch_cmd.args(["--skip-wasm-opt"]);
+            }
             if let Some(wasm_size_limit) = wasm_size_limit {
                 watch_cmd.args(["--wasm-size-limit", wasm_size_limit.to_string().as_str()]);
             }
+
+            // === cargo-watch options ===
             watch_cmd.arg("--").args(extra_cargo_options);
 
             let watch_process = watch_cmd.spawn_intercepting()?;
             let artifact = Artifact(RepoRootDistWasm::new_root(&destination));
+            ensure!(
+                artifact == first_build_output,
+                "First build output does not match general watch build output. First build output: \
+                {first_build_output:?}, general watch build output: {artifact:?}",
+            );
             Ok(Self::Watcher { artifact, watch_process })
         }
+        .instrument(span.exit())
         .boxed()
     }
 }
 
 
 
-#[derive(Clone, Debug, Display)]
+#[derive(Clone, Debug, Display, PartialEq)]
 pub struct Artifact(RepoRootDistWasm);
 
 impl Artifact {
@@ -431,6 +451,45 @@ impl Wasm {
             .await
         // PM will be automatically killed by dropping the handle.
     }
+
+    /// Process "raw" WASM (as compiled) by optionally invoking wasm-opt.
+    pub async fn finalize_wasm(
+        wasm_opt_options: &[String],
+        skip_wasm_opt: bool,
+        profile: Profile,
+        temp_dist: &RepoRootDistWasm,
+    ) -> Result {
+        let should_call_wasm_opt = {
+            if profile == Profile::Dev {
+                debug!("Skipping wasm-opt invocation, as it is not part of profile {profile}.");
+                false
+            } else if skip_wasm_opt {
+                debug!("Skipping wasm-opt invocation, as it was explicitly requested.");
+                false
+            } else {
+                true
+            }
+        };
+
+        if should_call_wasm_opt {
+            let mut wasm_opt_command = WasmOpt.cmd()?;
+            let has_custom_opt_level = wasm_opt_options.iter().any(|opt| {
+                wasm_opt::OptimizationLevel::from_str(opt.trim_start_matches('-')).is_ok()
+            });
+            if !has_custom_opt_level {
+                wasm_opt_command.apply(&profile.optimization_level());
+            }
+            wasm_opt_command
+                .args(wasm_opt_options)
+                .arg(&temp_dist.wasm_main_raw)
+                .apply(&wasm_opt::Output(&temp_dist.wasm_main))
+                .run_ok()
+                .await?;
+        } else {
+            copy_file_if_different(&temp_dist.wasm_main_raw, &temp_dist.wasm_main)?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -438,7 +497,6 @@ mod tests {
     use super::*;
     use ide_ci::io::read_length;
     use ide_ci::programs::Cargo;
-    use semver::VersionReq;
 
     #[tokio::test]
     async fn check_wasm_size() -> Result {
@@ -446,12 +504,6 @@ mod tests {
         let file = tokio::io::BufReader::new(ide_ci::fs::tokio::open(&path).await?);
         let encoded_stream = async_compression::tokio::bufread::GzipEncoder::new(file);
         dbg!(read_length(encoded_stream).await?);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn check_wasm_pack_version() -> Result {
-        WasmPack.require_present_that(&VersionReq::parse(WASM_PACK_VERSION_REQ)?).await?;
         Ok(())
     }
 

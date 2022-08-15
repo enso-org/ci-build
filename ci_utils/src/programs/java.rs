@@ -2,6 +2,11 @@ use crate::prelude::*;
 
 use crate::program::command::Manipulator;
 
+crate::define_env_var! {
+    /// Java installation directory.
+    JAVA_HOME, PathBuf
+}
+
 #[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut)]
 pub struct Classpath(pub Vec<PathBuf>);
 
@@ -47,6 +52,13 @@ impl Program for Java {
     }
 }
 
+impl Java {
+    pub async fn check_language_version(&self) -> Result<LanguageVersion> {
+        let version_string = self.version_string().await?;
+        Ok(LanguageVersion(self.parse_version(&version_string)?.major as u8))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -58,7 +70,7 @@ mod tests {
     }
 }
 
-#[derive(Clone, Copy, Debug, Shrinkwrap)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Shrinkwrap)]
 pub struct LanguageVersion(pub u8);
 
 impl std::str::FromStr for LanguageVersion {

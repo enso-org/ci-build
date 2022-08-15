@@ -4,6 +4,7 @@ use ide_ci::actions::workflow::is_in_env;
 use ide_ci::env::Variable;
 use sysinfo::SystemExt;
 
+use crate::engine;
 use crate::engine::download_project_templates;
 use crate::engine::env;
 use crate::engine::BuildConfigurationResolved;
@@ -23,16 +24,16 @@ use crate::project::ProcessWrapper;
 use crate::retrieve_github_access_token;
 
 use crate::engine::bundle::Bundle;
-use crate::engine::sbt::verify_generated_package;
 use crate::enso::BuiltEnso;
 use crate::enso::IrCaches;
 
+use crate::engine::sbt::SbtCommandProvider;
+use ide_ci::cache;
+use ide_ci::cache::goodie::graalvm;
 use ide_ci::goodie::GoodieDatabase;
-use ide_ci::goodies;
-use ide_ci::goodies::graalvm;
 use ide_ci::platform::DEFAULT_SHELL;
-use ide_ci::program::with_cwd::WithCwd;
 use ide_ci::programs::graal;
+use ide_ci::programs::sbt;
 use ide_ci::programs::Flatc;
 use ide_ci::programs::Git;
 use ide_ci::programs::Sbt;
@@ -59,7 +60,7 @@ impl RunContext {
         }
 
         // Setup SBT
-        self.goodies.require(&goodies::sbt::Sbt).await?;
+        cache::goodie::sbt::Sbt.install_if_missing(&self.cache).await?;
         ide_ci::programs::Sbt.require_present().await?;
 
         // Other programs.
@@ -105,7 +106,9 @@ impl RunContext {
             }
 
             ide_ci::programs::Conda
-                .call_args(["install", "-y", "--freeze-installed", "flatbuffers=1.12.0"])
+                .cmd()?
+                .args(["install", "-y", "--freeze-installed", "flatbuffers=1.12.0"])
+                .run_ok()
                 .await?;
             ide_ci::programs::Flatc.lookup()?;
         }
@@ -131,13 +134,13 @@ impl RunContext {
         // Setup GraalVM
         let build_sbt_content = ide_ci::fs::read_to_string(self.paths.build_sbt())?;
         let graalvm = graalvm::GraalVM {
-            client:        &self.octocrab,
+            client:        self.octocrab.clone(),
             graal_version: get_graal_version(&build_sbt_content)?,
             java_version:  get_java_major_version(&build_sbt_content)?,
             os:            TARGET_OS,
             arch:          TARGET_ARCH,
         };
-        self.goodies.require(&graalvm).await?;
+        graalvm.install_if_missing(&self.cache).await?;
         graal::Gu.require_present().await?;
 
         // Make sure that Graal has installed the optional components that we need.
@@ -190,17 +193,25 @@ impl RunContext {
         let client = reqwest::Client::new();
         download_project_templates(client.clone(), self.paths.repo_root.path.clone()).await?;
 
-        let sbt = WithCwd::new(Sbt, &self.paths.repo_root);
+        // let sbt = WithCwd::new(Sbt, &self.paths.repo_root);
 
         let mut system = sysinfo::System::new();
         system.refresh_memory();
-        debug!("Total memory: {}", system.total_memory());
-        debug!("Available memory: {}", system.available_memory());
-        debug!("Used memory: {}", system.used_memory());
-        debug!("Free memory: {}", system.free_memory());
+        trace!("Total memory: {}", system.total_memory());
+        trace!("Available memory: {}", system.available_memory());
+        trace!("Used memory: {}", system.used_memory());
+        trace!("Free memory: {}", system.free_memory());
 
         // Build packages.
         debug!("Bootstrapping Enso project.");
+        let sbt = engine::sbt::Context {
+            repo_root:         self.paths.repo_root.path.clone(),
+            system_properties: vec![sbt::SystemProperty::new(
+                "bench.compileOnly",
+                self.config.execute_benchmarks_once.to_string(),
+            )],
+        };
+
         sbt.call_arg("bootstrap").await?;
 
         perhaps_generate_java_from_rust_job.await.transpose()?;
@@ -266,11 +277,11 @@ impl RunContext {
 
             // Build the Launcher Native Image
             sbt.call_arg("launcher/assembly").await?;
-            sbt.call_args(["--mem", "1536", "launcher/buildNativeImage"]).await?;
+            sbt.call_args(&["--mem", "1536", "launcher/buildNativeImage"]).await?;
 
             // Build the PM Native Image
             sbt.call_arg("project-manager/assembly").await?;
-            sbt.call_args(["--mem", "1536", "project-manager/buildNativeImage"]).await?;
+            sbt.call_args(&["--mem", "1536", "project-manager/buildNativeImage"]).await?;
 
             // Prepare Launcher Distribution
             //create_launcher_package(&paths)?;
@@ -297,6 +308,21 @@ impl RunContext {
                 sbt.call_arg(benchmark.sbt_task()).await?;
             }
         }
+
+        // If we were running any benchmarks, they are complete by now. Upload the report.
+        if is_in_env() {
+            let path = &self.paths.repo_root.engine.runtime.bench_report_xml;
+            if path.exists() {
+                ide_ci::actions::artifacts::upload_single_file(
+                    &self.paths.repo_root.engine.runtime.bench_report_xml,
+                    "Runtime Benchmark Report",
+                )
+                .await?;
+            } else {
+                info!("No benchmark file found at {}, nothing to upload.", path.display());
+            }
+        }
+
         if self.config.test_scala {
             // Test Enso
             sbt.call_arg("set Global / parallelExecution := false; test").await?;
@@ -362,28 +388,24 @@ impl RunContext {
             */
 
             if self.config.build_engine_package() {
-                verify_generated_package(&sbt, "engine", &self.paths.engine.dir).await?;
+                sbt.verify_generated_package("engine", &self.paths.engine.dir).await?;
             }
             if self.config.build_launcher_package() {
-                verify_generated_package(&sbt, "launcher", &self.paths.launcher.dir).await?;
+                sbt.verify_generated_package("launcher", &self.paths.launcher.dir).await?;
             }
             if self.config.build_project_manager_package() {
-                verify_generated_package(&sbt, "project-manager", &self.paths.project_manager.dir)
+                sbt.verify_generated_package("project-manager", &self.paths.project_manager.dir)
                     .await?;
             }
             if self.config.build_engine_package {
                 for libname in ["Base", "Table", "Image", "Database"] {
-                    verify_generated_package(
-                        &sbt,
-                        libname,
-                        self.paths
-                            .engine
-                            .dir
-                            .join_iter(["lib", "Standard"])
-                            .join(libname)
-                            .join(self.paths.version().to_string()),
-                    )
-                    .await?;
+                    let lib_path = self
+                        .paths
+                        .engine
+                        .dir
+                        .join_iter(["lib", "Standard", libname])
+                        .join(self.paths.version().to_string());
+                    sbt.verify_generated_package(libname, lib_path).await?;
                 }
             }
         }

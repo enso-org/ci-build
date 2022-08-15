@@ -122,7 +122,7 @@ impl Docker {
     }
 
     pub async fn kill(&self, target: impl AsRef<str>) -> Result {
-        Docker.call_args(["kill", target.as_ref()]).await
+        Docker.cmd()?.args(["kill", target.as_ref()]).run_ok().await
     }
 
     pub async fn upload(
@@ -150,22 +150,22 @@ impl Docker {
         driver: &NetworkDriver,
         name: impl AsRef<str>,
     ) -> Result<String> {
-        Ok(Docker
+        Docker
             .cmd()?
             .args(["network", "create", "--driver", driver.as_ref(), name.as_ref()])
             .output_ok()
             .await?
-            .single_line_stdout()?)
+            .single_line_stdout()
     }
 
     /// Returns network ID.
     pub async fn remove_network(&self, name_or_id: impl AsRef<str>) -> Result<String> {
-        Ok(Docker
+        Docker
             .cmd()?
             .args(["network", "rm", name_or_id.as_ref()])
             .output_ok()
             .await?
-            .single_line_stdout()?)
+            .single_line_stdout()
     }
 
     pub async fn list_networks(&self) -> Result<Vec<NetworkInfo>> {
