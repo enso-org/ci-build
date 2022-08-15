@@ -162,6 +162,10 @@ pub struct Runner {
     pub docker_access: bool,
     #[serde(default = "default_count")]
     pub count:         usize,
+    #[serde(default)]
+    pub volumes:       HashMap<PathBuf, PathBuf>,
+    #[serde(default)]
+    pub env:           HashMap<String, String>,
 }
 
 impl Runner {
@@ -175,6 +179,8 @@ impl Runner {
             ports:         default(),
             docker_access: default(),
             count:         1,
+            volumes:       default(),
+            env:           default(),
         }
     }
 }
