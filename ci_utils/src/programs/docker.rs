@@ -370,6 +370,11 @@ impl RunOptions {
         self
     }
 
+    pub fn volume(&mut self, host: impl Into<PathBuf>, guest: impl Into<PathBuf>) -> &mut Self {
+        self.volume.push((host.into(), guest.into()));
+        self
+    }
+
     pub fn env<T: TypedVariable>(
         &mut self,
         variable: &T,
