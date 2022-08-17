@@ -45,6 +45,15 @@ pub fn setup_wasm_pack_step() -> Step {
     }
 }
 
+pub fn github_script_step(name: impl Into<String>, script: impl Into<String>) -> Step {
+    Step {
+        name: Some(name.into()),
+        uses: Some("actions/github-script@v6".into()),
+        with: Some(step::Argument::GitHubScript { script: script.into() }),
+        ..default()
+    }
+}
+
 pub fn setup_artifact_api() -> Step {
     let script = [
         r#"core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])"#,
@@ -52,12 +61,7 @@ pub fn setup_artifact_api() -> Step {
         r#"core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])"#,
     ]
     .join("\n");
-    Step {
-        name: Some("Setup the Artifact API environment".into()),
-        uses: Some("actions/github-script@v6".into()),
-        with: Some(step::Argument::GitHubScript { script }),
-        ..default()
-    }
+    github_script_step("Setup the Artifact API environment", script)
 }
 
 pub fn is_windows_runner() -> String {
@@ -145,6 +149,10 @@ impl Default for Workflow {
 }
 
 impl Workflow {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into(), ..Default::default() }
+    }
+
     pub fn expose_outputs(&self, source_job_id: impl AsRef<str>, consumer_job: &mut Job) {
         let source_job = self.jobs.get(source_job_id.as_ref()).unwrap();
         consumer_job.use_job_outputs(source_job_id.as_ref(), source_job);
@@ -277,6 +285,20 @@ impl WorkflowDispatchInput {
             r#type: Default::default(),
         }
     }
+
+    pub fn new_string(description: impl Into<String>, required: bool, default: impl Into<String>) -> Self {
+        Self {
+            r#type: WorkflowDispatchInputType::String { default: Some(default.into()) },
+            ..Self::new(description, required)
+        }
+    }
+
+    pub fn new_boolean(description: impl Into<String>, required: bool, default: bool) -> Self {
+        Self {
+            r#type: WorkflowDispatchInputType::Boolean { default: Some(default) },
+            ..Self::new(description, required)
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -287,6 +309,11 @@ pub struct WorkflowDispatch {
 }
 
 impl WorkflowDispatch {
+    pub fn add_input(&mut self, name: impl Into<String>, input: WorkflowDispatchInput) -> &mut Self {
+        self.inputs.insert(name.into(), input);
+        self
+    }
+
     pub fn with_input<S: Into<String>>(mut self, name: S, input: WorkflowDispatchInput) -> Self {
         self.inputs.insert(name.into(), input);
         self
@@ -323,6 +350,13 @@ pub struct Job {
 }
 
 impl Job {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..default()
+        }
+    }
+
     pub fn expose_output(&mut self, step_id: impl AsRef<str>, output_name: impl Into<String>) {
         let step = step_id.as_ref();
         let output = output_name.into();
@@ -362,6 +396,20 @@ pub struct Strategy {
 }
 
 impl Strategy {
+    pub fn new(matrix_entries: impl IntoIterator<Item = (impl Into<String>, impl IntoIterator<Item: Serialize>)>) -> Result<Self> {
+        let mut ret = Self::default();
+        for (key, value) in matrix_entries {
+            ret.insert_to_matrix(key, value)?;
+        }
+        Ok(ret)
+    }
+
+    pub fn insert_to_matrix(&mut self, name: impl Into<String>, values: impl IntoIterator<Item: Serialize>) -> Result<&mut Self> {
+        let values = values.into_iter().map(|v| serde_json::to_value(v)).collect_result()?;
+        self.matrix.insert(name.into(), serde_json::Value::Array(values));
+        Ok(self)
+    }
+
     pub fn new_os(labels: impl Serialize) -> Strategy {
         let oses = serde_json::to_value(labels).unwrap();
         Strategy {
@@ -393,6 +441,11 @@ pub struct Step {
 }
 
 impl Step {
+    pub fn with_if(mut self, condition: impl Into<String>) -> Self {
+        self.r#if = Some(condition.into());
+        self
+    }
+
     pub fn with_id(mut self, id: impl Into<String>) -> Self {
         self.id = Some(id.into());
         self

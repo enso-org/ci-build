@@ -43,6 +43,7 @@ impl Config {
     pub fn custom_labels(&self) -> BTreeSet<String> {
         once(self.runner.name.clone())
             .chain(once(self.server_name.clone()))
+            .chain(once(self.qualified_name()))
             .chain(once(format!("index-{}", self.index)))
             .chain(self.runner.labels.as_ref().into_iter().flatten().cloned())
             .collect()
