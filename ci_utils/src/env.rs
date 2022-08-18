@@ -148,6 +148,12 @@ pub mod new {
         }
     }
 
+    impl<Value, Borrowed: ?Sized> Into<String> for &SimpleVariable<Value, Borrowed> {
+        fn into(self) -> String {
+            self.name.to_string()
+        }
+    }
+
     impl<Value, Borrowed: ?Sized> SimpleVariable<Value, Borrowed> {
         pub const fn new(name: &'static str) -> Self {
             Self {

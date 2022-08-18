@@ -45,6 +45,21 @@ pub mod env {
     define_env_var!(ENSO_BUILD_GUI_ASSETS, PathBuf);
     define_env_var!(ENSO_BUILD_IDE_BUNDLED_ENGINE_VERSION, Version);
     define_env_var!(ENSO_BUILD_PROJECT_MANAGER_IN_BUNDLE_PATH, PathBuf);
+
+
+    // === Electron Builder ===
+    // Variables introduced by the Electron Builder itself.
+    // See: https://www.electron.build/code-signing
+
+    define_env_var! {
+        /// The HTTPS link (or base64-encoded data, or file:// link, or local path) to certificate
+        /// (*.p12 or *.pfx file). Shorthand ~/ is supported (home directory).
+        WIN_CSC_LINK, String
+    }
+    define_env_var! {
+        /// The password to decrypt the certificate given in WIN_CSC_LINK.
+        WIN_CSC_KEY_PASSWORD, String
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -1,6 +1,9 @@
+use crate::prelude::*;
+
 use crate::ci_gen::runs_on;
 use crate::ci_gen::step;
-use crate::prelude::*;
+use crate::ci_gen::SECRET_WINDOWS_CERT_PASSWORD;
+use crate::ci_gen::SECRET_WINDOWS_CERT_PATH;
 use ide_ci::actions::workflow::definition::cancel_workflow_action;
 use ide_ci::actions::workflow::definition::checkout_repo_step;
 use ide_ci::actions::workflow::definition::Job;
@@ -8,7 +11,7 @@ use ide_ci::actions::workflow::definition::JobArchetype;
 use ide_ci::actions::workflow::definition::RunnerLabel;
 use ide_ci::actions::workflow::definition::Step;
 use ide_ci::actions::workflow::definition::Strategy;
-
+use std::convert::identity;
 
 
 // pub struct PlainScriptRunJob {
@@ -62,12 +65,21 @@ pub fn plain_job(
     name: impl AsRef<str>,
     command_line: impl AsRef<str>,
 ) -> Job {
+    plain_job_customized(runs_on_info, name, command_line, identity)
+}
+
+pub fn plain_job_customized(
+    runs_on_info: &impl RunsOn,
+    name: impl AsRef<str>,
+    command_line: impl AsRef<str>,
+    f: impl FnOnce(Step) -> Step,
+) -> Job {
     let name = if let Some(os_name) = runs_on_info.os_name() {
         format!("{} ({})", name.as_ref(), os_name)
     } else {
         name.as_ref().to_string()
     };
-    let steps = crate::ci_gen::setup_script_and_steps(command_line);
+    let steps = crate::ci_gen::setup_customized_script_steps(command_line, f);
     let runs_on = runs_on_info.runs_on();
     let strategy = runs_on_info.strategy();
     Job { name, runs_on, steps, strategy, ..default() }
@@ -194,10 +206,20 @@ impl JobArchetype for UploadBackend {
 pub struct PackageIde;
 impl JobArchetype for PackageIde {
     fn job(os: OS) -> Job {
-        plain_job(
+        plain_job_customized(
             &os,
             "Package IDE",
             "ide build --wasm-source current-ci-run --backend-source current-ci-run",
+            |step| {
+                step.with_secret_exposed_as(
+                    SECRET_WINDOWS_CERT_PATH,
+                    &enso_build::ide::web::env::WIN_CSC_LINK,
+                )
+                .with_secret_exposed_as(
+                    SECRET_WINDOWS_CERT_PASSWORD,
+                    &enso_build::ide::web::env::WIN_CSC_KEY_PASSWORD,
+                )
+            },
         )
     }
 }

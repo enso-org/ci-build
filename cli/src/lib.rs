@@ -90,6 +90,8 @@ use tempfile::tempdir;
 use tokio::process::Child;
 use tokio::runtime::Runtime;
 
+pub fn void<T>(_t: T) {}
+
 fn resolve_artifact_name(input: Option<String>, project: &impl IsTarget) -> String {
     input.unwrap_or_else(|| project.artifact_name())
 }
