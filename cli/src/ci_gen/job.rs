@@ -206,11 +206,8 @@ impl JobArchetype for UploadBackend {
 pub struct PackageIde;
 impl JobArchetype for PackageIde {
     fn job(os: OS) -> Job {
-        plain_job_customized(
-            &os,
-            "Package IDE",
-            "ide build --wasm-source current-ci-run --backend-source current-ci-run",
-            |step| {
+        let expose_certificates = |step: Step| {
+            if os == OS::Windows {
                 step.with_secret_exposed_as(
                     SECRET_WINDOWS_CERT_PATH,
                     &enso_build::ide::web::env::WIN_CSC_LINK,
@@ -219,7 +216,15 @@ impl JobArchetype for PackageIde {
                     SECRET_WINDOWS_CERT_PASSWORD,
                     &enso_build::ide::web::env::WIN_CSC_KEY_PASSWORD,
                 )
-            },
+            } else {
+                step
+            }
+        };
+        plain_job_customized(
+            &os,
+            "Package IDE",
+            "ide build --wasm-source current-ci-run --backend-source current-ci-run",
+            expose_certificates,
         )
     }
 }
