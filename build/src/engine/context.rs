@@ -169,6 +169,10 @@ impl RunContext {
             // change its version might break the caches.
             // See (private): https://discord.com/channels/401396655599124480/407883082310352928/939618590158630922
             ide_ci::fs::remove_dir_if_exists(cache_directory())?;
+
+            // Remove the benchmark reports. They are not meant currently to be incrementally
+            // updated.
+            ide_ci::fs::remove_if_exists(&self.paths.repo_root.engine.runtime.bench_report_xml)?;
         }
 
         if self.config.test_standard_library {
