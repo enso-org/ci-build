@@ -64,13 +64,14 @@ pub async fn download_and_extract(
     let url = url.into_url()?;
     let url_text = url.to_string();
     let filename = filename_from_url(&url)?;
+    let format = Format::from_filename(&filename)?;
 
     debug!("Downloading {}", url_text);
+    // FIXME: dont keep the whole download in the memory.
     let contents = download_all(url).await?;
     let buffer = std::io::Cursor::new(contents);
 
     debug!("Extracting {} to {}", filename.display(), output_dir.as_ref().display());
-    let format = Format::from_filename(&PathBuf::from(filename))?;
     format.extract(buffer, output_dir.as_ref()).with_context(|| {
         format!("Failed to extract data from {} to {}.", url_text, output_dir.as_ref().display(),)
     })

@@ -59,17 +59,3 @@ impl AsRef<OsStr> for Command {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::log::setup_logging;
-
-    #[tokio::test]
-    async fn nice_clean_test() -> Result {
-        setup_logging()?;
-        let git = Git::new(r"H:\NBO\enso5");
-        git.clean_except_for([".idea", "target/enso-build"]).await?;
-        Ok(())
-    }
-}

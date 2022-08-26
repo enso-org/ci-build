@@ -1,6 +1,7 @@
 use crate::prelude::*;
 
 use crate::env::new::TypedVariable;
+use crate::extensions::child::ChildExt;
 use shrinkwraprs::Shrinkwrap;
 use std::collections::HashMap;
 use std::fmt::Formatter;
@@ -64,7 +65,21 @@ pub struct NetworkInfo {
     pub scope:  String,
 }
 
+pub struct Credentials {
+    pub username: String,
+    pub password: String,
+    pub server:   String,
+}
 
+impl Credentials {
+    pub fn new(
+        username: impl Into<String>,
+        password: impl Into<String>,
+        server: impl Into<String>,
+    ) -> Self {
+        Self { username: username.into(), password: password.into(), server: server.into() }
+    }
+}
 
 pub struct Docker;
 
@@ -80,6 +95,7 @@ impl Docker {
         command.arg("build").args(options.args());
         debug!("{:?}", command);
         let output = command.output_ok().await?;
+        trace!("Output: {:?}", output);
         let built_image_id = std::str::from_utf8(&output.stdout)?
             .lines()
             .inspect(|line| debug!("{}", line))
@@ -203,6 +219,41 @@ impl Docker {
             }
         }
         Ok(ret)
+    }
+
+    pub async fn while_logged_in<F: Future<Output = Result<T>>, T>(
+        &self,
+        credentials: Credentials,
+        f: impl FnOnce() -> F,
+    ) -> F::Output {
+        self.login(&credentials).await?;
+        let ret = f().await;
+        // Logout before returning result.
+        self.logout(&credentials.server).await?;
+        ret
+    }
+
+    pub async fn login(&self, credentials: &Credentials) -> Result {
+        let Credentials { username, password, server } = credentials;
+        let mut cmd = self.cmd()?;
+        cmd.args(["login", "--username", username, "--password-stdin", server]);
+        cmd.stdin(Stdio::piped());
+        let mut process = cmd.spawn()?;
+        let stdin = process.stdin.as_mut().context("Failed to open stdin")?;
+        stdin.write_all(password.as_bytes()).await?;
+        process.wait_ok().await
+    }
+
+    pub async fn logout(&self, registry: &str) -> Result {
+        let mut cmd = self.cmd()?;
+        cmd.args(["logout", registry]);
+        cmd.run_ok().await
+    }
+
+    pub async fn push(&self, image: &str) -> Result {
+        let mut cmd = self.cmd()?;
+        cmd.args(["push", image]);
+        cmd.run_ok().await
     }
 }
 

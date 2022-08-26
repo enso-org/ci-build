@@ -203,6 +203,19 @@ impl JobArchetype for UploadBackend {
     }
 }
 
+pub struct UploadRuntimeToEcr;
+impl JobArchetype for UploadRuntimeToEcr {
+    fn job(os: OS) -> Job {
+        plain_job_customized(&os, "Upload Runtime to ECR", "release deploy-to-ecr", |step| {
+            step.with_env("ENSO_BUILD_ECR_REPOSITORY", enso_build::aws::ecr::runtime::NAME)
+                .with_secret_exposed_as("AWS_DEFAULT_REGION", "SECRET_ECR_IMAGE_ACCESS_KEY")
+                .with_env("AWS_DEFAULT_REGION", enso_build::aws::ecr::runtime::REGION)
+                .with_env("AWS_ACCESS_KEY_ID", "ECR_IMAGE_ACCESS_KEY_ID") // FIXME
+        })
+    }
+}
+
+
 pub struct PackageIde;
 impl JobArchetype for PackageIde {
     fn job(os: OS) -> Job {
