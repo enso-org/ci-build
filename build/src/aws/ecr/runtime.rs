@@ -5,6 +5,11 @@ use ide_ci::programs::docker::BuildOptions;
 use ide_ci::programs::docker::ImageId;
 use ide_ci::programs::Docker;
 
+/// Name of the repository.
+pub const NAME: &str = "runtime";
+
+pub const REGION: &str = "eu-west-1";
+
 #[instrument(fields(%dockerfile, %engine_package_root))]
 pub async fn build_runtime_image(
     dockerfile: generated::RepoRootToolsCiDocker,

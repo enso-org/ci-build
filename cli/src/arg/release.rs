@@ -5,7 +5,7 @@ use clap::Subcommand;
 
 #[derive(Args, Clone, Debug)]
 pub struct DeployToEcr {
-    #[clap(long, default_value = "runtime", enso_env())]
+    #[clap(long, default_value = enso_build::aws::ecr::runtime::NAME, enso_env())]
     pub ecr_repository: String,
 }
 

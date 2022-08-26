@@ -43,6 +43,8 @@ pub const SECRET_WINDOWS_CERT_PATH: &str = "MICROSOFT_CODE_SIGNING_CERT";
 /// Name of the GitHub Actions secret that stores password to the Windows code signing certificate.
 pub const SECRET_WINDOWS_CERT_PASSWORD: &str = "MICROSOFT_CODE_SIGNING_CERT_PASSWORD";
 
+pub const SECRET_ECR_IMAGE_ACCESS_KEY: &str = "ECR_IMAGE_UPLOAD_ACCESS_KEY";
+
 impl RunsOn for DeluxeRunner {
     fn runs_on(&self) -> Vec<RunnerLabel> {
         vec![RunnerLabel::MwuDeluxe]
