@@ -10,6 +10,8 @@ use bytes::Buf;
 use ide_ci::models::config::RepoContext;
 use serde::de::DeserializeOwned;
 
+pub mod ecr;
+
 /// The upper limit on number of nightly editions that are stored in the bucket.
 pub const NIGHTLY_EDITIONS_LIMIT: usize = 20;
 
@@ -117,8 +119,8 @@ impl BucketContext {
     }
 
     pub async fn put_yaml(&self, path: &str, data: &impl Serialize) -> Result<PutObjectOutput> {
-        let buf = serde_yaml::to_vec(data)?;
-        self.put(path, ByteStream::from(buf)).await
+        let buf = serde_yaml::to_string(data)?;
+        self.put(path, ByteStream::from(buf.into_bytes())).await
     }
 }
 

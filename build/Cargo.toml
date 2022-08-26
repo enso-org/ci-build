@@ -9,11 +9,13 @@ edition = "2021"
 anyhow = "1.0.44"
 async-compression = "0.3.12"
 async-trait = "0.1.51"
-aws-config = "0.12.0"
-aws-sdk-s3 = "0.12.0"
+aws-config = "0.47.0"
+aws-sdk-ecr = "0.17.0"
+aws-sdk-s3 = "0.17.0"
+base64 = "0.13.0"
 bytes = "1.0.0"
 byte-unit = { version = "4.0.14", features = ["serde"] }
-cached = "0.34.0"
+cached = "0.38.0"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.19", features = ["serde"] }
 clap = { version = "3.1.5", features = ["derive", "env", "wrap_help"] }
@@ -40,7 +42,7 @@ lazy_static = "1.4.0"
 #git2 = "0.13.25"
 log = "0.4.14"
 mime = "0.3.16"
-nix = "0.24.1"
+nix = "0.25.0"
 octocrab = { git = "https://github.com/enso-org/octocrab", default-features = false, features = ["rustls"] }
 ouroboros = "0.15.0"
 paste = "1.0.7"
@@ -57,11 +59,11 @@ snafu = "0.7.1"
 semver = { version = "1.0.4", features=["serde"] }
 serde = { version = "1.0.130", features= ["derive"]}
 serde_json = "1.0.68"
-serde_yaml = "0.8.21"
+serde_yaml = "0.9.10"
 scopeguard = "1.1.0"
 shrinkwraprs = "0.3.0"
 strum = { version = "0.24.0", features = ["derive"] }
-sysinfo = "0.23.13"
+sysinfo = "0.25.3"
 tar = "0.4.37"
 tempfile = "3.2.0"
 toml = "0.5.8"
@@ -79,4 +81,4 @@ zip = "0.6.2"
 
 [build-dependencies]
 ide-ci = {path = "../ci_utils"}
-serde_yaml = "0.8.21"
+serde_yaml = "0.9.10"

@@ -801,6 +801,9 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
             Action::CreateDraft => {
                 enso_build::release::create_release(&*ctx).await?;
             }
+            Action::DeployToEcr(args) => {
+                enso_build::release::deploy_to_ecr(&*ctx, args.ecr_repository).await?;
+            }
             Action::Publish => {
                 enso_build::release::publish_release(&*ctx).await?;
             }

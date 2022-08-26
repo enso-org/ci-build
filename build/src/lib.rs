@@ -1,3 +1,4 @@
+#![feature(let_else)]
 #![feature(derive_default_enum)]
 #![feature(hash_set_entry)]
 #![feature(type_alias_impl_trait)]
@@ -16,6 +17,7 @@
 #![feature(associated_type_defaults)]
 #![feature(once_cell)]
 #![feature(duration_constants)]
+#![feature(slice_take)]
 
 use crate::prelude::*;
 
