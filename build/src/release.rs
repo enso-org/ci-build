@@ -74,8 +74,7 @@ pub async fn publish_release(context: &BuildContext) -> Result {
 pub async fn deploy_to_ecr(context: &BuildContext, repository: String) -> Result {
     let octocrab = &context.octocrab;
     let release_id = crate::env::ReleaseId.fetch()?;
-    // let temp = tempdir()?;
-    let temp = PathBuf::from(r"C:\Temp\ttt");
+    let temp = tempdir()?;
 
     let paths = context.repo_root();
     let linux_triple = TargetTriple { os: OS::Linux, ..context.triple.clone() };
@@ -91,7 +90,7 @@ pub async fn deploy_to_ecr(context: &BuildContext, repository: String) -> Result
     let asset = github::find_asset_url_by_text(&release, &package_name)?;
 
     info!("Downloading Engine Package from {asset}.");
-    // ide_ci::io::download_and_extract(asset.clone(), &temp).await?;
+    ide_ci::io::download_and_extract(asset.clone(), &temp).await?;
 
     let engine_package =
         generated::EnginePackage::new_under(&temp, context.triple.versions.version.to_string());
