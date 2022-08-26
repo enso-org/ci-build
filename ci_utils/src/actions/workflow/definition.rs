@@ -627,7 +627,7 @@ pub fn checkout_repo_step() -> impl IntoIterator<Item = Step> {
         // FIXME: Check what is wrong with v3. Seemingly Engine Tests fail because there's only a
         //        shallow copy of the repo.
         uses: Some("actions/checkout@v2".into()),
-        with: Some(step::Argument::Checkout { clean: Some(true) }),
+        with: Some(step::Argument::Checkout { clean: Some(false) }),
         ..default()
     };
     [submodules_workaround_win, submodules_workaround_linux, actual_checkout]
