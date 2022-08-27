@@ -43,7 +43,9 @@ pub const SECRET_WINDOWS_CERT_PATH: &str = "MICROSOFT_CODE_SIGNING_CERT";
 /// Name of the GitHub Actions secret that stores password to the Windows code signing certificate.
 pub const SECRET_WINDOWS_CERT_PASSWORD: &str = "MICROSOFT_CODE_SIGNING_CERT_PASSWORD";
 
-pub const SECRET_ECR_IMAGE_ACCESS_KEY: &str = "ECR_IMAGE_UPLOAD_ACCESS_KEY";
+pub const ECR_PUSH_RUNTIME_SECRET_ACCESS_KEY: &str = "ECR_PUSH_RUNTIME_SECRET_ACCESS_KEY";
+
+pub const ECR_PUSH_RUNTIME_ACCESS_KEY_ID: &str = "ECR_PUSH_RUNTIME_ACCESS_KEY_ID";
 
 impl RunsOn for DeluxeRunner {
     fn runs_on(&self) -> Vec<RunnerLabel> {
@@ -186,6 +188,10 @@ pub fn nightly() -> Result<Workflow> {
     let prepare_job_id = workflow.add::<DraftRelease>(linux_only);
     let build_wasm_job_id = workflow.add::<job::BuildWasm>(linux_only);
     let mut packaging_job_ids = vec![];
+
+    // Assumed, because Linux is necessary to deploy ECR runtime image.
+    assert!(TARGETED_SYSTEMS.contains(&OS::Linux));
+
     for os in TARGETED_SYSTEMS {
         let backend_job_id = workflow.add_dependent::<job::UploadBackend>(os, [&prepare_job_id]);
         let build_ide_job_id = workflow.add_dependent::<UploadIde>(os, [
@@ -194,6 +200,12 @@ pub fn nightly() -> Result<Workflow> {
             &build_wasm_job_id,
         ]);
         packaging_job_ids.push(build_ide_job_id);
+
+        if os == OS::Linux {
+            let upload_runtime_job_id = workflow
+                .add_dependent::<job::UploadRuntimeToEcr>(os, [&prepare_job_id, &backend_job_id]);
+            packaging_job_ids.push(upload_runtime_job_id);
+        }
     }
 
     let publish_deps = {
