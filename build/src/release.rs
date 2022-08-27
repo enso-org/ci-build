@@ -90,7 +90,20 @@ pub async fn deploy_to_ecr(context: &BuildContext, repository: String) -> Result
     let asset = github::find_asset_url_by_text(&release, &package_name)?;
 
     info!("Downloading Engine Package from {asset}.");
-    ide_ci::io::download_and_extract(asset.clone(), &temp).await?;
+    for i in 0..4 {
+        let result = ide_ci::io::download_and_extract(asset.clone(), &temp).await;
+        match result {
+            Ok(_) => break,
+            Err(err) => {
+                if i == 3 {
+                    return Err(err.into());
+                }
+                warn!("Failed to download Engine Package. Retrying in 5 seconds.");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
+    // ide_ci::io::download_and_extract(asset.clone(), &temp).await?;
 
     let engine_package =
         generated::EnginePackage::new_under(&temp, context.triple.versions.version.to_string());
