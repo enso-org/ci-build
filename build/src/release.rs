@@ -91,7 +91,8 @@ pub async fn deploy_to_ecr(context: &BuildContext, repository: String) -> Result
 
     info!("Downloading Engine Package from {asset}.");
     for i in 0..30 {
-        let result = ide_ci::io::download_and_extract(asset.clone(), &temp).await;
+        let result =
+            ide_ci::io::client::download_and_extract(&octocrab.client, asset.clone(), &temp).await;
         match result {
             Ok(_) => break,
             Err(err) => {
