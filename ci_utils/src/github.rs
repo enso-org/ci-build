@@ -185,6 +185,18 @@ pub trait RepoPointer: Display {
         let response = self.download_asset(client, asset_id).await?;
         crate::io::web::stream_response_to_file(response, &output_path).await
     }
+
+    #[tracing::instrument(name="Download the asset to a directory.", skip(client, output_dir), fields(self=%self, dest=%output_dir.as_ref().display()), err)]
+    async fn download_asset_to(
+        &self,
+        client: &Octocrab,
+        asset: &Asset,
+        output_dir: impl AsRef<Path> + Send + Sync + 'static,
+    ) -> Result<PathBuf> {
+        let output_path = output_dir.as_ref().join(&asset.name);
+        self.download_asset_as(client, asset.id, output_path.clone()).await?;
+        Ok(output_path)
+    }
 }
 
 #[async_trait]

@@ -74,7 +74,6 @@ pub async fn publish_release(context: &BuildContext) -> Result {
 pub async fn deploy_to_ecr(context: &BuildContext, repository: String) -> Result {
     let octocrab = &context.octocrab;
     let release_id = crate::env::ReleaseId.fetch()?;
-    let temp = tempdir()?;
 
     let paths = context.repo_root();
     let linux_triple = TargetTriple { os: OS::Linux, ..context.triple.clone() };
@@ -87,27 +86,20 @@ pub async fn deploy_to_ecr(context: &BuildContext, repository: String) -> Result
             .to_string();
 
     let release = context.remote_repo.find_release_by_id(octocrab, release_id).await?;
-    let asset = github::find_asset_url_by_text(&release, &package_name)?;
+    let asset = github::find_asset_by_text(&release, &package_name)?;
 
-    info!("Downloading Engine Package from {asset}.");
-    for i in 0..30 {
-        let result =
-            ide_ci::io::client::download_and_extract(&octocrab.client, asset.clone(), &temp).await;
-        match result {
-            Ok(_) => break,
-            Err(err) => {
-                if i == 3 {
-                    return Err(err.into());
-                }
-                warn!("Failed to download Engine Package. Retrying in 5 seconds.");
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-            }
-        }
-    }
-    // ide_ci::io::download_and_extract(asset.clone(), &temp).await?;
 
-    let engine_package =
-        generated::EnginePackage::new_under(&temp, context.triple.versions.version.to_string());
+    let temp_for_archive = tempdir()?;
+    let downloaded_asset =
+        context.remote_repo.download_asset_to(octocrab, &asset, temp_for_archive).await?;
+
+    let temp_for_extraction = tempdir()?;
+    ide_ci::archive::extract_to(&downloaded_asset, &temp_for_extraction).await?;
+
+    let engine_package = generated::EnginePackage::new_under(
+        &temp_for_extraction,
+        context.triple.versions.version.to_string(),
+    );
 
 
     let config = &aws_config::load_from_env().await;
