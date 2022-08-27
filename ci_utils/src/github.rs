@@ -210,17 +210,22 @@ pub trait OrganizationPointer {
 }
 
 /// Get the biggest asset containing given text.
-#[instrument(fields(id = %release.id, url = %release.url), ret(Display), err)]
-pub fn find_asset_url_by_text<'a>(release: &'a Release, text: &str) -> anyhow::Result<&'a Url> {
-    let matching_asset = release
+#[instrument(fields(id = %release.id, url = %release.url), ret, err)]
+pub fn find_asset_by_text<'a>(release: &'a Release, text: &str) -> anyhow::Result<&'a Asset> {
+    release
         .assets
         .iter()
         .filter(|asset| asset.name.contains(&text))
         .max_by_key(|asset| asset.size)
         .ok_or_else(|| {
             anyhow!("Cannot find release asset by string {} in the release {}.", text, release.url)
-        })?;
-    trace!("Found asset: {:#?}", matching_asset);
+        })
+}
+
+/// Get the biggest asset containing given text.
+#[instrument(fields(id = %release.id, url = %release.url), ret(Display), err)]
+pub fn find_asset_url_by_text<'a>(release: &'a Release, text: &str) -> anyhow::Result<&'a Url> {
+    let matching_asset = find_asset_by_text(release, text)?;
     Ok(&matching_asset.browser_download_url)
 }
 
