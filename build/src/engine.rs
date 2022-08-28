@@ -34,7 +34,7 @@ pub async fn download_project_templates(client: reqwest::Client, enso_root: Path
             let relative_output_base = output_base.join(project_name.to_lowercase());
             let client = client.clone();
             let future = async move {
-                ide_ci::io::client::download_relative(
+                ide_ci::io::web::client::download_relative(
                     &client,
                     &relative_url_base,
                     &relative_output_base,

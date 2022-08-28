@@ -1,6 +1,7 @@
+use crate::prelude::*;
+
 use crate::archive::Format;
 use crate::global::progress_bar;
-use crate::prelude::*;
 use reqwest::Client;
 use reqwest::IntoUrl;
 use std::time::Duration;

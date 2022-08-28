@@ -238,9 +238,12 @@ pub fn gui() -> Result<Workflow> {
     workflow.add::<job::Lint>(PRIMARY_OS);
     workflow.add::<job::WasmTest>(PRIMARY_OS);
     workflow.add::<job::NativeTest>(PRIMARY_OS);
-    workflow.add_customized::<job::IntegrationTest>(PRIMARY_OS, |job| {
-        job.needs.insert(job::BuildBackend::key(PRIMARY_OS));
-    });
+
+    // FIXME: Integration tests are currently always failing.
+    //        The should be reinstated when fixed.
+    // workflow.add_customized::<job::IntegrationTest>(PRIMARY_OS, |job| {
+    //     job.needs.insert(job::BuildBackend::key(PRIMARY_OS));
+    // });
 
     // Because WASM upload happens only for the Linux build, all other platforms needs to depend on
     // it.

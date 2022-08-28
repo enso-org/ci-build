@@ -1,10 +1,10 @@
-pub mod client;
 pub mod web;
 
 use crate::prelude::*;
 
 use reqwest::IntoUrl;
 use tokio::io::AsyncRead;
+use web::client;
 
 /// Read the whole input and return its length.
 ///
