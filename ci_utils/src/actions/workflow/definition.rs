@@ -413,16 +413,16 @@ impl Strategy {
         Ok(ret)
     }
 
+    pub fn fail_fast(mut self, fail_fast: bool) -> Self {
+        self.fail_fast = Some(fail_fast);
+        self
+    }
+
     pub fn insert_to_matrix(
         &mut self,
         name: impl Into<String>,
         values: impl IntoIterator<Item: Serialize>,
     ) -> Result<&mut Self> {
-    pub fn new_string(
-        description: impl Into<String>,
-        required: bool,
-        default: impl Into<String>,
-    ) -> Self {
         let values = values.into_iter().map(|v| serde_json::to_value(v)).collect_result()?;
         self.matrix.insert(name.into(), serde_json::Value::Array(values));
         Ok(self)
@@ -459,6 +459,20 @@ pub struct Step {
 }
 
 impl Step {
+    pub fn with_secret_exposed_as(
+        self,
+        secret: impl AsRef<str>,
+        given_name: impl Into<String>,
+    ) -> Self {
+        let secret_expr = wrap_expression(format!("secrets.{}", secret.as_ref()));
+        self.with_env(given_name, secret_expr)
+    }
+
+    pub fn with_env(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.insert(name.into(), value.into());
+        self
+    }
+
     pub fn with_if(mut self, condition: impl Into<String>) -> Self {
         self.r#if = Some(condition.into());
         self
@@ -618,7 +632,7 @@ pub fn checkout_repo_step() -> impl IntoIterator<Item = Step> {
         // FIXME: Check what is wrong with v3. Seemingly Engine Tests fail because there's only a
         //        shallow copy of the repo.
         uses: Some("actions/checkout@v2".into()),
-        with: Some(step::Argument::Checkout { clean: Some(true) }),
+        with: Some(step::Argument::Checkout { clean: Some(false) }),
         ..default()
     };
     [submodules_workaround_win, submodules_workaround_linux, actual_checkout]
