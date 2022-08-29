@@ -286,7 +286,11 @@ impl WorkflowDispatchInput {
         }
     }
 
-    pub fn new_string(description: impl Into<String>, required: bool, default: impl Into<String>) -> Self {
+    pub fn new_string(
+        description: impl Into<String>,
+        required: bool,
+        default: impl Into<String>,
+    ) -> Self {
         Self {
             r#type: WorkflowDispatchInputType::String { default: Some(default.into()) },
             ..Self::new(description, required)
@@ -309,7 +313,11 @@ pub struct WorkflowDispatch {
 }
 
 impl WorkflowDispatch {
-    pub fn add_input(&mut self, name: impl Into<String>, input: WorkflowDispatchInput) -> &mut Self {
+    pub fn add_input(
+        &mut self,
+        name: impl Into<String>,
+        input: WorkflowDispatchInput,
+    ) -> &mut Self {
         self.inputs.insert(name.into(), input);
         self
     }
@@ -351,10 +359,7 @@ pub struct Job {
 
 impl Job {
     pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            ..default()
-        }
+        Self { name: name.into(), ..default() }
     }
 
     pub fn expose_output(&mut self, step_id: impl AsRef<str>, output_name: impl Into<String>) {
@@ -396,7 +401,11 @@ pub struct Strategy {
 }
 
 impl Strategy {
-    pub fn new(matrix_entries: impl IntoIterator<Item = (impl Into<String>, impl IntoIterator<Item: Serialize>)>) -> Result<Self> {
+    pub fn new(
+        matrix_entries: impl IntoIterator<
+            Item = (impl Into<String>, impl IntoIterator<Item: Serialize>),
+        >,
+    ) -> Result<Self> {
         let mut ret = Self::default();
         for (key, value) in matrix_entries {
             ret.insert_to_matrix(key, value)?;
@@ -404,7 +413,16 @@ impl Strategy {
         Ok(ret)
     }
 
-    pub fn insert_to_matrix(&mut self, name: impl Into<String>, values: impl IntoIterator<Item: Serialize>) -> Result<&mut Self> {
+    pub fn fail_fast(mut self, fail_fast: bool) -> Self {
+        self.fail_fast = Some(fail_fast);
+        self
+    }
+
+    pub fn insert_to_matrix(
+        &mut self,
+        name: impl Into<String>,
+        values: impl IntoIterator<Item: Serialize>,
+    ) -> Result<&mut Self> {
         let values = values.into_iter().map(|v| serde_json::to_value(v)).collect_result()?;
         self.matrix.insert(name.into(), serde_json::Value::Array(values));
         Ok(self)
