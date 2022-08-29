@@ -19,6 +19,9 @@
   build/:
     prettier/:
   built-distribution/:
+    ? path: "enso-engine-<triple>"
+      type: engine_package
+    "enso-bundle-<triple>":
     "project-manager-bundle-<triple>":
       enso:
   dist/:
@@ -56,6 +59,10 @@
   target/:
     generated-java/:
   tools/:
+    ci/:
+      docker/:
+        docker-entrypoint.sh:
+        Dockerfile:
     simple-library-server/:
   run:
   CHANGELOG.md:
@@ -66,6 +73,22 @@ project-manager/:
   dist/:
   runtime/:
 
+
+# Engine Package
 # https://enso.org/docs/developer/enso/distribution/distribution.html#layout-of-an-enso-version-package
-<enso_version_dist>/:
+? {path: enso-<version>/, var: engine_package}
+: bin/:
+  components/:
+  editions/:
+  lib/:
   manifest.yaml:
+
+# Engine Bundle
+# https://enso.org/docs/developer/enso/distribution/distribution.html#portable-enso-distribution-layout
+? {path: enso/, var: engine_bundle}
+: dist/:
+    <version>/:
+  edition/:
+    <edition>.yaml:
+  runtime/:
+  .enso.portable:

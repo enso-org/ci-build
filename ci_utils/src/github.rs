@@ -185,6 +185,21 @@ pub trait RepoPointer: Display {
         let response = self.download_asset(client, asset_id).await?;
         crate::io::web::stream_response_to_file(response, &output_path).await
     }
+
+    #[tracing::instrument(name="Download the asset to a directory.",
+        skip(client, output_dir, asset),
+        fields(self=%self, dest=%output_dir.as_ref().display(), id = %asset.id),
+        err)]
+    async fn download_asset_to(
+        &self,
+        client: &Octocrab,
+        asset: &Asset,
+        output_dir: impl AsRef<Path> + Send + Sync + 'static,
+    ) -> Result<PathBuf> {
+        let output_path = output_dir.as_ref().join(&asset.name);
+        self.download_asset_as(client, asset.id, output_path.clone()).await?;
+        Ok(output_path)
+    }
 }
 
 #[async_trait]
@@ -210,15 +225,23 @@ pub trait OrganizationPointer {
 }
 
 /// Get the biggest asset containing given text.
-pub fn find_asset_url_by_text<'a>(release: &'a Release, text: &str) -> anyhow::Result<&'a Url> {
-    let matching_asset = release
+#[instrument(skip(release), fields(id = %release.id, url = %release.url), err)]
+pub fn find_asset_by_text<'a>(release: &'a Release, text: &str) -> anyhow::Result<&'a Asset> {
+    release
         .assets
         .iter()
         .filter(|asset| asset.name.contains(&text))
         .max_by_key(|asset| asset.size)
         .ok_or_else(|| {
             anyhow!("Cannot find release asset by string {} in the release {}.", text, release.url)
-        })?;
+        })
+        .inspect(|asset| trace!("Found asset: {:#?}", asset))
+}
+
+/// Get the biggest asset containing given text.
+#[instrument(skip(release), fields(id = %release.id, url = %release.url), ret(Display), err)]
+pub fn find_asset_url_by_text<'a>(release: &'a Release, text: &str) -> anyhow::Result<&'a Url> {
+    let matching_asset = find_asset_by_text(release, text)?;
     Ok(&matching_asset.browser_download_url)
 }
 

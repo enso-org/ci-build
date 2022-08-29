@@ -1,6 +1,9 @@
+use crate::prelude::*;
+
 use crate::ci_gen::runs_on;
 use crate::ci_gen::step;
-use crate::prelude::*;
+use crate::ci_gen::SECRET_WINDOWS_CERT_PASSWORD;
+use crate::ci_gen::SECRET_WINDOWS_CERT_PATH;
 use ide_ci::actions::workflow::definition::cancel_workflow_action;
 use ide_ci::actions::workflow::definition::checkout_repo_step;
 use ide_ci::actions::workflow::definition::Job;
@@ -8,7 +11,7 @@ use ide_ci::actions::workflow::definition::JobArchetype;
 use ide_ci::actions::workflow::definition::RunnerLabel;
 use ide_ci::actions::workflow::definition::Step;
 use ide_ci::actions::workflow::definition::Strategy;
-
+use std::convert::identity;
 
 
 // pub struct PlainScriptRunJob {
@@ -62,12 +65,21 @@ pub fn plain_job(
     name: impl AsRef<str>,
     command_line: impl AsRef<str>,
 ) -> Job {
+    plain_job_customized(runs_on_info, name, command_line, identity)
+}
+
+pub fn plain_job_customized(
+    runs_on_info: &impl RunsOn,
+    name: impl AsRef<str>,
+    command_line: impl AsRef<str>,
+    f: impl FnOnce(Step) -> Step,
+) -> Job {
     let name = if let Some(os_name) = runs_on_info.os_name() {
         format!("{} ({})", name.as_ref(), os_name)
     } else {
         name.as_ref().to_string()
     };
-    let steps = crate::ci_gen::setup_script_and_steps(command_line);
+    let steps = crate::ci_gen::setup_customized_script_steps(command_line, f);
     let runs_on = runs_on_info.runs_on();
     let strategy = runs_on_info.strategy();
     Job { name, runs_on, steps, strategy, ..default() }
@@ -191,13 +203,47 @@ impl JobArchetype for UploadBackend {
     }
 }
 
+pub struct UploadRuntimeToEcr;
+impl JobArchetype for UploadRuntimeToEcr {
+    fn job(os: OS) -> Job {
+        plain_job_customized(&os, "Upload Runtime to ECR", "release deploy-to-ecr", |step| {
+            step.with_env("ENSO_BUILD_ECR_REPOSITORY", enso_build::aws::ecr::runtime::NAME)
+                .with_secret_exposed_as(
+                    crate::ci_gen::ECR_PUSH_RUNTIME_ACCESS_KEY_ID,
+                    "AWS_ACCESS_KEY_ID",
+                )
+                .with_secret_exposed_as(
+                    crate::ci_gen::ECR_PUSH_RUNTIME_SECRET_ACCESS_KEY,
+                    "AWS_SECRET_ACCESS_KEY",
+                )
+                .with_env("AWS_DEFAULT_REGION", enso_build::aws::ecr::runtime::REGION)
+        })
+    }
+}
+
+
 pub struct PackageIde;
 impl JobArchetype for PackageIde {
     fn job(os: OS) -> Job {
-        plain_job(
+        let expose_certificates = |step: Step| {
+            if os == OS::Windows {
+                step.with_secret_exposed_as(
+                    SECRET_WINDOWS_CERT_PATH,
+                    &enso_build::ide::web::env::WIN_CSC_LINK,
+                )
+                .with_secret_exposed_as(
+                    SECRET_WINDOWS_CERT_PASSWORD,
+                    &enso_build::ide::web::env::WIN_CSC_KEY_PASSWORD,
+                )
+            } else {
+                step
+            }
+        };
+        plain_job_customized(
             &os,
             "Package IDE",
             "ide build --wasm-source current-ci-run --backend-source current-ci-run",
+            expose_certificates,
         )
     }
 }

@@ -1,8 +1,12 @@
 use crate::prelude::*;
 
 use crate::context::BuildContext;
+use crate::paths::generated;
+use crate::paths::TargetTriple;
 use crate::paths::EDITION_FILE_ARTIFACT_NAME;
 use crate::project;
+use ide_ci::github;
+use ide_ci::programs::Docker;
 use octocrab::models::repos::Release;
 use tempfile::tempdir;
 
@@ -64,5 +68,52 @@ pub async fn publish_release(context: &BuildContext) -> Result {
     debug!("Updating edition in the AWS S3.");
     crate::aws::update_manifest(remote_repo, &edition_file_path).await?;
 
+    Ok(())
+}
+
+pub async fn deploy_to_ecr(context: &BuildContext, repository: String) -> Result {
+    let octocrab = &context.octocrab;
+    let release_id = crate::env::ReleaseId.fetch()?;
+
+    let paths = context.repo_root();
+    let linux_triple = TargetTriple { os: OS::Linux, ..context.triple.clone() };
+    let package_name =
+        generated::RepoRootBuiltDistribution::new_root(".", linux_triple.to_string())
+            .enso_engine_triple
+            .file_name()
+            .context("Failed to get Engine Package name.")?
+            .as_str()
+            .to_string();
+
+    let release = context.remote_repo.find_release_by_id(octocrab, release_id).await?;
+    let asset = github::find_asset_by_text(&release, &package_name)?;
+
+
+    let temp_for_archive = tempdir()?;
+    let downloaded_asset =
+        context.remote_repo.download_asset_to(octocrab, &asset, temp_for_archive.path().to_owned()).await?;
+
+    let temp_for_extraction = tempdir()?;
+    ide_ci::archive::extract_to(&downloaded_asset, &temp_for_extraction).await?;
+
+    let engine_package = generated::EnginePackage::new_under(
+        &temp_for_extraction,
+        context.triple.versions.version.to_string(),
+    );
+
+
+    let config = &aws_config::load_from_env().await;
+    let client = aws_sdk_ecr::Client::new(config);
+    let repository_uri = crate::aws::ecr::get_repository_uri(&client, &repository).await?;
+    let tag = format!("{}:{}", repository_uri, context.triple.versions.version);
+    let _image = crate::aws::ecr::runtime::build_runtime_image(
+        paths.tools.ci.docker,
+        engine_package,
+        tag.clone(),
+    )
+    .await?;
+
+    let credentials = crate::aws::ecr::get_credentials(&client).await?;
+    Docker.while_logged_in(credentials, || async move { Docker.push(&tag).await }).await?;
     Ok(())
 }

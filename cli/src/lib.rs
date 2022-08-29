@@ -90,6 +90,8 @@ use tempfile::tempdir;
 use tokio::process::Child;
 use tokio::runtime::Runtime;
 
+pub fn void<T>(_t: T) {}
+
 fn resolve_artifact_name(input: Option<String>, project: &impl IsTarget) -> String {
     input.unwrap_or_else(|| project.artifact_name())
 }
@@ -798,6 +800,9 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
         Target::Release(release) => match release.action {
             Action::CreateDraft => {
                 enso_build::release::create_release(&*ctx).await?;
+            }
+            Action::DeployToEcr(args) => {
+                enso_build::release::deploy_to_ecr(&*ctx, args.ecr_repository).await?;
             }
             Action::Publish => {
                 enso_build::release::publish_release(&*ctx).await?;

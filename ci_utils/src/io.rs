@@ -2,13 +2,9 @@ pub mod web;
 
 use crate::prelude::*;
 
-use anyhow::Context;
 use reqwest::IntoUrl;
-use std::time::Duration;
 use tokio::io::AsyncRead;
-
-use crate::archive::Format;
-use crate::global::progress_bar;
+use web::client;
 
 /// Read the whole input and return its length.
 ///
@@ -20,22 +16,12 @@ pub async fn read_length(mut read: impl AsyncRead + Unpin) -> Result<u64> {
 
 /// Get the the response body as a byte stream.
 pub async fn download(url: impl IntoUrl) -> Result<impl Stream<Item = reqwest::Result<Bytes>>> {
-    Ok(reqwest::get(url).await?.error_for_status()?.bytes_stream())
+    client::download(&default(), url).await
 }
 
 /// Get the full response body from URL as bytes.
 pub async fn download_all(url: impl IntoUrl) -> anyhow::Result<Bytes> {
-    let url = url.into_url()?;
-    let bar = progress_bar(indicatif::ProgressBar::new_spinner);
-    bar.enable_steady_tick(Duration::from_millis(100));
-    bar.set_message(format!("Downloading {}", url));
-    let response = reqwest::get(url).await?;
-    if let Some(e) = response.error_for_status_ref().err() {
-        let body = response.text().await?;
-        Err(e).context(body)
-    } else {
-        response.bytes().await.map_err(Into::into)
-    }
+    client::download_all(&default(), url).await
 }
 
 /// Take the trailing filename from URL path.
@@ -61,49 +47,7 @@ pub async fn download_and_extract(
     url: impl IntoUrl,
     output_dir: impl AsRef<Path>,
 ) -> anyhow::Result<()> {
-    let url = url.into_url()?;
-    let url_text = url.to_string();
-    let filename = filename_from_url(&url)?;
-
-    debug!("Downloading {}", url_text);
-    let contents = download_all(url).await?;
-    let buffer = std::io::Cursor::new(contents);
-
-    debug!("Extracting {} to {}", filename.display(), output_dir.as_ref().display());
-    let format = Format::from_filename(&PathBuf::from(filename))?;
-    format.extract(buffer, output_dir.as_ref()).with_context(|| {
-        format!("Failed to extract data from {} to {}.", url_text, output_dir.as_ref().display(),)
-    })
-}
-
-/// Download file at base_url/subpath to output_dir_base/subpath.
-pub async fn download_relative(
-    client: &reqwest::Client,
-    base_url: &Url,
-    output_dir_base: impl AsRef<Path>,
-    subpath: &Path,
-) -> Result<PathBuf> {
-    let url_to_get = base_url.join(&subpath.display().to_string())?;
-    let output_path = output_dir_base.as_ref().join(subpath);
-
-    debug!("Will download {} => {}", url_to_get, output_path.display());
-    let response = client.get(url_to_get).send().await?.error_for_status()?;
-
-    if let Some(parent_dir) = output_path.parent() {
-        crate::fs::create_dir_if_missing(parent_dir)?;
-    }
-    let output = tokio::fs::OpenOptions::new().write(true).create(true).open(&output_path).await?;
-    response
-        .bytes_stream()
-        .map_err(anyhow::Error::from)
-        // We must use fold (rather than foreach) to properly keep `output` alive long enough.
-        .try_fold(output, |mut output, chunk| async move {
-            output.write(&chunk.clone()).await?;
-            Ok(output)
-        })
-        .await?;
-    debug!("Download finished: {}", output_path.display());
-    Ok(output_path)
+    client::download_and_extract(&default(), url, output_dir).await
 }
 
 // pub async fn stream_to_file<E: Into<Box<dyn std::error::Error + Send + Sync>>>(

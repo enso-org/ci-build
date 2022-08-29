@@ -8,6 +8,8 @@ use reqwest::RequestBuilder;
 use reqwest::Response;
 use tokio::io::AsyncBufRead;
 
+pub mod client;
+
 pub async fn handle_error_response(response: Response) -> Result<Response> {
     if let Some(e) = response.error_for_status_ref().err() {
         let e = Err(e);
@@ -48,11 +50,12 @@ pub async fn download_file(url: impl IntoUrl, output: impl AsRef<Path>) -> Resul
 }
 
 
-#[tracing::instrument(name="Streaming http response to a file.", skip(output), fields(
+#[tracing::instrument(name="Streaming http response to a file.", skip(output, response), fields(
     dest = %output.as_ref().display(),
     url  = %response.url()
 ), err)]
 pub async fn stream_response_to_file(response: Response, output: impl AsRef<Path>) -> Result {
+    trace!("Streamed response: {:#?}", response);
     let response = handle_error_response(response).await?;
     let reader = async_reader(response);
     copy_to_file(reader, output).await?;

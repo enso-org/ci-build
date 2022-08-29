@@ -413,16 +413,16 @@ impl Strategy {
         Ok(ret)
     }
 
-    pub fn fail_fast(mut self, fail_fast: bool) -> Self {
-        self.fail_fast = Some(fail_fast);
-        self
-    }
-
     pub fn insert_to_matrix(
         &mut self,
         name: impl Into<String>,
         values: impl IntoIterator<Item: Serialize>,
     ) -> Result<&mut Self> {
+    pub fn new_string(
+        description: impl Into<String>,
+        required: bool,
+        default: impl Into<String>,
+    ) -> Self {
         let values = values.into_iter().map(|v| serde_json::to_value(v)).collect_result()?;
         self.matrix.insert(name.into(), serde_json::Value::Array(values));
         Ok(self)
