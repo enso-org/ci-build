@@ -262,7 +262,6 @@ pub async fn latest_runner_url(octocrab: &Octocrab, os: OS) -> anyhow::Result<Ur
     let arch_name = match TARGET_ARCH {
         Arch::X86_64 => "x64",
         Arch::Arm => "arm",
-        Arch::AArch64 if os == OS::MacOS => "x64", /* M1 native runners are not yet supported, see: https://github.com/actions/runner/issues/805 */
         Arch::AArch64 => "arm64",
         other_arch => unimplemented!("Architecture `{}` is not yet supported!", other_arch),
     };
