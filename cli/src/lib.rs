@@ -42,19 +42,20 @@ use clap::Parser;
 use derivative::Derivative;
 use enso_build::context::BuildContext;
 use enso_build::engine::Benchmarks;
-use enso_build::engine::BuildMode;
 use enso_build::engine::Tests;
 use enso_build::paths::TargetTriple;
 use enso_build::prettier;
 use enso_build::project;
 use enso_build::project::backend;
 use enso_build::project::backend::Backend;
+use enso_build::project::runtime;
 // use enso_build::project::engine;
 // use enso_build::project::engine::Engine;
 use enso_build::project::gui;
 use enso_build::project::gui::Gui;
 use enso_build::project::ide;
 use enso_build::project::ide::Ide;
+use enso_build::project::runtime::Runtime;
 // use enso_build::project::project_manager;
 // use enso_build::project::project_manager::ProjectManager;
 use enso_build::project::wasm;
@@ -88,7 +89,6 @@ use ide_ci::programs::Cargo;
 use std::time::Duration;
 use tempfile::tempdir;
 use tokio::process::Child;
-use tokio::runtime::Runtime;
 
 pub fn void<T>(_t: T) {}
 
@@ -136,9 +136,9 @@ impl Processor {
                 cache: Cache::new(&cli.cache_path).await?,
                 octocrab,
                 upload_artifacts: cli.upload_artifacts,
+                repo_root: enso_build::paths::new_repo_root(absolute_repo_path, &triple),
             },
             triple,
-            source_root: absolute_repo_path.into(),
             remote_repo: cli.repo_remote.clone(),
         };
         Ok(Self { context })
@@ -234,10 +234,7 @@ impl Processor {
     }
 
     pub fn pm_info(&self) -> enso_build::project::backend::BuildInput {
-        enso_build::project::backend::BuildInput {
-            versions:  self.triple.versions.clone(),
-            repo_root: self.source_root.clone(),
-        }
+        enso_build::project::backend::BuildInput { versions: self.triple.versions.clone() }
     }
 
     pub fn resolve_inputs<T: Resolvable>(
@@ -326,7 +323,7 @@ impl Processor {
             arg::wasm::Command::Build(job) => self.build(job).void_ok().boxed(),
             arg::wasm::Command::Check => Wasm.check().boxed(),
             arg::wasm::Command::Test { no_wasm, no_native } =>
-                Wasm.test(self.repo_root().path, !no_wasm, !no_native).boxed(),
+                Wasm.test(self.repo_root.to_path_buf(), !no_wasm, !no_native).boxed(),
             arg::wasm::Command::Get(source) => self.get(source).void_ok().boxed(),
         }
     }
@@ -350,6 +347,15 @@ impl Processor {
         }
     }
 
+    pub fn handle_runtime(&self, gui: arg::runtime::Target) -> BoxFuture<'static, Result> {
+        // todo!()
+        match gui.command {
+            arg::runtime::Command::Build(job) => self.build(job),
+            //     arg::gui::Command::Get(source) => self.get(source).void_ok().boxed(),
+            //     arg::gui::Command::Watch(job) => self.watch_and_wait(job),
+        }
+    }
+
     pub fn handle_backend(&self, backend: arg::backend::Target) -> BoxFuture<'static, Result> {
         match backend.command {
             arg::backend::Command::Get { source } => self.get(source).void_ok().boxed(),
@@ -366,14 +372,14 @@ impl Processor {
                         },
                     );
                     let config = enso_build::engine::BuildConfigurationFlags {
-                        mode: BuildMode::NightlyRelease,
                         build_engine_package: true,
                         build_launcher_bundle: true,
                         build_project_manager_bundle: true,
+                        verify_packages: true,
                         ..default()
                     };
-                    let context = input.prepare_context(context, operation, config)?;
-                    context.execute().await?;
+                    let context = input.prepare_context(context, config)?;
+                    context.execute(operation).await?;
                     Ok(())
                 }
                 .boxed()
@@ -387,7 +393,8 @@ impl Processor {
                 let context = self.prepare_backend_context(config);
                 async move {
                     let context = context.await?;
-                    context.execute().await
+                    context.build().await?;
+                    Ok(())
                 }
                 .boxed()
             }
@@ -401,7 +408,7 @@ impl Processor {
                 }
                 config.test_java_generated_from_rust = true;
                 let context = self.prepare_backend_context(config);
-                async move { context.await?.execute().await }.boxed()
+                async move { context.await?.build().void_ok().await }.boxed()
             }
             arg::backend::Command::Sbt { command } => {
                 let context = self.prepare_backend_context(default());
@@ -409,18 +416,18 @@ impl Processor {
                     let mut command_pieces = vec![OsString::from("sbt")];
                     command_pieces.extend(command.into_iter().map(into));
 
-                    let mut context = context.await?;
-                    context.operation =
+                    let operation =
                         enso_build::engine::Operation::Run(enso_build::engine::RunOperation {
                             command_pieces,
                         });
-                    context.execute().await
+
+                    let context = context.await?;
+                    context.execute(operation).await
                 }
                 .boxed()
             }
             arg::backend::Command::CiCheck {} => {
                 let config = enso_build::engine::BuildConfigurationFlags {
-                    mode: BuildMode::Development,
                     test_scala: true,
                     test_standard_library: true,
                     test_java_generated_from_rust: true,
@@ -428,14 +435,17 @@ impl Processor {
                     execute_benchmarks: once(Benchmarks::Runtime).collect(),
                     execute_benchmarks_once: true,
                     build_js_parser: matches!(TARGET_OS, OS::Linux),
+                    verify_packages: true,
+                    generate_documentation: true,
                     ..default()
                 };
                 let context = self.prepare_backend_context(config);
                 async move {
                     let mut context = context.await?;
                     context.upload_artifacts = true;
-                    context.execute().await
+                    context.build().await
                 }
+                .void_ok()
                 .boxed()
             }
         }
@@ -446,19 +456,18 @@ impl Processor {
         &self,
         config: enso_build::engine::BuildConfigurationFlags,
     ) -> BoxFuture<'static, Result<enso_build::engine::RunContext>> {
-        let operation = enso_build::engine::Operation::Build;
-        let paths = enso_build::paths::Paths::new_triple(&self.source_root, self.triple.clone());
+        let paths = enso_build::paths::Paths::new_triple(&self.repo_root, self.triple.clone());
         let config = config.into();
         let octocrab = self.octocrab.clone();
         async move {
             let paths = paths?;
-            let goodies = ide_ci::goodie::GoodieDatabase::new()?;
             let inner = crate::project::Context {
+                repo_root: paths.repo_root.clone(),
                 upload_artifacts: true,
                 octocrab,
                 cache: Cache::new_default().await?,
             };
-            Ok(enso_build::engine::RunContext { inner, config, paths, goodies, operation })
+            Ok(enso_build::engine::RunContext { inner, config, paths })
         }
         .boxed()
     }
@@ -521,7 +530,7 @@ impl Processor {
                     }
                     Err(e) => (None, Err(e)),
                 };
-                let source_root = self.source_root.clone();
+                let source_root = self.repo_root.to_path_buf();
                 async move {
                     let project_manager =
                         if !external_backend { Some(project_manager?.await?) } else { None };
@@ -570,11 +579,11 @@ impl Processor {
         let input = ide::BuildInput {
             gui:             self.get(gui),
             project_manager: self.get(project_manager),
-            repo_root:       self.repo_root(),
             version:         self.triple.versions.version.clone(),
         };
+        let ide_desktop = self.repo_root.app.ide_desktop.clone();
         let target = Ide { target_os: self.triple.os, target_arch: self.triple.arch };
-        let build_job = target.build(input, output_path);
+        let build_job = target.build(ide_desktop, input, output_path);
         async move {
             let artifacts = build_job.await?;
             if is_in_env() {
@@ -605,7 +614,7 @@ impl Resolvable for Wasm {
     }
 
     fn resolve(
-        ctx: &Processor,
+        _ctx: &Processor,
         from: <Self as IsTargetSource>::BuildInput,
     ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
         let arg::wasm::BuildInput {
@@ -618,7 +627,6 @@ impl Resolvable for Wasm {
             skip_wasm_opt,
         } = from;
         ok_ready_boxed(wasm::BuildInput {
-            repo_root: ctx.repo_root(),
             crate_path,
             wasm_opt_options,
             skip_wasm_opt,
@@ -640,10 +648,22 @@ impl Resolvable for Gui {
         from: <Self as IsTargetSource>::BuildInput,
     ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
         let wasm_source = ctx.resolve(Wasm, from.wasm);
-        let repo_root = ctx.repo_root();
         let build_info = ctx.js_build_info();
-        async move { Ok(gui::BuildInput { wasm: wasm_source.await?, repo_root, build_info }) }
-            .boxed()
+        async move { Ok(gui::BuildInput { wasm: wasm_source.await?, build_info }) }.boxed()
+    }
+}
+
+impl Resolvable for Runtime {
+    fn prepare_target(_context: &Processor) -> Result<Self> {
+        Ok(Runtime {})
+    }
+
+    fn resolve(
+        ctx: &Processor,
+        from: <Self as IsTargetSource>::BuildInput,
+    ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
+        let arg::runtime::BuildInput {} = from;
+        ok_ready_boxed(runtime::BuildInput { versions: ctx.triple.versions.clone() })
     }
 }
 
@@ -656,10 +676,7 @@ impl Resolvable for Backend {
         ctx: &Processor,
         _from: <Self as IsTargetSource>::BuildInput,
     ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
-        ok_ready_boxed(backend::BuildInput {
-            repo_root: ctx.repo_root().path,
-            versions:  ctx.triple.versions.clone(),
-        })
+        ok_ready_boxed(backend::BuildInput { versions: ctx.triple.versions.clone() })
     }
 }
 
@@ -748,6 +765,7 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
     match cli.target {
         Target::Wasm(wasm) => ctx.handle_wasm(wasm).await?,
         Target::Gui(gui) => ctx.handle_gui(gui).await?,
+        Target::Runtime(runtime) => ctx.handle_runtime(runtime).await?,
         // Target::ProjectManager(project_manager) =>
         //     ctx.handle_project_manager(project_manager).await?,
         // Target::Engine(engine) => ctx.handle_engine(engine).await?,
@@ -760,7 +778,7 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
                 exclusions.push("target/enso-build");
             }
 
-            let git_clean = clean::clean_except_for(ctx.repo_root(), exclusions);
+            let git_clean = clean::clean_except_for(&ctx.repo_root, exclusions);
             let clean_cache = async {
                 if options.cache {
                     ide_ci::fs::tokio::remove_dir_if_exists(ctx.cache.path()).await?;
@@ -772,7 +790,7 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
         Target::Lint => {
             Cargo
                 .cmd()?
-                .current_dir(ctx.repo_root())
+                .current_dir(&ctx.repo_root)
                 .arg(cargo::clippy::COMMAND)
                 .apply(&cargo::Options::Workspace)
                 .apply(&cargo::Options::Package("enso-integration-test".into()))
@@ -785,17 +803,17 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
 
             Cargo
                 .cmd()?
-                .current_dir(ctx.repo_root())
+                .current_dir(&ctx.repo_root)
                 .arg("fmt")
                 .args(["--", "--check"])
                 .run_ok()
                 .await?;
 
-            prettier::check(&ctx.repo_root()).await?;
+            prettier::check(&ctx.repo_root).await?;
         }
         Target::Fmt => {
-            prettier::write(&ctx.repo_root()).await?;
-            Cargo.cmd()?.current_dir(ctx.repo_root()).arg("fmt").run_ok().await?;
+            prettier::write(&ctx.repo_root).await?;
+            Cargo.cmd()?.current_dir(&ctx.repo_root).arg("fmt").run_ok().await?;
         }
         Target::Release(release) => match release.action {
             Action::CreateDraft => {
@@ -812,7 +830,7 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
             &enso_build::paths::generated::RepoRootGithubWorkflows::new(cli.repo_path),
         )?,
         Target::JavaGen(command) => {
-            let repo_root = ctx.repo_root();
+            let repo_root = ctx.repo_root.clone();
             async move {
                 let generate_job = enso_build::rust::parser::generate_java(&repo_root);
                 match command.action {
@@ -834,7 +852,7 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
 }
 
 pub fn lib_main(config: enso_build::config::Config) -> Result {
-    let rt = Runtime::new()?;
+    let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async { main_internal(config).await })?;
     rt.shutdown_timeout(Duration::from_secs(60 * 30));
     info!("Successfully ending.");

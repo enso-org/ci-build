@@ -1,7 +1,5 @@
 use crate::prelude::*;
 
-use crate::paths::generated::RepoRoot;
-
 use futures_util::future::try_join;
 use ide_ci::actions::artifacts::upload_compressed_directory;
 use ide_ci::actions::artifacts::upload_single_file;
@@ -88,8 +86,6 @@ impl Artifact {
 #[derivative(Debug)]
 pub struct BuildInput {
     #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
-    pub repo_root:       RepoRoot,
-    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub version:         Version,
     #[derivative(Debug = "ignore")]
     pub project_manager: BoxFuture<'static, Result<crate::project::backend::Artifact>>,
@@ -118,11 +114,12 @@ pub struct Ide {
 impl Ide {
     pub fn build(
         &self,
+        ide_desktop: crate::paths::generated::RepoRootAppIdeDesktop,
         input: BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Artifact>> {
-        let BuildInput { repo_root, version, project_manager, gui } = input;
-        let ide_desktop = crate::ide::web::IdeDesktop::new(&repo_root.app.ide_desktop);
+        let BuildInput { version, project_manager, gui } = input;
+        let ide_desktop = crate::ide::web::IdeDesktop::new(&ide_desktop);
         let target_os = self.target_os;
         let target_arch = self.target_arch;
         async move {

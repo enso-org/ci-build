@@ -14,8 +14,7 @@ pub async fn create_release(context: &BuildContext) -> Result<Release> {
     let versions = &context.triple.versions;
     let commit = ide_ci::actions::env::GITHUB_SHA.get()?;
 
-    let paths = context.repo_root();
-    let changelog_contents = ide_ci::fs::read_to_string(&paths.changelog_md)?;
+    let changelog_contents = ide_ci::fs::read_to_string(&context.repo_root.changelog_md)?;
     let latest_changelog_body =
         crate::changelog::Changelog(&changelog_contents).top_release_notes()?;
 
@@ -75,7 +74,6 @@ pub async fn deploy_to_ecr(context: &BuildContext, repository: String) -> Result
     let octocrab = &context.octocrab;
     let release_id = crate::env::ReleaseId.fetch()?;
 
-    let paths = context.repo_root();
     let linux_triple = TargetTriple { os: OS::Linux, ..context.triple.clone() };
     let package_name =
         generated::RepoRootBuiltDistribution::new_root(".", linux_triple.to_string())
@@ -90,8 +88,10 @@ pub async fn deploy_to_ecr(context: &BuildContext, repository: String) -> Result
 
 
     let temp_for_archive = tempdir()?;
-    let downloaded_asset =
-        context.remote_repo.download_asset_to(octocrab, &asset, temp_for_archive.path().to_owned()).await?;
+    let downloaded_asset = context
+        .remote_repo
+        .download_asset_to(octocrab, &asset, temp_for_archive.path().to_owned())
+        .await?;
 
     let temp_for_extraction = tempdir()?;
     ide_ci::archive::extract_to(&downloaded_asset, &temp_for_extraction).await?;
@@ -107,7 +107,7 @@ pub async fn deploy_to_ecr(context: &BuildContext, repository: String) -> Result
     let repository_uri = crate::aws::ecr::get_repository_uri(&client, &repository).await?;
     let tag = format!("{}:{}", repository_uri, context.triple.versions.version);
     let _image = crate::aws::ecr::runtime::build_runtime_image(
-        paths.tools.ci.docker,
+        context.repo_root.tools.ci.docker.clone(),
         engine_package,
         tag.clone(),
     )

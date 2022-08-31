@@ -2,7 +2,6 @@
 
 use crate::prelude::*;
 
-use crate::paths::generated::RepoRoot;
 use crate::paths::generated::RepoRootDistWasm;
 use crate::project::wasm::js_patcher::patch_js_glue_in_place;
 use crate::project::Context;
@@ -107,8 +106,6 @@ impl Profile {
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct BuildInput {
-    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
-    pub repo_root:           RepoRoot,
     /// Path to the crate to be compiled to WAM. Relative to the repository root.
     pub crate_path:          PathBuf,
     pub wasm_opt_options:    Vec<String>,
@@ -170,10 +167,10 @@ impl IsTarget for Wasm {
         context: Context,
         job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let Context { octocrab: _, cache, upload_artifacts: _ } = context;
+        let Context { octocrab: _, cache, upload_artifacts: _, repo_root } = context;
         let WithDestination { inner, destination } = job;
         let span = info_span!("Building WASM.",
-            repo = %inner.repo_root.display(),
+            repo = %repo_root.display(),
             crate = %inner.crate_path.display(),
             cargo_opts = ?inner.extra_cargo_options
         );
@@ -183,7 +180,6 @@ impl IsTarget for Wasm {
             WasmPack.require_present_that(VersionReq::parse(">=0.10.1")?).await?;
 
             let BuildInput {
-                repo_root,
                 crate_path,
                 wasm_opt_options,
                 skip_wasm_opt,
@@ -274,7 +270,6 @@ impl IsWatchable for Wasm {
                 build: WithDestination { inner, destination },
             } = job;
             let BuildInput {
-                repo_root,
                 crate_path,
                 wasm_opt_options,
                 skip_wasm_opt,
@@ -295,7 +290,7 @@ impl IsWatchable for Wasm {
 
             watch_cmd
                 .kill_on_drop(true)
-                .current_dir(&repo_root)
+                .current_dir(&context.repo_root)
                 .arg("watch")
                 .args(["--ignore", "README.md"])
                 .args(cargo_watch_flags)
@@ -311,7 +306,7 @@ impl IsWatchable for Wasm {
                 .arg("--skip-version-check") // We already checked in the parent process.
                 .args(["--cache-path", context.cache.path().as_str()])
                 .args(["--upload-artifacts", context.upload_artifacts.to_string().as_str()])
-                .args(["--repo-path", repo_root.as_str()]);
+                .args(["--repo-path", context.repo_root.as_str()]);
 
             // === Build Script command and its options ===
             watch_cmd

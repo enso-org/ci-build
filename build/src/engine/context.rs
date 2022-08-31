@@ -8,7 +8,6 @@ use crate::engine;
 use crate::engine::download_project_templates;
 use crate::engine::env;
 use crate::engine::BuildConfigurationResolved;
-use crate::engine::BuildMode;
 use crate::engine::BuiltArtifacts;
 use crate::engine::ComponentPathExt;
 use crate::engine::Operation;
@@ -20,6 +19,7 @@ use crate::get_graal_version;
 use crate::get_java_major_version;
 use crate::paths::cache_directory;
 use crate::paths::Paths;
+use crate::paths::TargetTriple;
 use crate::project::ProcessWrapper;
 use crate::retrieve_github_access_token;
 
@@ -30,7 +30,6 @@ use crate::enso::IrCaches;
 use crate::engine::sbt::SbtCommandProvider;
 use ide_ci::cache;
 use ide_ci::cache::goodie::graalvm;
-use ide_ci::goodie::GoodieDatabase;
 use ide_ci::platform::DEFAULT_SHELL;
 use ide_ci::programs::graal;
 use ide_ci::programs::sbt;
@@ -42,14 +41,22 @@ use ide_ci::programs::Sbt;
 pub struct RunContext {
     #[deref]
     #[deref_mut]
-    pub inner:     crate::project::Context,
-    pub config:    BuildConfigurationResolved,
-    pub paths:     Paths,
-    pub goodies:   GoodieDatabase,
-    pub operation: Operation,
+    pub inner:  crate::project::Context,
+    pub config: BuildConfigurationResolved,
+    pub paths:  Paths,
 }
 
 impl RunContext {
+    pub fn new(
+        inner: crate::project::Context,
+        config: impl Into<BuildConfigurationResolved>,
+        triple: TargetTriple,
+    ) -> Result<Self> {
+        let paths = crate::paths::Paths::new_versions(&inner.repo_root, triple.versions.clone())?;
+        let context = crate::engine::context::RunContext { config: config.into(), inner, paths };
+        Ok(context)
+    }
+
     /// Check that required programs are present (if not, installs them, if supported). Set
     /// environment variables for the build to follow.
     pub async fn prepare_build_env(&self) -> Result {
@@ -335,7 +342,7 @@ impl RunContext {
         perhaps_test_java_generated_from_rust_job.await.transpose()?;
 
         // === Build Distribution ===
-        if self.config.mode == BuildMode::Development {
+        if self.config.generate_documentation {
             // FIXME [mwu]
             //  docs-generator fails on Windows because it can't understand non-Unix-style paths.
             if TARGET_OS != OS::Windows {
@@ -383,7 +390,7 @@ impl RunContext {
 
         // Verify License Packages in Distributions
         // FIXME apparently this does not work on Windows due to some CRLF issues?
-        if self.config.mode == BuildMode::NightlyRelease && TARGET_OS != OS::Windows {
+        if self.config.verify_packages && TARGET_OS != OS::Windows {
             /*  refversion=${{ env.ENSO_VERSION }}
                 binversion=${{ env.DIST_VERSION }}
                 engineversion=$(${{ env.ENGINE_DIST_DIR }}/bin/enso --version --json | jq -r '.version')
@@ -445,8 +452,8 @@ impl RunContext {
         Ok(ret)
     }
 
-    pub async fn execute(&self) -> Result {
-        match &self.operation {
+    pub async fn execute(&self, operation: Operation) -> Result {
+        match &operation {
             Operation::Release(ReleaseOperation { command, repo }) => match command {
                 ReleaseCommand::Upload => {
                     let artifacts = self.build().await?;

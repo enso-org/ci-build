@@ -8,6 +8,7 @@ pub mod ide;
 pub mod java_gen;
 pub mod project_manager;
 pub mod release;
+pub mod runtime;
 pub mod wasm;
 
 use clap::Arg;
@@ -102,6 +103,8 @@ pub enum Target {
     Wasm(wasm::Target),
     /// Build/Run GUI that consists of WASM and JS parts. This is what we deploy to cloud.
     Gui(gui::Target),
+    /// Enso Engine Runtime.
+    Runtime(runtime::Target),
     // /// Project Manager package (just the binary, no Engine)
     // ProjectManager(project_manager::Target),
     // /// Enso Engine distribution.

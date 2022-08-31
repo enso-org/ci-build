@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-use crate::paths::generated::RepoRoot;
 use crate::paths::TargetTriple;
 use derivative::Derivative;
 use ide_ci::models::config::RepoContext;
@@ -22,24 +21,14 @@ pub struct BuildContext {
     /// other means, their version might be different.
     pub triple: TargetTriple,
 
-    /// Directory being an `enso` repository's working copy.
-    ///
-    /// The directory is not required to be a git repository. It is allowed to use source tarballs
-    /// as well.
-    pub source_root: PathBuf,
-
     /// Remote repository is used for release-related operations. This also includes deducing a new
     /// version number.
     pub remote_repo: RepoContext,
 }
 
 impl BuildContext {
-    pub fn repo_root(&self) -> RepoRoot {
-        crate::paths::new_repo_root(&self.source_root, &self.triple)
-    }
-
     pub fn commit(&self) -> BoxFuture<'static, Result<String>> {
-        let root = self.source_root.clone();
+        let root = self.repo_root.to_path_buf();
         async move {
             match ide_ci::actions::env::GITHUB_SHA.get() {
                 Ok(commit) => Ok(commit),

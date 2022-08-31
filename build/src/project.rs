@@ -24,6 +24,7 @@ pub mod engine;
 pub mod gui;
 pub mod ide;
 pub mod project_manager;
+pub mod runtime;
 pub mod wasm;
 
 pub use backend::Backend;
@@ -87,6 +88,13 @@ pub struct Context {
 
     /// Whether built artifacts should be uploaded as part of CI run. Works only in CI environment.
     pub upload_artifacts: bool,
+
+    /// Directory being an `enso` repository's working copy.
+    ///
+    /// The directory is not required to be a git repository. It is allowed to use source tarballs
+    /// as well.
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
+    pub repo_root: crate::paths::generated::RepoRoot,
 }
 
 /// Build targets, like GUI or Project Manager.
@@ -207,7 +215,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         ci_run: CiRunSource,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let Context { octocrab, cache, upload_artifacts: _ } = context;
+        let Context { octocrab, cache, upload_artifacts: _, repo_root: _ } = context;
         let CiRunSource { run_id, artifact_name, repository } = ci_run;
         let span = info_span!("Downloading CI Artifact.", %artifact_name, %repository, target = output_path.as_str());
         let this = self.clone();
@@ -239,7 +247,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
         source: ReleaseSource,
         destination: PathBuf,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
-        let Context { octocrab, cache, upload_artifacts: _ } = context;
+        let Context { octocrab, cache, upload_artifacts: _, repo_root: _ } = context;
         let span = info_span!("Downloading built target from a release asset.",
             asset_id = source.asset_id.0,
             repo = %source.repository);

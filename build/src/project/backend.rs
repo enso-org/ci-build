@@ -1,44 +1,33 @@
 use crate::prelude::*;
 
 use crate::engine::BuildConfigurationFlags;
-use crate::engine::Operation;
 use crate::project::Context;
 use crate::project::IsArtifact;
 use crate::project::IsTarget;
 use crate::version::Versions;
 
 use crate::paths::pretty_print_arch;
+use crate::paths::TargetTriple;
 use crate::source::BuildTargetJob;
 use crate::source::WithDestination;
 use derivative::Derivative;
 use ide_ci::archive::is_archive_name;
 use ide_ci::extensions::os::OsExt;
-use ide_ci::goodie::GoodieDatabase;
 use octocrab::models::repos::Asset;
 
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct BuildInput {
-    pub repo_root: PathBuf,
-    pub versions:  Versions,
+    pub versions: Versions,
 }
 
 impl BuildInput {
     pub fn prepare_context(
         &self,
         inner: Context,
-        operation: Operation,
         config: BuildConfigurationFlags,
     ) -> Result<crate::engine::RunContext> {
-        let paths = crate::paths::Paths::new_versions(&self.repo_root, self.versions.clone())?;
-        let context = crate::engine::context::RunContext {
-            operation,
-            goodies: GoodieDatabase::new()?,
-            config: config.into(),
-            inner,
-            paths,
-        };
-        Ok(context)
+        crate::engine::RunContext::new(inner, config, TargetTriple::new(self.versions.clone()))
     }
 }
 
@@ -136,14 +125,12 @@ impl IsTarget for Backend {
                 target_os == TARGET_OS,
                 "Enso Project Manager cannot be built on '{target_os}' for target '{TARGET_OS}'.",
             );
-            let operation = crate::engine::Operation::Build;
             let config = BuildConfigurationFlags {
-                build_project_manager_bundle: true,
+                build_engine_package: true,
                 generate_java_from_rust: true,
-                mode: crate::engine::BuildMode::NightlyRelease,
                 ..default()
             };
-            let context = inner.prepare_context(context, operation, config)?;
+            let context = inner.prepare_context(context, config)?;
             let artifacts = context.build().await?;
             let project_manager =
                 artifacts.bundles.project_manager.context("Missing project manager bundle!")?;

@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
 use crate::ide::web::IdeDesktop;
-use crate::paths::generated::RepoRoot;
 use crate::project::Context;
 use crate::project::IsTarget;
 use crate::project::IsWatchable;
@@ -33,8 +32,6 @@ pub struct WatchInput {
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
 pub struct BuildInput {
-    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
-    pub repo_root:  RepoRoot,
     #[derivative(Debug = "ignore")]
     pub wasm:       GetTargetJob<Wasm>,
     /// BoxFuture<'static, Result<wasm::Artifact>>,
@@ -65,7 +62,7 @@ impl IsTarget for Gui {
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let WithDestination { inner, destination } = job;
         async move {
-            let ide = IdeDesktop::new(&inner.repo_root.app.ide_desktop);
+            let ide = IdeDesktop::new(&context.repo_root.app.ide_desktop);
             let wasm = Wasm.get(context, inner.wasm);
             ide.build_content(wasm, &inner.build_info.await?, &destination).await?;
             Ok(Artifact::new(destination))
@@ -118,9 +115,9 @@ impl IsWatchable for Gui {
         job: WatchTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Watcher>> {
         let WatchTargetJob { watch_input, build: WithDestination { inner, destination } } = job;
-        let BuildInput { build_info, repo_root, wasm } = inner;
+        let BuildInput { build_info, wasm } = inner;
         let perhaps_watched_wasm = perhaps_watch(Wasm, context.clone(), wasm, watch_input.wasm);
-        let ide = IdeDesktop::new(&repo_root.app.ide_desktop);
+        let ide = IdeDesktop::new(&context.repo_root.app.ide_desktop);
         async move {
             let perhaps_watched_wasm = perhaps_watched_wasm.await?;
             let wasm_artifacts = ok_ready_boxed(perhaps_watched_wasm.as_ref().clone());

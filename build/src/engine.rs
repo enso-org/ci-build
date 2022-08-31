@@ -52,12 +52,6 @@ pub async fn download_project_templates(client: reqwest::Client, enso_root: Path
     Ok(())
 }
 
-#[derive(Clone, Copy, Debug, Display, PartialEq)]
-pub enum BuildMode {
-    Development,
-    NightlyRelease,
-}
-
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, clap::ArgEnum)]
 pub enum Benchmarks {
     All,
@@ -85,27 +79,27 @@ pub struct BuildConfigurationFlags {
     /// If true, repository shall be cleaned at the build start.
     ///
     /// Makes sense given that incremental builds with SBT are currently broken.
-    pub clean_repo: bool,
-    /// Development builds have docs-generator run.
-    /// Release builds have their packages validated (license-wise).
-    pub mode: BuildMode,
-    pub test_scala: bool,
-    pub test_standard_library: bool,
+    pub clean_repo:                    bool,
+    pub test_scala:                    bool,
+    pub test_standard_library:         bool,
     /// Whether benchmarks are compiled.
     ///
     /// Note that this does not run the benchmarks, only ensures that they are buildable.
-    pub build_benchmarks: bool,
-    pub execute_benchmarks: BTreeSet<Benchmarks>,
+    pub build_benchmarks:              bool,
+    pub execute_benchmarks:            BTreeSet<Benchmarks>,
     /// Used to check that benchmarks do not fail on runtime, rather than obtaining the results.
-    pub execute_benchmarks_once: bool,
-    pub build_js_parser: bool,
-    pub build_engine_package: bool,
-    pub build_launcher_package: bool,
+    pub execute_benchmarks_once:       bool,
+    pub build_js_parser:               bool,
+    pub build_engine_package:          bool,
+    pub build_launcher_package:        bool,
     pub build_project_manager_package: bool,
-    pub build_launcher_bundle: bool,
-    pub build_project_manager_bundle: bool,
-    pub generate_java_from_rust: bool,
+    pub build_launcher_bundle:         bool,
+    pub build_project_manager_bundle:  bool,
+    pub generate_java_from_rust:       bool,
     pub test_java_generated_from_rust: bool,
+    pub generate_documentation:        bool,
+    /// Verify License Packages in Distributions.
+    pub verify_packages:               bool,
 }
 
 impl From<BuildConfigurationFlags> for BuildConfigurationResolved {
@@ -161,21 +155,22 @@ impl BuildConfigurationFlags {
 impl Default for BuildConfigurationFlags {
     fn default() -> Self {
         Self {
-            clean_repo: false,
-            mode: BuildMode::Development,
-            test_scala: false,
-            test_standard_library: false,
-            build_benchmarks: false,
-            execute_benchmarks: default(),
-            execute_benchmarks_once: false,
-            build_js_parser: false,
-            build_engine_package: false,
-            build_launcher_package: false,
+            clean_repo:                    false,
+            test_scala:                    false,
+            test_standard_library:         false,
+            build_benchmarks:              false,
+            execute_benchmarks:            default(),
+            execute_benchmarks_once:       false,
+            build_js_parser:               false,
+            build_engine_package:          false,
+            build_launcher_package:        false,
             build_project_manager_package: false,
-            build_launcher_bundle: false,
-            build_project_manager_bundle: false,
-            generate_java_from_rust: true,
+            build_launcher_bundle:         false,
+            build_project_manager_bundle:  false,
+            generate_java_from_rust:       true,
             test_java_generated_from_rust: false,
+            generate_documentation:        false,
+            verify_packages:               false,
         }
     }
 }
@@ -302,3 +297,5 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
     ide_ci::archive::create(&paths.artifact_archive, [&paths.root]).await?;
     Ok(paths.artifact_archive.clone())
 }
+
+//////////////////////////////////
