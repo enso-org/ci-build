@@ -413,6 +413,11 @@ impl Strategy {
         Ok(ret)
     }
 
+    pub fn fail_fast(mut self, fail_fast: bool) -> Self {
+        self.fail_fast = Some(fail_fast);
+        self
+    }
+
     pub fn insert_to_matrix(
         &mut self,
         name: impl Into<String>,
@@ -525,6 +530,14 @@ pub enum Shell {
     Pwsh,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CheckoutArgumentSubmodules {
+    True,
+    False,
+    Recursive,
+}
+
 pub mod step {
     use super::*;
 
@@ -535,7 +548,10 @@ pub mod step {
     pub enum Argument {
         #[serde(rename_all = "kebab-case")]
         Checkout {
-            clean: Option<bool>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            clean:      Option<bool>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            submodules: Option<CheckoutArgumentSubmodules>,
         },
         #[serde(rename_all = "kebab-case")]
         SetupConda {
@@ -627,7 +643,10 @@ pub fn checkout_repo_step() -> impl IntoIterator<Item = Step> {
         // FIXME: Check what is wrong with v3. Seemingly Engine Tests fail because there's only a
         //        shallow copy of the repo.
         uses: Some("actions/checkout@v2".into()),
-        with: Some(step::Argument::Checkout { clean: Some(false) }),
+        with: Some(step::Argument::Checkout {
+            clean:      Some(false),
+            submodules: Some(CheckoutArgumentSubmodules::Recursive),
+        }),
         ..default()
     };
     [submodules_workaround_win, submodules_workaround_linux, actual_checkout]

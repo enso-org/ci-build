@@ -187,6 +187,16 @@ impl RunContext {
             ide_ci::fs::reset_dir(&self.paths.test_results)?;
         }
 
+        // Workaround for incremental compilation issue, as suggested by kustosz.
+        // We target files like
+        // engine/runtime/target/scala-2.13/classes/META-INF/org/enso/interpreter/node/expression/
+        // builtin/BuiltinMethods.metadata but need to remove more so sbt can figure out it needs to
+        // rebuild.
+        // Otherwise, errors like this may occur:
+        // sbt:warning: java.lang.ClassNotFoundException:
+        // org.enso.interpreter.node.expression.builtin.bool.True
+        ide_ci::fs::remove_if_exists(&self.paths.repo_root.engine.runtime.target)?;
+
         let git = Git::new(&self.paths.repo_root);
         if self.config.clean_repo {
             git.cmd()?.nice_clean().run_ok().await?;

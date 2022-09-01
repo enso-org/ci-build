@@ -50,6 +50,7 @@
       <edition>.yaml:
   engine/:
     runtime/:
+      target/:
       bench-report.xml:
   lib/:
     rust/:
