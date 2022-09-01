@@ -18,7 +18,9 @@ use octocrab::models::repos::Asset;
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct BuildInput {
-    pub versions: Versions,
+    pub versions:         Versions,
+    #[derivative(Debug = "ignore")]
+    pub external_runtime: Option<Arc<crate::engine::context::EnginePackageProvider>>,
 }
 
 impl BuildInput {
@@ -27,7 +29,13 @@ impl BuildInput {
         inner: Context,
         config: BuildConfigurationFlags,
     ) -> Result<crate::engine::RunContext> {
-        crate::engine::RunContext::new(inner, config, TargetTriple::new(self.versions.clone()))
+        let BuildInput { versions, external_runtime } = self;
+        crate::engine::RunContext::new(
+            inner,
+            config,
+            TargetTriple::new(versions.clone()),
+            external_runtime.clone(),
+        )
     }
 }
 
@@ -126,7 +134,7 @@ impl IsTarget for Backend {
                 "Enso Project Manager cannot be built on '{target_os}' for target '{TARGET_OS}'.",
             );
             let config = BuildConfigurationFlags {
-                build_engine_package: true,
+                build_project_manager_bundle: true,
                 generate_java_from_rust: true,
                 ..default()
             };

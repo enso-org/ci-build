@@ -13,6 +13,7 @@ pub enum Lint {
 }
 
 /// An option that can b e passed as a command line argument to rustc.
+#[derive(Clone, Copy, Debug)]
 pub enum Option {
     /// Set lint denied
     Deny(Lint),

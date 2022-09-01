@@ -83,7 +83,7 @@ impl<'a> IntoIterator for &'a Switch<'a> {
     }
 }
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Command {
     Append,
     Create,
@@ -109,6 +109,7 @@ impl AsRef<OsStr> for Command {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Tar;
 
 impl Program for Tar {

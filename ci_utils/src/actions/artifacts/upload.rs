@@ -9,7 +9,7 @@ use crate::actions::artifacts::run_session::SessionClient;
 use crate::global;
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct UploadOptions {
     pub file_concurrency:  usize,
     pub chunk_size:        usize,
@@ -166,8 +166,11 @@ pub fn upload_worker(
 }
 
 #[derive(Derivative)]
+#[derivative(Debug)]
 pub struct FileUploader {
+    #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub url:           Url,
+    #[derivative(Debug = "ignore")]
     pub client:        Client,
     pub artifact_name: PathBuf,
     pub chunk_size:    usize,

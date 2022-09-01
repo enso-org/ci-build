@@ -48,6 +48,7 @@ impl GitCommand {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum Command {
     Clean,
 }

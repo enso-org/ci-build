@@ -65,6 +65,7 @@ pub struct NetworkInfo {
     pub scope:  String,
 }
 
+#[derive(Clone, Debug)]
 pub struct Credentials {
     pub username: String,
     pub password: String,
@@ -81,6 +82,7 @@ impl Credentials {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Docker;
 
 impl Program for Docker {
@@ -383,6 +385,7 @@ impl Display for Network {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct RunOptions {
     pub image:             ImageId,
     pub working_directory: Option<PathBuf>,

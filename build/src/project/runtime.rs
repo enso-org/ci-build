@@ -48,7 +48,7 @@ impl IsTarget for Runtime {
         let this = *self;
         let WithDestination { inner, destination } = job;
         let triple = TargetTriple::new(inner.versions);
-        let context = crate::engine::RunContext::new(context, config, triple);
+        let context = crate::engine::RunContext::new(context, config, triple, None);
         context
             .and_then_async(|context| async move {
                 let artifacts = context.build().await?;
@@ -70,6 +70,10 @@ impl Artifact {
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self(EnginePackage::new_root(path))
     }
+
+    pub fn into_inner(self) -> EnginePackage {
+        self.0
+    }
 }
 
 impl AsRef<Path> for Artifact {
@@ -79,6 +83,7 @@ impl AsRef<Path> for Artifact {
 }
 
 impl IsArtifact for Artifact {}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////

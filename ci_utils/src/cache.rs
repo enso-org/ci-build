@@ -81,6 +81,7 @@ impl<S: Storable> EntryIndexExtended<S> {
     }
 }
 
+#[derive(Debug)]
 pub struct HashToDigest<'a, D: Digest>(&'a mut D);
 impl<'a, D: Digest> Hasher for HashToDigest<'a, D> {
     fn finish(&self) -> u64 {

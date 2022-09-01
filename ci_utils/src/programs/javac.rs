@@ -18,6 +18,7 @@ impl Manipulator for Options {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Javac;
 
 impl Program for Javac {

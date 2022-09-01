@@ -130,6 +130,7 @@ pub mod new {
         }
     }
 
+    #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
     pub struct SimpleVariable<Value, Borrowed: ?Sized = Value> {
         pub name:          Cow<'static, str>,
         pub phantom_data:  PhantomData<Value>,
@@ -183,6 +184,7 @@ pub mod new {
         }
     }
 
+    #[derive(Clone, Copy, Debug, Display, Ord, PartialOrd, Eq, PartialEq)]
     pub struct PathLike(pub &'static str);
 
     impl RawVariable for PathLike {
@@ -213,6 +215,7 @@ pub mod new {
     }
 
     /// Environment variable consisting of string separated by a given separator.
+    #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
     pub struct Separated {
         pub name:      &'static str,
         pub separator: &'static str,
@@ -243,6 +246,7 @@ pub mod new {
 //     fn f(&self) {}
 // }
 
+#[derive(Clone, Copy, Debug, Display, Ord, PartialOrd, Eq, PartialEq)]
 pub struct StrLikeVariable {
     pub name: &'static str,
 }

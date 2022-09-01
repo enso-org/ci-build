@@ -37,13 +37,20 @@ use ide_ci::programs::Flatc;
 use ide_ci::programs::Git;
 use ide_ci::programs::Sbt;
 
-#[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut)]
+pub type FutureEnginePackage = BoxFuture<'static, Result<crate::paths::generated::EnginePackage>>;
+
+pub type EnginePackageProvider = dyn FnMut() -> FutureEnginePackage + Send + Sync + 'static;
+
+#[derive(derive_more::Deref, derive_more::DerefMut)]
 pub struct RunContext {
     #[deref]
     #[deref_mut]
-    pub inner:  crate::project::Context,
-    pub config: BuildConfigurationResolved,
-    pub paths:  Paths,
+    pub inner:            crate::project::Context,
+    pub config:           BuildConfigurationResolved,
+    pub paths:            Paths,
+    /// If set, the engine package (used for creating bundles) will be obtained through this
+    /// provider rather than built from source along the other Engine components.
+    pub external_runtime: Option<Arc<EnginePackageProvider>>,
 }
 
 impl RunContext {
@@ -51,9 +58,15 @@ impl RunContext {
         inner: crate::project::Context,
         config: impl Into<BuildConfigurationResolved>,
         triple: TargetTriple,
+        external_runtime: Option<Arc<EnginePackageProvider>>,
     ) -> Result<Self> {
         let paths = crate::paths::Paths::new_versions(&inner.repo_root, triple.versions.clone())?;
-        let context = crate::engine::context::RunContext { config: config.into(), inner, paths };
+        let context = crate::engine::context::RunContext {
+            config: config.into(),
+            inner,
+            paths,
+            external_runtime,
+        };
         Ok(context)
     }
 

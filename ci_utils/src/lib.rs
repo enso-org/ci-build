@@ -24,6 +24,13 @@
 #![feature(explicit_generic_args_with_impl_trait)]
 #![feature(pin_macro)]
 #![feature(result_option_inspect)]
+#![deny(non_ascii_idents)]
+#![warn(unsafe_code)]
+#![warn(missing_copy_implementations)]
+#![warn(missing_debug_implementations)]
+#![warn(unsafe_code)]
+
+include!("../../lint-settings.txt");
 
 pub mod actions;
 pub mod anyhow;

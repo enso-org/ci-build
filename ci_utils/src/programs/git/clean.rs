@@ -5,6 +5,7 @@ use crate::program::command::Manipulator;
 use crate::programs::Git;
 use std::path::Component;
 
+#[derive(Clone, Debug)]
 pub struct DirectoryToClear<'a> {
     pub prefix: Vec<Component<'a>>,
     pub trie:   &'a Trie<'a>,
@@ -57,7 +58,7 @@ pub async fn clean_except_for(
     Ok(())
 }
 
-
+#[derive(Clone, Debug)]
 pub enum Clean {
     /// Normally, when no path is specified, `git clean` will not recurse into untracked
     /// directories to avoid removing too much. Specify this option to have it recurse into such

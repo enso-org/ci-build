@@ -16,6 +16,7 @@ pub fn is_our_module_path(path: impl AsRef<str>) -> bool {
     ["ide_ci::", "enso"].into_iter().any(|prefix| path.as_ref().starts_with(prefix))
 }
 
+#[derive(Clone, Copy, Debug, Display)]
 pub struct MyLayer;
 
 impl<S: Subscriber + Debug + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S> for MyLayer {

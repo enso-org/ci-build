@@ -6,6 +6,7 @@ use crate::programs::vswhere::VsWhere;
 ///
 /// A possible component of Microsoft Visual Studio IDE, or part of the self-contained Microsoft
 /// Visual C++ Build Tools.
+#[derive(Clone, Copy, Debug)]
 pub struct Cl;
 
 impl Program for Cl {

@@ -19,7 +19,7 @@ pub enum Profile {
 
 impl AsRef<OsStr> for Profile {
     fn as_ref(&self) -> &OsStr {
-        &OsStr::new(match self {
+        OsStr::new(match self {
             Profile::Dev => "--dev",
             Profile::Release => "--release",
             Profile::Profile => "--profile",
@@ -37,7 +37,7 @@ pub enum Target {
 
 impl AsRef<OsStr> for Target {
     fn as_ref(&self) -> &OsStr {
-        &OsStr::new(match self {
+        OsStr::new(match self {
             Target::Bundler => "bundler",
             Target::NodeJs => "nodejs",
             Target::Web => "web",
@@ -63,6 +63,7 @@ impl Manipulator for TestFlags {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct WasmPack;
 
 impl Program for WasmPack {

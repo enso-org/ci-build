@@ -193,6 +193,7 @@ impl<T> ProgramExt for T where T: Program {}
 ///
 
 
+#[derive(Clone, Debug)]
 pub struct Unknown(pub String);
 impl Program for Unknown {
     fn executable_name(&self) -> &str {

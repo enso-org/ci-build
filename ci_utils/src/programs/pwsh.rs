@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+#[derive(Clone, Copy, Debug)]
 pub struct PwSh;
 
 pub mod arg {

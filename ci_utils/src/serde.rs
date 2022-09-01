@@ -79,7 +79,7 @@ pub mod regex_vec {
     use regex::Regex;
 
     /// See [`regex_vec`].
-    pub fn serialize<S>(value: &Vec<Regex>, ser: S) -> std::result::Result<S::Ok, S::Error>
+    pub fn serialize<S>(value: &[Regex], ser: S) -> std::result::Result<S::Ok, S::Error>
     where S: Serializer {
         ser.collect_seq(value.iter().map(Regex::as_str))
     }

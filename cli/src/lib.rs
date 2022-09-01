@@ -51,13 +51,12 @@ use enso_build::project::backend::Backend;
 use enso_build::project::runtime;
 // use enso_build::project::engine;
 // use enso_build::project::engine::Engine;
+use enso_build::engine::context::EnginePackageProvider;
 use enso_build::project::gui;
 use enso_build::project::gui::Gui;
 use enso_build::project::ide;
 use enso_build::project::ide::Ide;
 use enso_build::project::runtime::Runtime;
-// use enso_build::project::project_manager;
-// use enso_build::project::project_manager::ProjectManager;
 use enso_build::project::wasm;
 use enso_build::project::wasm::Wasm;
 use enso_build::project::IsTarget;
@@ -233,9 +232,9 @@ impl Processor {
         .boxed()
     }
 
-    pub fn pm_info(&self) -> enso_build::project::backend::BuildInput {
-        enso_build::project::backend::BuildInput { versions: self.triple.versions.clone() }
-    }
+    // pub fn pm_info(&self) -> enso_build::project::backend::BuildInput {
+    //     enso_build::project::backend::BuildInput { versions: self.triple.versions.clone() }
+    // }
 
     pub fn resolve_inputs<T: Resolvable>(
         &self,
@@ -467,7 +466,7 @@ impl Processor {
                 octocrab,
                 cache: Cache::new_default().await?,
             };
-            Ok(enso_build::engine::RunContext { inner, config, paths })
+            Ok(enso_build::engine::RunContext { inner, config, paths, external_runtime: None })
         }
         .boxed()
     }
@@ -674,9 +673,27 @@ impl Resolvable for Backend {
 
     fn resolve(
         ctx: &Processor,
-        _from: <Self as IsTargetSource>::BuildInput,
+        from: <Self as IsTargetSource>::BuildInput,
     ) -> BoxFuture<'static, Result<<Self as IsTarget>::BuildInput>> {
-        ok_ready_boxed(backend::BuildInput { versions: ctx.triple.versions.clone() })
+        let arg::backend::BuildInput { runtime } = from;
+        let versions = ctx.triple.versions.clone();
+
+        let context = ctx.context.inner.clone();
+
+        ctx.resolve(Runtime, runtime)
+            .and_then_sync(|runtime| {
+                let external_runtime = runtime.to_external().map(move |external| {
+                    Arc::new(move || {
+                        Runtime
+                            .get_external(context.clone(), external.clone())
+                            .map_ok(|artifact| artifact.into_inner())
+                            .boxed()
+                    }) as Arc<EnginePackageProvider>
+                });
+                Ok(backend::BuildInput { external_runtime, versions })
+            })
+            .boxed()
+        // ok_ready_boxed(backend::BuildInput { versions: ctx.triple.versions.clone() })
     }
 }
 

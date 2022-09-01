@@ -30,6 +30,7 @@ impl Manipulator for OptimizationLevel {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Output<'a>(pub &'a Path);
 
 impl Manipulator for Output<'_> {

@@ -212,7 +212,7 @@ pub struct Push {
     pub paths_ignore:    Vec<PathBuf>,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct PullRequest {}
 
@@ -520,7 +520,7 @@ impl IntoIterator for Step {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Shell {
     /// Command Prompt.
@@ -530,7 +530,7 @@ pub enum Shell {
     Pwsh,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CheckoutArgumentSubmodules {
     True,
@@ -574,7 +574,7 @@ pub mod step {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum RunnerLabel {
     #[serde(rename = "self-hosted")]
     SelfHosted,

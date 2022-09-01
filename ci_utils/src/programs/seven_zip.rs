@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use snafu::Snafu;
 
+#[derive(Clone, Copy, Debug)]
 pub struct SevenZip;
 
 impl Program for SevenZip {

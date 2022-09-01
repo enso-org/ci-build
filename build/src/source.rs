@@ -62,6 +62,18 @@ pub struct WithDestination<T> {
     pub destination: PathBuf,
 }
 
+impl<T: IsTarget> WithDestination<Source<T>> {
+    pub fn to_external(&self) -> Option<FetchTargetJob> {
+        match &self.inner {
+            Source::BuildLocally(_) => None,
+            Source::External(external) => Some(WithDestination {
+                inner:       external.clone(),
+                destination: self.destination.clone(),
+            }),
+        }
+    }
+}
+
 impl<T> WithDestination<T> {
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> WithDestination<U> {
         WithDestination { inner: f(self.inner), destination: self.destination }

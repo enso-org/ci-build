@@ -41,6 +41,7 @@ impl Sbt {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct SystemProperty {
     pub name:  String,
     pub value: String,

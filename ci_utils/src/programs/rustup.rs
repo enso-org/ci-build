@@ -7,6 +7,7 @@ pub mod env {
     /// toolchain to be used and set up this variable for the spawned process.
     ///
     /// Example value: `"nightly-2022-01-20-x86_64-pc-windows-msvc"`.
+    #[derive(Clone, Copy, Debug)]
     pub struct Toolchain;
 
     impl crate::env::Variable for Toolchain {
@@ -14,6 +15,7 @@ pub mod env {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Rustup;
 
 impl Program for Rustup {

@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+#[derive(Clone, Copy, Debug)]
 pub struct Rsync;
 
 impl Program for Rsync {
@@ -8,7 +9,7 @@ impl Program for Rsync {
     }
 }
 
-#[derive(Clone, Debug, strum::AsRefStr)]
+#[derive(Clone, Copy, Debug, strum::AsRefStr)]
 pub enum Option {
     /// archive mode; equals -rlptgoD (no -H,-A,-X)
     Archive,

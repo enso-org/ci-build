@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+#[derive(Clone, Copy, Debug)]
 pub struct Sh;
 
 impl Program for Sh {
@@ -8,6 +9,7 @@ impl Program for Sh {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Bash;
 
 impl Program for Bash {

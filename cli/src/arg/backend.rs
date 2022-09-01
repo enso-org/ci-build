@@ -5,14 +5,13 @@ use crate::arg::Source;
 use crate::source_args_hlp;
 use clap::Args;
 use clap::Subcommand;
+use enso_build::project;
 use enso_build::project::backend::Backend;
 
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct BuildInput {
-    // #[clap(flatten)]
-    // pub project_manager: Source<project::project_manager::ProjectManager>,
-    // #[clap(flatten)]
-    // pub engine:          Source<project::engine::Engine>,
+    #[clap(flatten)]
+    pub runtime: Source<project::Runtime>,
 }
 
 source_args_hlp!(Backend, "backend", BuildInput);

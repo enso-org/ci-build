@@ -5,6 +5,7 @@ use crate::programs::cmd::args::RUN_COMMAND;
 use std::process::Stdio;
 use unicase::UniCase;
 
+#[derive(Clone, Copy, Debug)]
 pub struct Cmd;
 
 lazy_static::lazy_static! {

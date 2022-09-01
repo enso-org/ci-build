@@ -21,7 +21,7 @@ pub struct Service {
 }
 
 /// A top-level volume entry.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Volume {
     pub external: bool,
 }

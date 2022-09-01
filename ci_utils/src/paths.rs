@@ -98,7 +98,7 @@ pub fn get_string<'a>(
         ))
         .map(ToString::to_string)
 }
-
+#[derive(Debug)]
 pub struct Generator<'a> {
     all_nodes: &'a [&'a Node],
     stack:     Vec<&'a Node>,

@@ -10,12 +10,14 @@ use crate::prelude::*;
 /// to differentiate when tests are being run locally or by GitHub Actions.
 ///
 /// See: <https://docs.github.com/en/actions/learn-github-actions/environment-variables#default-environment-variables>
+#[derive(Clone, Copy, Debug)]
 pub struct Actions;
 impl Variable for Actions {
     const NAME: &'static str = "GITHUB_ACTIONS";
     type Value = bool;
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct EnvFile;
 
 impl Variable for EnvFile {
@@ -24,6 +26,7 @@ impl Variable for EnvFile {
 }
 
 /// The name of the runner executing the job.
+#[derive(Clone, Copy, Debug)]
 pub struct RunnerName;
 
 impl Variable for RunnerName {

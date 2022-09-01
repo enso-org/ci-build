@@ -45,7 +45,7 @@ pub struct UploadFileQuery {
     pub continue_on_error: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")] // Sic!
 pub struct PatchArtifactSize {
     pub size: usize,

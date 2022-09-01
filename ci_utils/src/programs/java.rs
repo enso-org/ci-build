@@ -25,7 +25,7 @@ impl Manipulator for Classpath {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Option {
     EnableAssertions,
 }
@@ -44,6 +44,7 @@ impl AsRef<OsStr> for Option {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Java;
 
 impl Program for Java {

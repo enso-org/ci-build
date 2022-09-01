@@ -201,6 +201,7 @@ pub struct Source<Target: IsTargetSource> {
     #[clap(name = Target::RELEASE_DESIGNATOR_NAME, long, required_if_eq(Target::SOURCE_NAME, "release"), enso_env())]
     pub release: Option<String>,
 
+    /// Used when `SourceKind::Build` is used.
     #[clap(flatten)]
     pub build_args: Target::BuildInput,
 

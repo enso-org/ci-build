@@ -1,5 +1,6 @@
 use crate::prelude::*;
 
+#[derive(Clone, Copy, Debug)]
 pub struct VsWhere;
 
 impl Program for VsWhere {
@@ -67,7 +68,7 @@ pub struct InstanceInfo {
     pub catalog:              Catalog,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
 pub struct Catalog {
     pub product_line_version: crate::programs::vs::Version,
@@ -88,6 +89,7 @@ pub struct Catalog {
      * "requiredEngineVersion": "2.8.3267.30329" */
 }
 
+#[derive(Clone, Debug)]
 pub enum Option {
     /// Output format.
     Format(Format),
@@ -114,6 +116,7 @@ impl Option {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum Format {
     Json,
     Text,
@@ -134,6 +137,7 @@ impl Into<OsString> for &Format {
 }
 
 // cf. https://docs.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-community?view=vs-2019&preserve-view=true
+#[derive(Clone, Copy, Debug)]
 pub enum Component {
     /// MSVC v142 - VS 2019 C++ x64/x86 build tools
     CppBuildTools,

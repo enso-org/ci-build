@@ -74,6 +74,7 @@ pub enum MessageLevel {
     Error,
 }
 
+#[derive(Clone, Debug)]
 pub struct Message {
     pub level: MessageLevel,
     pub text:  String,
