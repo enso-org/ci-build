@@ -1,4 +1,6 @@
+use crate::ci_gen::job::expose_os_specific_signing_secret;
 use crate::ci_gen::job::plain_job;
+use crate::ci_gen::job::plain_job_customized;
 use crate::ci_gen::job::RunsOn;
 use crate::prelude::*;
 use ide_ci::actions::workflow::definition::checkout_repo_step;
@@ -163,7 +165,9 @@ impl JobArchetype for PublishRelease {
 pub struct UploadIde;
 impl JobArchetype for UploadIde {
     fn job(os: OS) -> Job {
-        plain_job(&os, "Build IDE", "ide upload --wasm-source current-ci-run --backend-source release --backend-release ${{env.ENSO_RELEASE_ID}}")
+        plain_job_customized(&os, "Build IDE", "ide upload --wasm-source current-ci-run --backend-source release --backend-release ${{env.ENSO_RELEASE_ID}}", |step| 
+            expose_os_specific_signing_secret(os, step)
+        )
     }
 }
 

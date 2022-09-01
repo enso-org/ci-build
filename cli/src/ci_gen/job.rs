@@ -221,29 +221,29 @@ impl JobArchetype for UploadRuntimeToEcr {
     }
 }
 
+pub fn expose_os_specific_signing_secret(os: OS, step: Step) -> Step {
+    match os {
+        OS::Windows => step
+            .with_secret_exposed_as(
+                SECRET_WINDOWS_CERT_PATH,
+                &enso_build::ide::web::env::WIN_CSC_LINK,
+            )
+            .with_secret_exposed_as(
+                SECRET_WINDOWS_CERT_PASSWORD,
+                &enso_build::ide::web::env::WIN_CSC_KEY_PASSWORD,
+            ),
+        _ => step,
+    }
+}
 
 pub struct PackageIde;
 impl JobArchetype for PackageIde {
     fn job(os: OS) -> Job {
-        let expose_certificates = |step: Step| {
-            if os == OS::Windows {
-                step.with_secret_exposed_as(
-                    SECRET_WINDOWS_CERT_PATH,
-                    &enso_build::ide::web::env::WIN_CSC_LINK,
-                )
-                .with_secret_exposed_as(
-                    SECRET_WINDOWS_CERT_PASSWORD,
-                    &enso_build::ide::web::env::WIN_CSC_KEY_PASSWORD,
-                )
-            } else {
-                step
-            }
-        };
         plain_job_customized(
             &os,
             "Package IDE",
             "ide build --wasm-source current-ci-run --backend-source current-ci-run",
-            expose_certificates,
+            |step| expose_os_specific_signing_secret(os, step),
         )
     }
 }
