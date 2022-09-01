@@ -30,8 +30,6 @@
 #![warn(missing_debug_implementations)]
 #![warn(unsafe_code)]
 
-include!("../../lint-settings.txt");
-
 pub mod actions;
 pub mod anyhow;
 pub mod archive;
