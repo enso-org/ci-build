@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use std::sync::Once;
 use tracing_subscriber::prelude::*;
 
 use tracing::span::Attributes;
@@ -57,18 +58,22 @@ impl<S: Subscriber + Debug + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<S
 
 
 pub fn setup_logging() -> Result {
-    let filter = tracing_subscriber::EnvFilter::builder()
-        .with_env_var("ENSO_BUILD_LOG")
-        .with_default_directive(LevelFilter::TRACE.into())
-        .from_env_lossy();
+    static GUARD: Once = Once::new();
+    GUARD.call_once(|| {
+        let filter = tracing_subscriber::EnvFilter::builder()
+            .with_env_var("ENSO_BUILD_LOG")
+            .with_default_directive(LevelFilter::TRACE.into())
+            .from_env_lossy();
 
-    tracing::subscriber::set_global_default(
-        Registry::default().with(MyLayer).with(
-            tracing_subscriber::fmt::layer()
-                .without_time()
-                .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-                .with_filter(filter),
-        ),
-    )
-    .anyhow_err()
+        tracing::subscriber::set_global_default(
+            Registry::default().with(MyLayer).with(
+                tracing_subscriber::fmt::layer()
+                    .without_time()
+                    .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+                    .with_filter(filter),
+            ),
+        )
+        .unwrap()
+    });
+    Ok(())
 }

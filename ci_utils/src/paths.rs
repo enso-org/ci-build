@@ -482,6 +482,7 @@ mod tests {
     use crate::log::setup_logging;
 
     #[test]
+    #[ignore]
     fn generate() -> Result {
         setup_logging()?;
         let yaml_contents = include_bytes!("../../build/ide-paths.yaml");

@@ -1,6 +1,7 @@
 use crate::prelude::*;
 
 use tokio::fs::File;
+use tokio::io::AsyncReadExt;
 
 
 #[context("Failed to obtain metadata for file: {}", path.as_ref().display())]
@@ -36,4 +37,12 @@ pub async fn remove_dir_all(path: impl AsRef<Path>) -> Result {
 #[context("Failed to write file: {}", path.as_ref().display())]
 pub async fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result {
     tokio::fs::write(&path, &contents).await.anyhow_err()
+}
+
+#[context("Failed to read file: {}", path.as_ref().display())]
+pub async fn read<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
+    let mut file = File::open(&path).await?;
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents).await?;
+    Ok(contents)
 }

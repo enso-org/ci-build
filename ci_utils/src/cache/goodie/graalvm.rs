@@ -130,6 +130,7 @@ mod tests {
     use crate::programs::Java;
 
     #[tokio::test]
+    #[ignore]
     async fn test_is_enabled() -> Result {
         setup_logging()?;
         let graal_version = Version::parse("21.3.0").unwrap();

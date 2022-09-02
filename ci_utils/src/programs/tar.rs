@@ -4,6 +4,26 @@ use crate::prelude::*;
 
 use crate::archive::Format;
 
+pub mod bsd {
+    use super::*;
+
+    /// Options specific for `bsdtar`.
+    #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
+    pub enum Switch {
+        /// Symbolic links named on the command line will be followed; the target of the link will
+        /// be archived, not the link itself.
+        FollowSymlinksInCommand,
+    }
+
+    impl AsRef<OsStr> for Switch {
+        fn as_ref(&self) -> &OsStr {
+            match self {
+                Switch::FollowSymlinksInCommand => "-H",
+            }
+            .as_ref()
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Compression {
@@ -84,6 +104,24 @@ impl<'a> IntoIterator for &'a Switch<'a> {
 }
 
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
+pub enum Flavor {
+    Gnu,
+    Bsd,
+}
+
+impl Flavor {
+    pub fn from_version_text(text: &str) -> Result<Self> {
+        if text.contains("bsdtar") {
+            Ok(Flavor::Bsd)
+        } else if text.contains("GNU tar") {
+            Ok(Flavor::Gnu)
+        } else {
+            bail!("The output of `tar --version` does not contain a recognizable flavor.")
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Command {
     Append,
     Create,
@@ -119,6 +157,11 @@ impl Program for Tar {
 }
 
 impl Tar {
+    pub async fn flavor(&self) -> Result<Flavor> {
+        let text = self.version_string().await?;
+        Flavor::from_version_text(&text)
+    }
+
     #[context("Failed to crate an archive {}.", output_archive.as_ref().display())]
     pub fn pack_cmd<P: AsRef<Path>>(
         &self,
@@ -185,14 +228,21 @@ impl Tar {
         root_directory: impl AsRef<Path>,
     ) -> Result {
         // See: https://stackoverflow.com/a/3035446
-        self.cmd()?
-            .arg(Command::Create)
+        let mut cmd = self.cmd()?;
+        cmd.arg(Command::Create)
             .args(compression)
             .args(&Switch::TargetFile(output_archive.as_ref()))
-            .args(&Switch::WorkingDir(root_directory.as_ref()))
-            .arg(".")
-            .run_ok()
-            .await
+            .args(&Switch::WorkingDir(root_directory.as_ref()));
+        if TARGET_OS == OS::Windows && Tar.flavor().await.contains(&Flavor::Bsd) {
+            // Used only when `tar` is `bsdtar`. This is the default
+            // but e.g. Git can come with its own non-bsd tar. GNU tar does not support this option.
+            //
+            // This flag is to tell `tar` to resolve symlinks that appear on the command line.
+            // On Windows when "." is a symlink, only the symlink is archived otherwise.
+            cmd.arg(bsd::Switch::FollowSymlinksInCommand);
+        }
+
+        cmd.arg(".").run_ok().await
     }
 
     pub async fn unpack(
@@ -214,6 +264,9 @@ impl Tar {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::archive::extract_to;
+    use crate::archive::pack_directory_contents;
+    use crate::log::setup_logging;
 
     #[test]
     fn deduce_format_from_extension() {
@@ -227,7 +280,38 @@ pub mod tests {
         expect_ok("xz", Compression::Xz);
     }
 
+    #[tokio::test]
+    async fn test_directory_packing() -> Result {
+        setup_logging()?;
+        let archive_temp = tempfile::tempdir()?;
+        let archive_path = archive_temp.path().join("archive.tar.gz");
+
+
+        let temp = tempfile::tempdir()?;
+        let filename = "bar.txt";
+        crate::fs::tokio::write(temp.path().join(filename), "bar contents").await?;
+
+        let linked_temp = archive_temp.path().join("linked");
+        symlink::symlink_dir(temp.path(), &linked_temp)?;
+
+        pack_directory_contents(&archive_path, &linked_temp).await?;
+        assert!(archive_path.exists());
+        assert!(archive_path.metadata()?.len() > 0);
+
+        let temp2 = tempfile::tempdir()?;
+        extract_to(&archive_path, temp2.path()).await?;
+        assert!(temp2.path().join(filename).exists());
+        assert_eq!(
+            crate::fs::tokio::read(temp2.path().join(filename)).await?,
+            "bar contents".as_bytes()
+        );
+
+
+        Ok(())
+    }
+
     #[test]
+    #[ignore]
     fn pack_command_test() {
         let cmd = Tar.pack_cmd("output.tar.gz", &["target.bmp"]).unwrap();
         debug!("{:?}", cmd);
