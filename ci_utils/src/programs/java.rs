@@ -67,7 +67,7 @@ mod tests {
     #[test]
     fn parse_version() {
         let contents = "openjdk 11.0.11 2021-04-20\nOpenJDK Runtime Environment GraalVM CE 21.1.0 (build 11.0.11+8-jvmci-21.1-b05)\nOpenJDK 64-Bit Server VM GraalVM CE 21.1.0 (build 11.0.11+8-jvmci-21.1-b05, mixed mode, sharing)";
-        assert_eq!(Java.parse_version(contents).unwrap(), Version::new(21, 1, 0));
+        assert_eq!(Java.parse_version(contents).unwrap(), Version::new(11, 0, 11));
     }
 }
 

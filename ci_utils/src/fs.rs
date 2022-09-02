@@ -293,6 +293,7 @@ mod tests {
     use ::tokio;
 
     #[tokio::test]
+    #[ignore]
     async fn copy_if_different_test() -> Result {
         setup_logging()?;
         copy_if_different(".", r"C:\temp\out").await?;

@@ -180,6 +180,7 @@ mod tests {
     use crate::log::setup_logging;
 
     #[tokio::test]
+    #[ignore]
     async fn cache_test() -> Result {
         setup_logging()?;
         let download_task = DownloadFile::new("https://store.akamai.steamstatic.com/public/shared/images/header/logo_steam.svg?t=962016")?;

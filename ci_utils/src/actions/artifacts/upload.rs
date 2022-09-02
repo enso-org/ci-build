@@ -253,6 +253,7 @@ mod tests {
     use crate::log::setup_logging;
 
     #[tokio::test]
+    #[ignore]
     async fn test_upload() -> Result {
         use warp::Filter;
         setup_logging()?;

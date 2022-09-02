@@ -79,6 +79,7 @@ mod tests {
     use crate::log::setup_logging;
 
     #[tokio::test]
+    #[ignore]
     async fn gu_list() -> Result {
         setup_logging()?;
         // let output = Gu.cmd()?.arg("list").output_ok().await?;

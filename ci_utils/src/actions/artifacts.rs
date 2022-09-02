@@ -179,6 +179,7 @@ mod tests {
     use wiremock::ResponseTemplate;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[ignore]
     async fn test_artifact_upload() -> Result {
         let mock_server = MockServer::start().await;
 

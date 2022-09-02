@@ -19,8 +19,14 @@ pub async fn create(path: impl AsRef<Path>) -> Result<File> {
 pub async fn create_dir_if_missing(path: impl AsRef<Path>) -> Result {
     let result = tokio::fs::create_dir_all(&path).await;
     match result {
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
-        result => result.anyhow_err(),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            trace!("Directory already exists: {}", path.as_ref().display());
+            Ok(())
+        }
+        result => {
+            trace!("Created directory: {}", path.as_ref().display());
+            result.anyhow_err()
+        }
     }
 }
 
