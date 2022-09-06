@@ -74,7 +74,7 @@ pub fn create_parent_dir_if_missing(path: impl AsRef<Path>) -> Result<PathBuf> {
 #[tracing::instrument(fields(path = %path.as_ref().display()))]
 #[context("Failed to remove directory {}", path.as_ref().display())]
 pub fn remove_dir_if_exists(path: impl AsRef<Path>) -> Result {
-    let result = win32_remove_dir_all::remove_dir_all(&path);
+    let result = std::fs::remove_dir_all(&path);
     match result {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         result => result.anyhow_err(),

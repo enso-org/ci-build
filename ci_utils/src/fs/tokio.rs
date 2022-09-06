@@ -56,10 +56,12 @@ pub async fn copy_to_file(
 /// Does not fail if the directory is not found.
 #[instrument(fields(path = %path.as_ref().display()), err, level = "trace")]
 pub async fn remove_dir_if_exists(path: impl AsRef<Path>) -> Result {
-    let path = path.as_ref().to_owned();
-    tokio::task::spawn_blocking(move || crate::fs::remove_dir_if_exists(&path))
-        .await
-        .context("Background task of removing directory failed.")?
+    let path = path.as_ref();
+    let result = tokio::fs::remove_dir_all(&path).await;
+    match result {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        result => result.context(format!("Failed to remove directory {}.", path.display())),
+    }
 }
 
 /// Recreate directory, so it exists and is empty.
