@@ -64,7 +64,7 @@ impl ArtifactUploader {
     /// Concurrently upload all of the files in chunks.
     pub async fn upload_artifact_to_file_container(
         &self,
-        files_to_upload: impl futures::Stream<Item = FileToUpload> + Send + 'static,
+        files_to_upload: impl Stream<Item = FileToUpload> + Send + 'static,
         options: &UploadOptions,
     ) -> Result {
         debug!(

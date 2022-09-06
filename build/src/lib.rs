@@ -18,6 +18,16 @@
 #![feature(once_cell)]
 #![feature(duration_constants)]
 #![feature(slice_take)]
+#![deny(non_ascii_idents)]
+#![warn(unsafe_code)]
+#![warn(missing_copy_implementations)]
+#![warn(missing_debug_implementations)]
+#![warn(missing_docs)]
+#![warn(trivial_casts)]
+#![warn(trivial_numeric_casts)]
+#![warn(unused_import_braces)]
+#![warn(unused_qualifications)]
+
 
 use crate::prelude::*;
 

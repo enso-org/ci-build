@@ -51,7 +51,7 @@ impl Compression {
 }
 
 impl Display for Compression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         use Compression::*;
         write!(f, "{}", match self {
             Bzip2 => "bzip2",

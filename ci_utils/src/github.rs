@@ -63,16 +63,13 @@ pub trait RepoPointer: Display {
         client.repos(self.owner(), self.name())
     }
 
-    async fn all_releases(
-        &self,
-        client: &Octocrab,
-    ) -> Result<Vec<octocrab::models::repos::Release>> {
+    async fn all_releases(&self, client: &Octocrab) -> Result<Vec<Release>> {
         get_all(client, self.repos(client).releases().list().per_page(MAX_PER_PAGE).send())
             .await
             .context(format!("Failed to list all releases in the {self} repository."))
     }
 
-    async fn latest_release(&self, client: &Octocrab) -> Result<octocrab::models::repos::Release> {
+    async fn latest_release(&self, client: &Octocrab) -> Result<Release> {
         self.repos(client)
             .releases()
             .get_latest()
@@ -84,7 +81,7 @@ pub trait RepoPointer: Display {
         &self,
         client: &Octocrab,
         release_id: ReleaseId,
-    ) -> Result<octocrab::models::repos::Release> {
+    ) -> Result<Release> {
         let repo_handler = self.repos(client);
         let releases_handler = repo_handler.releases();
         releases_handler
@@ -94,11 +91,7 @@ pub trait RepoPointer: Display {
     }
 
     #[tracing::instrument(skip(client), fields(%self, %text), err)]
-    async fn find_release_by_text(
-        &self,
-        client: &Octocrab,
-        text: &str,
-    ) -> anyhow::Result<octocrab::models::repos::Release> {
+    async fn find_release_by_text(&self, client: &Octocrab, text: &str) -> anyhow::Result<Release> {
         self.all_releases(client)
             .await?
             .into_iter()
@@ -158,7 +151,7 @@ pub trait RepoPointer: Display {
         let path = iformat!("/repos/{self.owner()}/{self.name()}/releases/assets/{asset_id}");
         // Unwrap will work, because we are appending relative URL constant.
         let url = octocrab.absolute_url(path).unwrap();
-        crate::cache::download::DownloadFile {
+        DownloadFile {
             client: octocrab.client.clone(),
             key:    crate::cache::download::Key {
                 url,

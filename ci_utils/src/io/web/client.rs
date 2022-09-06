@@ -54,7 +54,7 @@ pub async fn download_and_extract(
 
 /// Download file at base_url/subpath to output_dir_base/subpath.
 pub async fn download_relative(
-    client: &reqwest::Client,
+    client: &Client,
     base_url: &Url,
     output_dir_base: impl AsRef<Path>,
     subpath: &Path,

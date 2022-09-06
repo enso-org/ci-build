@@ -19,7 +19,7 @@ pub struct DirectoryToClear<'a> {
 pub async fn clean_except_for(
     repo_root: impl AsRef<Path>,
     paths: impl IntoIterator<Item: AsRef<Path>>,
-) -> crate::Result {
+) -> Result {
     let root = repo_root.as_ref().canonicalize()?;
 
     let relative_exclusions: Vec<PathBuf> = paths

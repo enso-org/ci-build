@@ -28,7 +28,7 @@ where
         text.parse::<T>().anyhow_err().context(format!(
             r#"Failed to parse "{}" as {}."#,
             text,
-            std::any::type_name::<T>()
+            type_name::<T>()
         ))
     }
 }

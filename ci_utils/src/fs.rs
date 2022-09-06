@@ -171,7 +171,7 @@ pub fn copy(source_file: impl AsRef<Path>, destination_file: impl AsRef<Path>) -
 }
 
 pub fn same_existing_path(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result<bool> {
-    Ok(wrappers::canonicalize(source)? == wrappers::canonicalize(destination)?)
+    Ok(canonicalize(source)? == canonicalize(destination)?)
 }
 
 pub async fn mirror_directory(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> Result {
@@ -240,9 +240,9 @@ pub async fn compressed_size(path: impl AsRef<Path>) -> Result<byte_unit::Byte> 
 
 pub fn check_if_identical(source: impl AsRef<Path>, target: impl AsRef<Path>) -> bool {
     (|| -> Result<bool> {
-        if crate::fs::metadata(&source)?.len() == crate::fs::metadata(&target)?.len() {
+        if metadata(&source)?.len() == metadata(&target)?.len() {
             Ok(true)
-        } else if crate::fs::read(&source)? == crate::fs::read(&target)? {
+        } else if read(&source)? == read(&target)? {
             // TODO: Not good for large files, should process them chunk by chunk.
             Ok(true)
         } else {
@@ -259,7 +259,7 @@ pub fn copy_file_if_different(source: impl AsRef<Path>, target: impl AsRef<Path>
             source.as_ref().display(),
             target.as_ref().display()
         );
-        crate::fs::copy(&source, &target)?;
+        copy(&source, &target)?;
     } else {
         trace!("No changes, skipping {}.", source.as_ref().display())
     }

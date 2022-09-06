@@ -9,7 +9,7 @@ use reqwest::header::CONTENT_TYPE;
 
 
 pub trait ClientBuilderExt: Sized {
-    fn default_content_type(self, mime_type: mime::Mime) -> Self;
+    fn default_content_type(self, mime_type: Mime) -> Self;
     fn keep_alive(self, seconds: usize) -> Self;
     fn default_header(self, name: impl Into<HeaderName>, value: impl Into<HeaderValue>) -> Self;
 }

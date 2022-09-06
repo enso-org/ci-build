@@ -3,7 +3,6 @@ use crate::prelude::*;
 use anyhow::Context;
 use bytes::BytesMut;
 use reqwest::header::HeaderMap;
-use reqwest::header::CONTENT_LENGTH;
 use reqwest::Body;
 use reqwest::Response;
 use reqwest::StatusCode;
@@ -153,7 +152,7 @@ pub mod endpoints {
 }
 
 pub fn decode_content_length(headers: &HeaderMap) -> Option<usize> {
-    let value = headers.get(CONTENT_LENGTH)?;
+    let value = headers.get(reqwest::header::CONTENT_LENGTH)?;
     let text = value.to_str().ok()?;
     text.parse::<usize>().ok()
 }
@@ -177,7 +176,7 @@ pub async fn upload_file(
         remote_path.as_ref().display()
     );
     if len < chunk_size && len > 0 {
-        let range = ContentRange::whole(len as usize);
+        let range = ContentRange::whole(len);
         endpoints::upload_file_chunk(client, upload_url.clone(), file, range, &remote_path).await
     } else {
         let mut chunks = stream_file_in_chunks(file, chunk_size).boxed();
@@ -240,7 +239,7 @@ pub async fn check_response(
 pub fn stream_file_in_chunks(
     file: tokio::fs::File,
     chunk_size: usize,
-) -> impl futures::Stream<Item = Result<Bytes>> + Send {
+) -> impl Stream<Item = Result<Bytes>> + Send {
     futures::stream::try_unfold(file, async move |mut file| {
         let mut buffer = BytesMut::with_capacity(chunk_size);
         while file.read_buf(&mut buffer).await? > 0 && buffer.len() < chunk_size {}

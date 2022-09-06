@@ -1,7 +1,6 @@
 use crate::prelude::*;
 
 use crate::fs::create_dir_if_missing;
-use crate::programs;
 use crate::programs::tar::Compression;
 use crate::programs::tar::Tar;
 use crate::programs::SevenZip;
@@ -16,7 +15,7 @@ pub mod zip;
 pub enum Format {
     Zip,
     SevenZip,
-    Tar(Option<programs::tar::Compression>),
+    Tar(Option<Compression>),
 }
 
 impl Format {
@@ -29,10 +28,10 @@ impl Format {
         match extension.to_str().unwrap() {
             "zip" => Ok(Format::Zip),
             "7z" => Ok(Format::SevenZip),
-            "tgz" => Ok(Format::Tar(Some(programs::tar::Compression::Gzip))),
-            "txz" => Ok(Format::Tar(Some(programs::tar::Compression::Xz))),
-            other => {
-                if let Ok(compression) = programs::tar::Compression::deduce_from_extension(other) {
+            "tgz" => Ok(Format::Tar(Some(Compression::Gzip))),
+            "txz" => Ok(Format::Tar(Some(Compression::Xz))),
+            other =>
+                if let Ok(compression) = Compression::deduce_from_extension(other) {
                     let secondary_extension =
                         filename.file_stem().map(Path::new).and_then(Path::extension);
                     if secondary_extension == Some(OsStr::new("tar")) {
@@ -42,8 +41,7 @@ impl Format {
                     }
                 } else {
                     bail!("Unrecognized archive extension `{}`.", other)
-                }
-            }
+                },
         }
     }
 

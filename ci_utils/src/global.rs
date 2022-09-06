@@ -19,7 +19,7 @@ use tokio::task::JoinHandle;
 /// argument, it will allocate only once.
 pub fn store_static_text(text: impl AsRef<str>) -> &'static str {
     lazy_static! {
-        pub static ref STRING_STORAGE: std::sync::Mutex<HashSet<&'static str>> = default();
+        pub static ref STRING_STORAGE: Mutex<HashSet<&'static str>> = default();
     }
     *STRING_STORAGE.lock().unwrap().get_or_insert_with(text.as_ref(), |text| Box::leak(text.into()))
 }

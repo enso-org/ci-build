@@ -36,7 +36,7 @@ where E: Into<Error>
     where T: TryFuture<Error: From<E>> {
         match self {
             Ok(fut) => fut.into_future().right_future(),
-            Err(e) => ready(std::result::Result::Err(T::Error::from(e))).left_future(),
+            Err(e) => ready(Err(T::Error::from(e))).left_future(),
         }
     }
 }

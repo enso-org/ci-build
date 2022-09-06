@@ -38,7 +38,7 @@ impl<T, E> ResultExt<T, E> for std::result::Result<T, E> {
     {
         match self {
             Ok(v) => f(v).map(Ok as fn(T2) -> std::result::Result<T2, E>).left_future(),
-            Err(e) => ready(std::result::Result::<T2, E>::Err(e)).right_future(),
+            Err(e) => ready(Err(e)).right_future(),
         }
     }
 

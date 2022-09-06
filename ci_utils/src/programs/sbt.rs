@@ -57,7 +57,7 @@ impl<'a> IntoIterator for &'a SystemProperty {
     type Item = String;
     type IntoIter = std::iter::Once<Self::Item>;
     fn into_iter(self) -> Self::IntoIter {
-        std::iter::once(format!("-D{}={}", self.name, self.value))
+        once(format!("-D{}={}", self.name, self.value))
     }
 }
 

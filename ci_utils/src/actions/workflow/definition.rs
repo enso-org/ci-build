@@ -516,7 +516,7 @@ impl IntoIterator for Step {
     type Item = Step;
     type IntoIter = std::iter::Once<Self>;
     fn into_iter(self) -> Self::IntoIter {
-        std::iter::once(self)
+        once(self)
     }
 }
 

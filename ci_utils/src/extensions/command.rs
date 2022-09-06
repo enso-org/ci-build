@@ -35,7 +35,7 @@ pub trait CommandExt {
     }
 }
 
-
+#[allow(unused_qualifications)]
 impl CommandExt for crate::program::command::Command {
     fn as_std(&self) -> &std::process::Command {
         self.inner.as_std()

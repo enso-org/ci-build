@@ -31,7 +31,7 @@ pub fn graal_version_from_version_string(version_string: &str) -> Result<Version
 }
 
 pub async fn find_graal_version() -> Result<Version> {
-    let text = crate::programs::Java.version_string().await?;
+    let text = Java.version_string().await?;
     graal_version_from_version_string(&text)
 }
 

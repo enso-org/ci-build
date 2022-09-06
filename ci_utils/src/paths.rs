@@ -8,7 +8,6 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use regex::Regex;
-use serde_yaml::Value;
 use std::collections::BTreeSet;
 use std::iter::zip;
 
@@ -317,16 +316,16 @@ impl Node {
     }
 
     #[context("Failed to process node from key: {}", serde_yaml::to_string(value).unwrap())]
-    pub fn new_from_key(value: &Value) -> Result<Self> {
+    pub fn new_from_key(value: &serde_yaml::Value) -> Result<Self> {
         Ok(match value {
-            Value::Mapping(mapping) => {
+            serde_yaml::Value::Mapping(mapping) => {
                 let value = get_string(mapping, "path")?;
                 let mut ret = Node::new(value);
                 ret.var_name = get_string(mapping, "var").ok();
                 ret.r#type = get_string(mapping, "type").ok();
                 ret
             }
-            Value::String(string) => Node::new(string),
+            serde_yaml::Value::String(string) => Node::new(string),
             other => bail!("Cannot deserialize {} to a node.", serde_yaml::to_string(other)?),
         })
     }
@@ -430,7 +429,7 @@ pub fn child_struct_ident(init: &[&Node], last: &Node) -> Ident {
     struct_ident(init.iter().cloned().chain(once(last)))
 }
 
-pub fn generate(forest: Vec<Node>) -> Result<proc_macro2::TokenStream> {
+pub fn generate(forest: Vec<Node>) -> Result<TokenStream> {
     let all_node_refs = forest.iter().collect_vec();
     let mut generator = Generator::new(&all_node_refs);
     generator.generate()
@@ -486,7 +485,7 @@ mod tests {
     fn generate() -> Result {
         setup_logging()?;
         let yaml_contents = include_bytes!("../../build/ide-paths.yaml");
-        let code = crate::paths::process(yaml_contents.as_slice())?;
+        let code = process(yaml_contents.as_slice())?;
         debug!("{}", code);
         Ok(())
     }

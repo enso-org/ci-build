@@ -47,7 +47,7 @@ pub async fn copy_to_file(
     mut content: impl AsyncRead + Unpin,
     output_path: impl AsRef<Path>,
 ) -> Result<u64> {
-    let mut output = crate::fs::tokio::create(output_path).await?;
+    let mut output = create(output_path).await?;
     tokio::io::copy(&mut content, &mut output).await.anyhow_err()
 }
 

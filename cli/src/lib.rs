@@ -2,6 +2,15 @@
 #![feature(option_result_contains)]
 #![feature(once_cell)]
 #![feature(default_free_fn)]
+#![deny(non_ascii_idents)]
+#![warn(unsafe_code)]
+#![warn(missing_copy_implementations)]
+#![warn(missing_debug_implementations)]
+#![warn(missing_docs)]
+#![warn(trivial_casts)]
+#![warn(trivial_numeric_casts)]
+#![warn(unused_import_braces)]
+#![warn(unused_qualifications)]
 
 pub mod arg;
 pub mod ci_gen;

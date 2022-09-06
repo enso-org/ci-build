@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 pub async fn get_or_insert<K, V, F, R>(map: &mut HashMap<K, V>, key: K, f: F) -> Result<&V>
 where
-    K: Eq + std::hash::Hash,
+    K: Eq + Hash,
     // TODO [mwu] It would be better if R would be allowed to live only for 'a lifetime.
     //            No idea how to express this.
     for<'a> F: FnOnce(&'a K) -> R,

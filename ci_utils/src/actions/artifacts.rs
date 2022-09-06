@@ -22,7 +22,7 @@ pub mod upload;
 pub const API_VERSION: &str = "6.0-preview";
 
 
-pub async fn execute_dbg<T: DeserializeOwned + std::fmt::Debug>(
+pub async fn execute_dbg<T: DeserializeOwned + Debug>(
     client: &reqwest::Client,
     reqeust: reqwest::RequestBuilder,
 ) -> Result<T> {
@@ -61,7 +61,7 @@ pub fn discover_recursive(
 }
 
 pub async fn upload(
-    file_provider: impl futures_util::Stream<Item = FileToUpload> + Send + 'static,
+    file_provider: impl Stream<Item = FileToUpload> + Send + 'static,
     artifact_name: impl AsRef<str>,
     options: UploadOptions,
 ) -> Result {

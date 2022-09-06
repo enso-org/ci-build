@@ -31,7 +31,7 @@ pub const EMPTY_ARGS: [&str; 0] = [];
 pub trait Program: Sized + 'static {
     type Command: MyCommand<Self> + Send + Sync + IsCommandWrapper = Command;
 
-    type Version: version::IsVersion = semver::Version;
+    type Version: version::IsVersion = Version;
 
     /// The name used to find and invoke the program.
     ///

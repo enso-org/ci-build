@@ -58,15 +58,15 @@ mod tests {
     use crate::cache;
     use crate::cache::Goodie;
     use crate::log::setup_logging;
-    use crate::programs;
 
     #[tokio::test]
+    #[ignore]
     async fn install_wasm_opt() -> Result {
         setup_logging()?;
         let cache = cache::Cache::new_default().await?;
         let binaryen = Binaryen { version: 108 };
         binaryen.install_if_missing(&cache).await?;
-        dbg!(programs::wasm_opt::WasmOpt.lookup())?;
+        dbg!(WasmOpt.lookup())?;
 
         assert!(binaryen.is_active().await?);
 

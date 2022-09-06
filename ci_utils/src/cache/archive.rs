@@ -20,11 +20,7 @@ impl<S: Storable<Output = PathBuf> + Clone> Storable for ExtractedArchive<S> {
     type Output = PathBuf;
     type Key = Key<S::Key>;
 
-    fn generate(
-        &self,
-        cache: Cache,
-        store: PathBuf,
-    ) -> BoxFuture<'static, crate::Result<Self::Metadata>> {
+    fn generate(&self, cache: Cache, store: PathBuf) -> BoxFuture<'static, Result<Self::Metadata>> {
         let Self { path_to_extract, archive_source } = self.clone();
         let get_archive_job = cache.get(archive_source);
         async move {
@@ -38,11 +34,7 @@ impl<S: Storable<Output = PathBuf> + Clone> Storable for ExtractedArchive<S> {
         .boxed()
     }
 
-    fn adapt(
-        &self,
-        cache: PathBuf,
-        _: Self::Metadata,
-    ) -> BoxFuture<'static, crate::Result<Self::Output>> {
+    fn adapt(&self, cache: PathBuf, _: Self::Metadata) -> BoxFuture<'static, Result<Self::Output>> {
         async move { Ok(cache) }.boxed()
     }
 

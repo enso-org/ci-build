@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use mime::Mime;
-use mime::APPLICATION_JSON;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::header::ACCEPT_ENCODING;
@@ -72,7 +71,7 @@ impl Context {
 
     pub fn download_client(&self) -> Result<Client> {
         self.prepare_client(mime::APPLICATION_OCTET_STREAM)?
-            .default_content_type(APPLICATION_JSON)
+            .default_content_type(mime::APPLICATION_JSON)
             .keep_alive(10)
             .default_header(ACCEPT_ENCODING, HeaderValue::try_from("gzip").unwrap())
             .build()

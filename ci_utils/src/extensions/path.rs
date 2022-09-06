@@ -64,7 +64,7 @@ pub trait PathExt: AsRef<Path> {
 
 impl<T: AsRef<Path>> PathExt for T {}
 
-pub fn display_fmt(path: &Path, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+pub fn display_fmt(path: &Path, f: &mut Formatter) -> std::fmt::Result {
     std::fmt::Display::fmt(&path.display(), f)
 }
 
