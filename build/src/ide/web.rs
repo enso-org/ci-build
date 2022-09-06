@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-use crate::paths::generated;
 use crate::project::gui::BuildInfo;
 use crate::project::wasm;
 use crate::project::wasm::Artifact;
@@ -8,8 +7,9 @@ use crate::project::ProcessWrapper;
 
 use anyhow::Context;
 use futures_util::future::try_join;
-use futures_util::future::try_join3;
+use futures_util::future::try_join4;
 use ide_ci::io::download_all;
+use ide_ci::models::config::RepoContext;
 use ide_ci::program::command;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
@@ -31,9 +31,13 @@ pub const IDE_ASSETS_URL: &str =
 
 pub const ARCHIVED_ASSET_FILE: &str = "ide-assets-main/content/assets/";
 
+pub const GOOGLE_FONTS_REPOSITORY: &str = "google/fonts";
+
+pub const GOOGLE_FONT_DIRECTORY: &str = "ofl";
 
 pub mod env {
     use super::*;
+
     use ide_ci::define_env_var;
 
     define_env_var!(ENSO_BUILD_IDE, PathBuf);
@@ -70,6 +74,45 @@ impl command::FallibleManipulator for IconsArtifacts {
         command.set_env(env::ENSO_BUILD_ICONS, &self.0)?;
         Ok(())
     }
+}
+//
+// /// A file description of a GitHub repository.
+// #[derive(Debug, Clone, serde::Deserialize)]
+// pub struct GithubFile {
+//     pub name:         String,
+//     pub download_url: String,
+// }
+
+pub async fn download_google_font(
+    octocrab: &Octocrab,
+    family: &str,
+    output_path: impl AsRef<Path>,
+) -> Result {
+    let destination_dir = output_path.as_ref();
+    let repo = RepoContext::from_str(GOOGLE_FONTS_REPOSITORY)?;
+    let path = format!("{GOOGLE_FONT_DIRECTORY}/{family}");
+    let files = repo.repos(octocrab).get_content().path(path).send().await?;
+    let ttf_files = files.items.into_iter().filter(|file| file.name.ends_with(".ttf"));
+    for file in ttf_files {
+        let destination_file = destination_dir.join(&file.name);
+        let url = file.download_url.context("Missing 'download_url' in the reply.")?;
+        let reply = ide_ci::io::web::client::download(&octocrab.client, url).await?;
+        ide_ci::io::web::stream_to_file(reply, &destination_file).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_download_fonts() -> Result {
+    setup_logging()?;
+    let octocrab = setup_octocrab().await?;
+
+    let dir = r"C:\Temp\fonts";
+    ide_ci::fs::reset_dir(dir)?;
+    download_google_font(&octocrab, "mplus1", dir).await?;
+
+
+    Ok(())
 }
 
 /// Fill the directory under `output_path` with the assets.
@@ -123,7 +166,9 @@ impl<Output: AsRef<Path>> ContentEnvironment<TempDir, Output> {
         let installation = ide.install();
         let asset_dir = TempDir::new()?;
         let assets_download = download_js_assets(&asset_dir);
-        let (wasm, _, _) = try_join3(wasm, installation, assets_download).await?;
+        let fonts_download = download_google_font(&ide.octocrab, "mplus1", &asset_dir);
+        let (wasm, _, _, _) =
+            try_join4(wasm, installation, assets_download, fonts_download).await?;
         ide.write_build_info(&build_info)?;
         Ok(ContentEnvironment { asset_dir, wasm, output_path })
     }
@@ -160,11 +205,12 @@ pub fn target_flag(os: OS) -> Result<&'static str> {
 #[derive(Clone, Debug)]
 pub struct IdeDesktop {
     pub package_dir: PathBuf,
+    pub octocrab:    Octocrab,
 }
 
 impl IdeDesktop {
-    pub fn new(package_dir: impl Into<PathBuf>) -> Self {
-        Self { package_dir: package_dir.into() }
+    pub fn new(package_dir: impl Into<PathBuf>, octocrab: Octocrab) -> Self {
+        Self { package_dir: package_dir.into(), octocrab }
     }
 
     pub fn npm(&self) -> Result<NpmCommand> {
@@ -221,7 +267,7 @@ impl IdeDesktop {
     }
 
 
-    #[tracing::instrument(name="Setting up GUI Content watcher.", 
+    #[tracing::instrument(name="Setting up GUI Content watcher.",
         fields(wasm = tracing::field::Empty),
         err)]
     pub async fn watch_content(
@@ -314,12 +360,6 @@ impl IdeDesktop {
             .await?;
 
         Ok(())
-    }
-}
-
-impl From<&generated::RepoRoot> for IdeDesktop {
-    fn from(value: &generated::RepoRoot) -> Self {
-        Self { package_dir: value.app.ide_desktop.to_path_buf() }
     }
 }
 

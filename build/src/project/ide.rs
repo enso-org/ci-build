@@ -91,6 +91,8 @@ pub struct BuildInput {
     pub project_manager: BoxFuture<'static, Result<crate::project::backend::Artifact>>,
     #[derivative(Debug = "ignore")]
     pub gui:             BoxFuture<'static, Result<crate::project::gui::Artifact>>,
+    #[derivative(Debug = "ignore")]
+    pub octocrab:        octocrab::Octocrab,
 }
 
 #[derive(Clone, Debug)]
@@ -105,7 +107,7 @@ pub enum OutputPath {
 }
 
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Ide {
     pub target_os:   OS,
     pub target_arch: Arch,
@@ -118,8 +120,8 @@ impl Ide {
         input: BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Artifact>> {
-        let BuildInput { version, project_manager, gui } = input;
-        let ide_desktop = crate::ide::web::IdeDesktop::new(&ide_desktop);
+        let BuildInput { version, project_manager, gui, octocrab } = input;
+        let ide_desktop = crate::ide::web::IdeDesktop::new(&ide_desktop, octocrab);
         let target_os = self.target_os;
         let target_arch = self.target_arch;
         async move {

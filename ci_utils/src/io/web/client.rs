@@ -68,16 +68,8 @@ pub async fn download_relative(
     if let Some(parent_dir) = output_path.parent() {
         crate::fs::create_dir_if_missing(parent_dir)?;
     }
-    let output = tokio::fs::OpenOptions::new().write(true).create(true).open(&output_path).await?;
-    response
-        .bytes_stream()
-        .map_err(anyhow::Error::from)
-        // We must use fold (rather than foreach) to properly keep `output` alive long enough.
-        .try_fold(output, |mut output, chunk| async move {
-            output.write(&chunk.clone()).await?;
-            Ok(output)
-        })
-        .await?;
+
+    crate::io::web::stream_to_file(response.bytes_stream(), &output_path).await?;
     debug!("Download finished: {}", output_path.display());
     Ok(output_path)
 }

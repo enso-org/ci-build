@@ -20,8 +20,7 @@ pub mod provider;
 #[macro_export]
 macro_rules! new_command_type {
     ($program_name:ident, $command_name:ident) => {
-        #[derive(Debug)]
-        #[derive(Shrinkwrap)]
+        #[derive(Debug, Shrinkwrap)]
         #[shrinkwrap(mutable)]
         pub struct $command_name(pub $crate::program::command::Command);
 

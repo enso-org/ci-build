@@ -84,6 +84,23 @@ pub fn filename_from_response(response: &Response) -> Result<&Path> {
         .context(format!("No {CONTENT_DISPOSITION} header present in the response."))?;
     filename_from_content_disposition(disposition)
 }
+
+pub async fn stream_to_file(
+    stream: impl Stream<Item = reqwest::Result<Bytes>>,
+    output_path: impl AsRef<Path>,
+) -> Result {
+    let output = tokio::fs::OpenOptions::new().write(true).create(true).open(&output_path).await?;
+    stream
+        .map_err(anyhow::Error::from)
+        // We must use fold (rather than foreach) to properly keep `output` alive long enough.
+        .try_fold(output, |mut output, chunk| async move {
+            output.write(&chunk.clone()).await?;
+            Ok(output)
+        })
+        .await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
