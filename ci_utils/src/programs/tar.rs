@@ -116,7 +116,7 @@ impl Flavor {
         } else if text.contains("GNU tar") {
             Ok(Flavor::Gnu)
         } else {
-            bail!("The output of `tar --version` does not contain a recognizable flavor.")
+            bail!("The output of `tar --version` does not contain a recognizable flavor. The version text was: {text}")
         }
     }
 }
