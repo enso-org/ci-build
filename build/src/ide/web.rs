@@ -9,12 +9,11 @@ use anyhow::Context;
 use futures_util::future::try_join;
 use futures_util::future::try_join4;
 use ide_ci::io::download_all;
+use ide_ci::models::config::RepoContext;
 use ide_ci::program::command;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
 use ide_ci::programs::Npm;
-
-use std::io::Cursor;
 use std::process::Stdio;
 use tempfile::TempDir;
 use tokio::process::Child;
@@ -32,7 +31,9 @@ pub const IDE_ASSETS_URL: &str =
 
 pub const ARCHIVED_ASSET_FILE: &str = "ide-assets-main/content/assets/";
 
-const GOOGLE_FONTS_URL: &str = "https://api.github.com/repos/google/fonts/contents/ofl";
+pub const GOOGLE_FONTS_REPOSITORY: &str = "google/fonts";
+
+pub const GOOGLE_FONT_DIRECTORY: &str = "ofl";
 
 pub mod env {
     use super::*;
@@ -74,13 +75,13 @@ impl command::FallibleManipulator for IconsArtifacts {
         Ok(())
     }
 }
-
-/// A file description of a GitHub repository.
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct GithubFile {
-    pub name:         String,
-    pub download_url: String,
-}
+//
+// /// A file description of a GitHub repository.
+// #[derive(Debug, Clone, serde::Deserialize)]
+// pub struct GithubFile {
+//     pub name:         String,
+//     pub download_url: String,
+// }
 
 pub async fn download_google_font(
     octocrab: &Octocrab,
@@ -88,30 +89,30 @@ pub async fn download_google_font(
     output_path: impl AsRef<Path>,
 ) -> Result {
     let destination_dir = output_path.as_ref();
-    let url = format!("{}/{}", GOOGLE_FONTS_URL, family);
-    let response = octocrab.client.get(url).send().await?;
-
-    let files: Vec<GithubFile> = response.json().await?;
-    let font_files: Vec<_> = files.into_iter().filter(|f| f.name.ends_with(".ttf")).collect();
-    for file in &font_files {
+    let repo = RepoContext::from_str(GOOGLE_FONTS_REPOSITORY)?;
+    let path = format!("{GOOGLE_FONT_DIRECTORY}/{family}");
+    let files = repo.repos(octocrab).get_content().path(path).send().await?;
+    let ttf_files = files.items.into_iter().filter(|file| file.name.ends_with(".ttf"));
+    for file in ttf_files {
         let destination_file = destination_dir.join(&file.name);
-        remove_old_file(&destination_file);
-        let resp = reqwest::get(&file.download_url).await?;
-        let resp_bytes = resp.bytes().await?;
-        let mut resp_bytes_cursor = Cursor::new(resp_bytes);
-        let mut out = std::fs::File::create(destination_file)?;
-        std::io::copy(&mut resp_bytes_cursor, &mut out)?;
+        let url = file.download_url.context("Missing 'download_url' in the reply.")?;
+        let reply = ide_ci::io::web::client::download(&octocrab.client, url).await?;
+        ide_ci::io::web::stream_to_file(reply, &destination_file).await?;
     }
-
     Ok(())
 }
 
-/// Remove the old file if it exists.
-fn remove_old_file(file: &Path) {
-    let result = std::fs::remove_file(&file);
-    let error = result.err();
-    let fatal_error = error.filter(|err| err.kind() != std::io::ErrorKind::NotFound);
-    assert!(fatal_error.is_none());
+#[tokio::test]
+async fn test_download_fonts() -> Result {
+    setup_logging()?;
+    let octocrab = setup_octocrab().await?;
+
+    let dir = r"C:\Temp\fonts";
+    ide_ci::fs::reset_dir(dir)?;
+    download_google_font(&octocrab, "mplus1", dir).await?;
+
+
+    Ok(())
 }
 
 /// Fill the directory under `output_path` with the assets.
