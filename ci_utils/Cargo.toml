@@ -80,6 +80,7 @@ url = "2.2.2"
 uuid = { version = "1.1.0", features= ["v4", "serde"] }
 walkdir = "2.3.2"
 which = "4.2.2"
+win32-remove-dir-all = "0.1.0"
 wiremock = "0.5.10"
 whoami = "1.2.1"
 zip = "0.6.2"
