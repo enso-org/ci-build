@@ -109,7 +109,7 @@ pub enum OutputPath {
 pub struct Ide {
     pub target_os:   OS,
     pub target_arch: Arch,
-    pub octocrab: Octocrab,
+    pub octocrab:    Octocrab,
 }
 
 impl Ide {

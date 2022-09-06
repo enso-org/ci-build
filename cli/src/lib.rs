@@ -581,7 +581,11 @@ impl Processor {
             version:         self.triple.versions.version.clone(),
         };
         let ide_desktop = self.repo_root.app.ide_desktop.clone();
-        let target = Ide { target_os: self.triple.os, target_arch: self.triple.arch, octocrab: self.inner.octocrab.clone() };
+        let target = Ide {
+            target_os:   self.triple.os,
+            target_arch: self.triple.arch,
+            octocrab:    self.inner.octocrab.clone(),
+        };
         let build_job = target.build(ide_desktop, input, output_path);
         async move {
             let artifacts = build_job.await?;
