@@ -379,7 +379,7 @@ impl Job {
 
     pub fn use_job_outputs(&mut self, job_id: impl Into<String>, job: &Job) {
         let job_id = job_id.into();
-        for (output_name, _) in &job.outputs {
+        for output_name in job.outputs.keys() {
             let reference = format!("${{{{needs.{}.outputs.{}}}}}", job_id, output_name);
             self.env.insert(output_name.into(), reference);
         }
@@ -423,7 +423,7 @@ impl Strategy {
         name: impl Into<String>,
         values: impl IntoIterator<Item: Serialize>,
     ) -> Result<&mut Self> {
-        let values = values.into_iter().map(|v| serde_json::to_value(v)).collect_result()?;
+        let values = values.into_iter().map(serde_json::to_value).collect_result()?;
         self.matrix.insert(name.into(), serde_json::Value::Array(values));
         Ok(self)
     }

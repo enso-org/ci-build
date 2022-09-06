@@ -39,7 +39,7 @@ pub struct BuildInput {
     pub build_info: BoxFuture<'static, Result<BuildInfo>>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Gui;
 
 #[async_trait]
@@ -71,6 +71,7 @@ impl IsTarget for Gui {
     }
 }
 
+#[derive(Debug)]
 pub struct Watcher {
     pub wasm: PerhapsWatched<Wasm>,
     pub web:  crate::project::Watcher<Gui, crate::ide::web::Watcher>,

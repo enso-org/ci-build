@@ -29,7 +29,10 @@ use std::convert::identity;
 pub mod job;
 pub mod step;
 
+#[derive(Clone, Copy, Debug)]
 pub struct DeluxeRunner;
+
+#[derive(Clone, Copy, Debug)]
 pub struct BenchmarkRunner;
 
 pub const PRIMARY_OS: OS = OS::Linux;
@@ -122,6 +125,7 @@ pub fn setup_script_and_steps(command_line: impl AsRef<str>) -> Vec<Step> {
     setup_customized_script_steps(command_line, identity)
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct DraftRelease;
 impl JobArchetype for DraftRelease {
     fn job(os: OS) -> Job {
@@ -151,6 +155,7 @@ impl DraftRelease {
     pub const PREPARE_STEP_ID: &'static str = "prepare";
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct PublishRelease;
 impl JobArchetype for PublishRelease {
     fn job(os: OS) -> Job {
@@ -162,6 +167,7 @@ impl JobArchetype for PublishRelease {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct UploadIde;
 impl JobArchetype for UploadIde {
     fn job(os: OS) -> Job {

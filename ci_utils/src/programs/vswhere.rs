@@ -124,9 +124,9 @@ pub enum Format {
     Xml,
 }
 
-impl Into<OsString> for &Format {
-    fn into(self) -> OsString {
-        match self {
+impl From<&Format> for OsString {
+    fn from(fmt: &Format) -> Self {
+        match fmt {
             Format::Json => "json",
             Format::Text => "text",
             Format::Value => "value",

@@ -40,6 +40,7 @@ pub trait Bundle {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Launcher;
 impl Bundle for Launcher {
     const PREFIX: &'static str = "enso-bundle";
@@ -49,6 +50,7 @@ impl Bundle for Launcher {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct ProjectManager;
 impl Bundle for ProjectManager {
     const PREFIX: &'static str = "project-manager-bundle";

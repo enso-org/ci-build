@@ -175,7 +175,7 @@ impl Default for BuildConfigurationFlags {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ReleaseCommand {
     Upload,
 }
@@ -224,8 +224,7 @@ impl BuiltPackageArtifacts {
 
 impl IntoIterator for BuiltPackageArtifacts {
     type Item = ComponentPaths;
-    type IntoIter =
-        std::iter::Flatten<std::array::IntoIter<std::option::Option<ComponentPaths>, 3_usize>>;
+    type IntoIter = std::iter::Flatten<std::array::IntoIter<Option<ComponentPaths>, 3_usize>>;
 
     fn into_iter(self) -> Self::IntoIter {
         [self.engine, self.launcher, self.project_manager].into_iter().flatten()
@@ -246,8 +245,7 @@ impl BuiltBundleArtifacts {
 
 impl IntoIterator for BuiltBundleArtifacts {
     type Item = ComponentPaths;
-    type IntoIter =
-        std::iter::Flatten<std::array::IntoIter<std::option::Option<ComponentPaths>, 2_usize>>;
+    type IntoIter = std::iter::Flatten<std::array::IntoIter<Option<ComponentPaths>, 2_usize>>;
 
     fn into_iter(self) -> Self::IntoIter {
         [self.launcher, self.project_manager].into_iter().flatten()

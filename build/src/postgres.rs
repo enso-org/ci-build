@@ -132,6 +132,7 @@ pub async fn process_lines_until<R: AsyncRead + Unpin>(
     Ok(reader.into_inner())
 }
 
+#[derive(Debug)]
 pub struct PostgresContainer {
     _docker_run: Child,
     config:      Configuration,
@@ -154,6 +155,7 @@ impl Drop for PostgresContainer {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Postgresql;
 
 impl Postgresql {

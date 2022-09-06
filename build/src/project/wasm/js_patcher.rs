@@ -16,7 +16,7 @@ lazy_static! {
     .unwrap();
 }
 
-
+#[derive(Clone, Debug)]
 pub struct Replacement {
     pattern:     Regex,
     replacement: String,

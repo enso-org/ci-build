@@ -377,8 +377,8 @@ impl Default for Network {
 impl Display for Network {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Network::Bridge => write!(f, "{}", "bridge"),
-            Network::Host => write!(f, "{}", "host"),
+            Network::Bridge => write!(f, "bridge"),
+            Network::Host => write!(f, "host"),
             Network::User(name) => write!(f, "{}", name),
             Network::Container(name_or_id) => write!(f, "container:{}", name_or_id),
         }

@@ -92,7 +92,7 @@ pub struct BuildInput {
     #[derivative(Debug = "ignore")]
     pub gui:             BoxFuture<'static, Result<crate::project::gui::Artifact>>,
     #[derivative(Debug = "ignore")]
-    pub octocrab:        octocrab::Octocrab,
+    pub octocrab:        Octocrab,
 }
 
 #[derive(Clone, Debug)]
@@ -107,7 +107,7 @@ pub enum OutputPath {
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Ide {
     pub target_os:   OS,
     pub target_arch: Arch,

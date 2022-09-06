@@ -6,6 +6,7 @@ use tokio::process::Child;
 
 pub mod env {
     /// Environment variable that stores URL under which spawned httpbin server is available.
+    #[derive(Clone, Copy, Debug)]
     pub struct Url;
     impl ide_ci::env::Variable for Url {
         const NAME: &'static str = "ENSO_HTTP_TEST_HTTPBIN_URL";

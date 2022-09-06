@@ -196,7 +196,7 @@ impl IsTarget for Wasm {
             info!("Building wasm.");
             let temp_dir = tempdir()?;
             let temp_dist = RepoRootDistWasm::new_root(temp_dir.path());
-            let mut command = ide_ci::programs::WasmPack.cmd()?;
+            let mut command = WasmPack.cmd()?;
             command
                 .current_dir(&repo_root)
                 .kill_on_drop(true)

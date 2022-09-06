@@ -11,7 +11,7 @@ pub enum Command {
     Test,
 }
 
-#[derive(Args, Clone, Debug)]
+#[derive(Args, Clone, Copy, Debug)]
 pub struct Target {
     #[clap(subcommand)]
     pub action: Command,

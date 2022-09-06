@@ -85,6 +85,7 @@ pub fn plain_job_customized(
     Job { name, runs_on, steps, strategy, ..default() }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct AssertChangelog;
 impl JobArchetype for AssertChangelog {
     fn job(os: OS) -> Job {
@@ -130,6 +131,7 @@ echo "::set-output name=list::'$list'"
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct CancelWorkflow;
 impl JobArchetype for CancelWorkflow {
     fn job(_os: OS) -> Job {
@@ -146,6 +148,7 @@ impl JobArchetype for CancelWorkflow {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Lint;
 impl JobArchetype for Lint {
     fn job(os: OS) -> Job {
@@ -153,6 +156,7 @@ impl JobArchetype for Lint {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct NativeTest;
 impl JobArchetype for NativeTest {
     fn job(os: OS) -> Job {
@@ -160,6 +164,7 @@ impl JobArchetype for NativeTest {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct WasmTest;
 impl JobArchetype for WasmTest {
     fn job(os: OS) -> Job {
@@ -167,6 +172,7 @@ impl JobArchetype for WasmTest {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct IntegrationTest;
 impl JobArchetype for IntegrationTest {
     fn job(os: OS) -> Job {
@@ -178,6 +184,7 @@ impl JobArchetype for IntegrationTest {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct BuildWasm;
 impl JobArchetype for BuildWasm {
     fn job(os: OS) -> Job {
@@ -189,6 +196,7 @@ impl JobArchetype for BuildWasm {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct BuildBackend;
 impl JobArchetype for BuildBackend {
     fn job(os: OS) -> Job {
@@ -196,6 +204,7 @@ impl JobArchetype for BuildBackend {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct UploadBackend;
 impl JobArchetype for UploadBackend {
     fn job(os: OS) -> Job {
@@ -203,6 +212,7 @@ impl JobArchetype for UploadBackend {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct UploadRuntimeToEcr;
 impl JobArchetype for UploadRuntimeToEcr {
     fn job(os: OS) -> Job {
@@ -236,6 +246,7 @@ pub fn expose_os_specific_signing_secret(os: OS, step: Step) -> Step {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct PackageIde;
 impl JobArchetype for PackageIde {
     fn job(os: OS) -> Job {
@@ -248,6 +259,7 @@ impl JobArchetype for PackageIde {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct CiCheckBackend;
 impl JobArchetype for CiCheckBackend {
     fn job(os: OS) -> Job {

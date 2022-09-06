@@ -1,13 +1,5 @@
 use crate::prelude::*;
 
-use derivative::Derivative;
-use ide_ci::actions::artifacts;
-use ide_ci::cache;
-use ide_ci::cache::Cache;
-use ide_ci::ok_ready_boxed;
-use octocrab::models::repos::Asset;
-use tokio::process::Child;
-
 use crate::source::BuildTargetJob;
 use crate::source::CiRunSource;
 use crate::source::ExternalSource;
@@ -18,6 +10,12 @@ use crate::source::ReleaseSource;
 use crate::source::Source;
 use crate::source::WatchTargetJob;
 use crate::source::WithDestination;
+use derivative::Derivative;
+use ide_ci::actions::artifacts;
+use ide_ci::cache;
+use ide_ci::cache::Cache;
+use ide_ci::ok_ready_boxed;
+use octocrab::models::repos::Asset;
 
 pub mod backend;
 pub mod engine;
@@ -270,7 +268,7 @@ pub trait IsTarget: Clone + Debug + Sized + Send + Sync + 'static {
     }
 }
 
-
+#[derive(Debug)]
 pub enum PerhapsWatched<T: IsWatchable> {
     Watched(T::Watcher),
     Static(T::Artifact),
@@ -306,13 +304,14 @@ pub trait ProcessWrapper {
 }
 
 impl ProcessWrapper for tokio::process::Child {
-    fn inner(&mut self) -> &mut Child {
+    fn inner(&mut self) -> &mut tokio::process::Child {
         self
     }
 }
 
 /// Watcher is an ongoing process that keeps updating the artifacts to follow changes to the
 /// target's source.
+#[derive(Debug)]
 pub struct Watcher<Target: IsWatchable, Proc> {
     /// Where the watcher outputs artifacts.
     pub artifact:      Target::Artifact,
@@ -323,7 +322,7 @@ pub struct Watcher<Target: IsWatchable, Proc> {
 }
 
 impl<Target: IsWatchable, Proc: ProcessWrapper> ProcessWrapper for Watcher<Target, Proc> {
-    fn inner(&mut self) -> &mut Child {
+    fn inner(&mut self) -> &mut tokio::process::Child {
         self.watch_process.inner()
     }
 }

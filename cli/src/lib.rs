@@ -6,8 +6,8 @@
 #![warn(unsafe_code)]
 #![warn(missing_copy_implementations)]
 #![warn(missing_debug_implementations)]
-#![warn(missing_docs)]
-#![warn(trivial_casts)]
+// #![warn(missing_docs)]
+// #![warn(trivial_casts)]
 #![warn(trivial_numeric_casts)]
 #![warn(unused_import_braces)]
 #![warn(unused_qualifications)]
@@ -24,19 +24,12 @@ use crate::prelude::*;
 
 use ide_ci::env::Variable;
 
+#[derive(Clone, Copy, Debug)]
 pub struct BuildKind;
 impl Variable for BuildKind {
     const NAME: &'static str = "ENSO_BUILD_KIND";
     type Value = enso_build::version::BuildKind;
 }
-
-// #![feature(explicit_generic_args_with_impl_trait)]
-// #![feature(once_cell)]
-// #![feature(exit_status_error)]
-// #![feature(associated_type_defaults)]
-// #![feature(is_some_with)]
-// #![feature(adt_const_params)]
-
 
 use crate::arg::java_gen;
 use crate::arg::release::Action;
@@ -50,6 +43,7 @@ use anyhow::Context;
 use clap::Parser;
 use derivative::Derivative;
 use enso_build::context::BuildContext;
+use enso_build::engine::context::EnginePackageProvider;
 use enso_build::engine::Benchmarks;
 use enso_build::engine::Tests;
 use enso_build::paths::TargetTriple;
@@ -57,14 +51,11 @@ use enso_build::prettier;
 use enso_build::project;
 use enso_build::project::backend;
 use enso_build::project::backend::Backend;
-use enso_build::project::runtime;
-// use enso_build::project::engine;
-// use enso_build::project::engine::Engine;
-use enso_build::engine::context::EnginePackageProvider;
 use enso_build::project::gui;
 use enso_build::project::gui::Gui;
 use enso_build::project::ide;
 use enso_build::project::ide::Ide;
+use enso_build::project::runtime;
 use enso_build::project::runtime::Runtime;
 use enso_build::project::wasm;
 use enso_build::project::wasm::Wasm;
@@ -261,9 +252,9 @@ impl Processor {
 
     pub fn resolve_build_job<T: Resolvable>(
         &self,
-        job: arg::BuildJob<T>,
+        job: BuildJob<T>,
     ) -> BoxFuture<'static, Result<BuildTargetJob<T>>> {
-        let arg::BuildJob { input, output_path } = job;
+        let BuildJob { input, output_path } = job;
         let input = self.resolve_inputs::<T>(input);
         async move {
             Ok(WithDestination { destination: output_path.output_path, inner: input.await? })
@@ -273,9 +264,9 @@ impl Processor {
 
     pub fn resolve_watch_job<T: WatchResolvable>(
         &self,
-        job: arg::WatchJob<T>,
+        job: WatchJob<T>,
     ) -> BoxFuture<'static, Result<WatchTargetJob<T>>> {
-        let arg::WatchJob { build, watch_input } = job;
+        let WatchJob { build, watch_input } = job;
         let build = self.resolve_build_job(build);
         let watch_input = self.resolve_watch_inputs::<T>(watch_input);
         async move { Ok(WatchTargetJob { watch_input: watch_input?, build: build.await? }) }.boxed()

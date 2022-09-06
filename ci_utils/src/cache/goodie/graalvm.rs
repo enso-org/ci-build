@@ -86,7 +86,7 @@ impl Goodie for GraalVM {
         let package_path = package_path.join(self.root_directory_name());
         let root = match TARGET_OS {
             OS::MacOS => package_path.join_iter(["Contents", "Home"]),
-            _ => package_path.clone(),
+            _ => package_path,
         };
 
         JAVA_HOME.set(&root)?;

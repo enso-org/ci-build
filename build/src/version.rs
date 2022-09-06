@@ -216,7 +216,7 @@ pub async fn deduce_versions(
                 BuildKind::Dev => Versions::local_prerelease()?,
                 BuildKind::Nightly => Versions::nightly_prerelease(octocrab, target_repo?).await?,
             },
-            ..crate::version::base_version(&changelog_path)?
+            ..base_version(&changelog_path)?
         };
         Ok(Versions::new(version))
     }

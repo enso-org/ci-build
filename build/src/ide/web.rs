@@ -2,7 +2,6 @@ use crate::prelude::*;
 
 use crate::project::gui::BuildInfo;
 use crate::project::wasm;
-use crate::project::wasm::Artifact;
 use crate::project::ProcessWrapper;
 
 use anyhow::Context;
@@ -105,6 +104,7 @@ pub async fn download_js_assets(output_path: impl AsRef<Path>) -> Result {
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum Workspaces {
     Icons,
     Content,
@@ -122,7 +122,7 @@ impl AsRef<OsStr> for Workspaces {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Command {
     Build,
     Watch,
@@ -139,7 +139,7 @@ pub struct ContentEnvironment<Assets, Output> {
 impl<Output: AsRef<Path>> ContentEnvironment<TempDir, Output> {
     pub async fn new(
         ide: &IdeDesktop,
-        wasm: impl Future<Output = Result<Artifact>>,
+        wasm: impl Future<Output = Result<wasm::Artifact>>,
         build_info: &BuildInfo,
         output_path: Output,
     ) -> Result<Self> {
@@ -228,7 +228,7 @@ impl IdeDesktop {
         err))]
     pub async fn build_content(
         &self,
-        wasm: impl Future<Output = Result<Artifact>>,
+        wasm: impl Future<Output = Result<wasm::Artifact>>,
         build_info: &BuildInfo,
         output_path: impl AsRef<Path>,
     ) -> Result {
@@ -252,7 +252,7 @@ impl IdeDesktop {
         err)]
     pub async fn watch_content(
         &self,
-        wasm: impl Future<Output = Result<Artifact>>,
+        wasm: impl Future<Output = Result<wasm::Artifact>>,
         build_info: &BuildInfo,
         shell: bool,
     ) -> Result<Watcher> {

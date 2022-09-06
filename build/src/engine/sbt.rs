@@ -24,6 +24,7 @@ pub trait SbtCommandProvider: CommandProvider {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Context {
     pub repo_root:         PathBuf,
     pub system_properties: Vec<sbt::SystemProperty>,

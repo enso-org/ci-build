@@ -41,7 +41,19 @@ pub type FutureEnginePackage = BoxFuture<'static, Result<crate::paths::generated
 
 pub type EnginePackageProvider = dyn FnMut() -> FutureEnginePackage + Send + Sync + 'static;
 
-#[derive(derive_more::Deref, derive_more::DerefMut)]
+/// Pretty print option variant name, i.e. whether it is Some or None.
+///
+/// Does not print the actual value under Some, so this can be used for `T`s that do not implement
+/// `Debug`.
+pub fn format_option_variant<T>(value: &Option<T>, f: &mut Formatter) -> std::fmt::Result {
+    match value {
+        Some(_) => write!(f, "Some(...)"),
+        None => write!(f, "None"),
+    }
+}
+
+#[derive(derive_more::Deref, derive_more::DerefMut, derivative::Derivative)]
+#[derivative(Debug)]
 pub struct RunContext {
     #[deref]
     #[deref_mut]
@@ -50,6 +62,7 @@ pub struct RunContext {
     pub paths:            Paths,
     /// If set, the engine package (used for creating bundles) will be obtained through this
     /// provider rather than built from source along the other Engine components.
+    #[derivative(Debug(format_with = "format_option_variant"))]
     pub external_runtime: Option<Arc<EnginePackageProvider>>,
 }
 
@@ -61,12 +74,7 @@ impl RunContext {
         external_runtime: Option<Arc<EnginePackageProvider>>,
     ) -> Result<Self> {
         let paths = crate::paths::Paths::new_versions(&inner.repo_root, triple.versions.clone())?;
-        let context = crate::engine::context::RunContext {
-            config: config.into(),
-            inner,
-            paths,
-            external_runtime,
-        };
+        let context = RunContext { config: config.into(), inner, paths, external_runtime };
         Ok(context)
     }
 
@@ -81,7 +89,7 @@ impl RunContext {
 
         // Setup SBT
         cache::goodie::sbt::Sbt.install_if_missing(&self.cache).await?;
-        ide_ci::programs::Sbt.require_present().await?;
+        Sbt.require_present().await?;
 
         // Other programs.
         ide_ci::programs::Git::default().require_present().await?;
@@ -130,7 +138,7 @@ impl RunContext {
                 .args(["install", "-y", "--freeze-installed", "flatbuffers=1.12.0"])
                 .run_ok()
                 .await?;
-            ide_ci::programs::Flatc.lookup()?;
+            Flatc.lookup()?;
         }
 
         let _ = self.paths.emit_env_to_actions(); // Ignore error: we might not be run on CI.

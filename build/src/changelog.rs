@@ -41,6 +41,7 @@ use std::ops::Range;
 //     }
 // }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Changelog<'a>(pub &'a str);
 
 impl<'a> Changelog<'a> {
@@ -77,6 +78,7 @@ pub struct Entry {
     pub contents: String,
 }
 
+#[derive(Clone, Debug)]
 pub struct Header<'a> {
     /// Text of the header.
     pub text: &'a str,

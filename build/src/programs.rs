@@ -12,6 +12,7 @@ pub mod project_manager {
         PROJECTS_ROOT, PathBuf
     }
 
+    #[derive(Clone, Copy, Debug)]
     pub struct ProjectManager;
 
     impl Program for ProjectManager {

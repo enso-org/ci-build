@@ -45,7 +45,7 @@ impl Shell for Cmd {
     }
 }
 
-pub fn run_commands<'a, Cmds, Arg>(commands: Cmds) -> anyhow::Result<Command>
+pub fn run_commands<Cmds, Arg>(commands: Cmds) -> anyhow::Result<Command>
 where
     Cmds: IntoIterator<Item: IntoIterator<Item = Arg>>,
     Arg: AsRef<OsStr>, {
