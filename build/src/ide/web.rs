@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-use crate::paths::generated;
 use crate::project::gui::BuildInfo;
 use crate::project::wasm;
 use crate::project::wasm::Artifact;
@@ -8,12 +7,14 @@ use crate::project::ProcessWrapper;
 
 use anyhow::Context;
 use futures_util::future::try_join;
-use futures_util::future::try_join3;
+use futures_util::future::try_join4;
 use ide_ci::io::download_all;
 use ide_ci::program::command;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
 use ide_ci::programs::Npm;
+
+use std::io::Cursor;
 use std::process::Stdio;
 use tempfile::TempDir;
 use tokio::process::Child;
@@ -31,9 +32,11 @@ pub const IDE_ASSETS_URL: &str =
 
 pub const ARCHIVED_ASSET_FILE: &str = "ide-assets-main/content/assets/";
 
+const GOOGLE_FONTS_URL: &str = "https://api.github.com/repos/google/fonts/contents/ofl";
 
 pub mod env {
     use super::*;
+
     use ide_ci::define_env_var;
 
     define_env_var!(ENSO_BUILD_IDE, PathBuf);
@@ -70,6 +73,45 @@ impl command::FallibleManipulator for IconsArtifacts {
         command.set_env(env::ENSO_BUILD_ICONS, &self.0)?;
         Ok(())
     }
+}
+
+/// A file description of a GitHub repository.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct GithubFile {
+    pub name:         String,
+    pub download_url: String,
+}
+
+pub async fn download_google_font(
+    octocrab: &Octocrab,
+    family: &str,
+    output_path: impl AsRef<Path>,
+) -> Result {
+    let destination_dir = output_path.as_ref();
+    let url = format!("{}/{}", GOOGLE_FONTS_URL, family);
+    let response = octocrab.client.get(url).send().await?;
+
+    let files: Vec<GithubFile> = response.json().await?;
+    let font_files: Vec<_> = files.into_iter().filter(|f| f.name.ends_with(".ttf")).collect();
+    for file in &font_files {
+        let destination_file = destination_dir.join(&file.name);
+        remove_old_file(&destination_file);
+        let resp = reqwest::get(&file.download_url).await?;
+        let resp_bytes = resp.bytes().await?;
+        let mut resp_bytes_cursor = Cursor::new(resp_bytes);
+        let mut out = std::fs::File::create(destination_file)?;
+        std::io::copy(&mut resp_bytes_cursor, &mut out)?;
+    }
+
+    Ok(())
+}
+
+/// Remove the old file if it exists.
+fn remove_old_file(file: &Path) {
+    let result = std::fs::remove_file(&file);
+    let error = result.err();
+    let fatal_error = error.filter(|err| err.kind() != std::io::ErrorKind::NotFound);
+    assert!(fatal_error.is_none());
 }
 
 /// Fill the directory under `output_path` with the assets.
@@ -123,7 +165,9 @@ impl<Output: AsRef<Path>> ContentEnvironment<TempDir, Output> {
         let installation = ide.install();
         let asset_dir = TempDir::new()?;
         let assets_download = download_js_assets(&asset_dir);
-        let (wasm, _, _) = try_join3(wasm, installation, assets_download).await?;
+        let fonts_download = download_google_font(&ide.octocrab, "mplus1", &asset_dir);
+        let (wasm, _, _, _) =
+            try_join4(wasm, installation, assets_download, fonts_download).await?;
         ide.write_build_info(&build_info)?;
         Ok(ContentEnvironment { asset_dir, wasm, output_path })
     }
@@ -160,11 +204,12 @@ pub fn target_flag(os: OS) -> Result<&'static str> {
 #[derive(Clone, Debug)]
 pub struct IdeDesktop {
     pub package_dir: PathBuf,
+    pub octocrab:    Octocrab,
 }
 
 impl IdeDesktop {
-    pub fn new(package_dir: impl Into<PathBuf>) -> Self {
-        Self { package_dir: package_dir.into() }
+    pub fn new(package_dir: impl Into<PathBuf>, octocrab: Octocrab) -> Self {
+        Self { package_dir: package_dir.into(), octocrab }
     }
 
     pub fn npm(&self) -> Result<NpmCommand> {
@@ -221,7 +266,7 @@ impl IdeDesktop {
     }
 
 
-    #[tracing::instrument(name="Setting up GUI Content watcher.", 
+    #[tracing::instrument(name="Setting up GUI Content watcher.",
         fields(wasm = tracing::field::Empty),
         err)]
     pub async fn watch_content(
@@ -314,12 +359,6 @@ impl IdeDesktop {
             .await?;
 
         Ok(())
-    }
-}
-
-impl From<&generated::RepoRoot> for IdeDesktop {
-    fn from(value: &generated::RepoRoot) -> Self {
-        Self { package_dir: value.app.ide_desktop.to_path_buf() }
     }
 }
 

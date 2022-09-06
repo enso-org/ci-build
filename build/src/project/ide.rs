@@ -105,10 +105,11 @@ pub enum OutputPath {
 }
 
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Ide {
     pub target_os:   OS,
     pub target_arch: Arch,
+    pub octocrab: Octocrab,
 }
 
 impl Ide {
@@ -119,7 +120,7 @@ impl Ide {
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Artifact>> {
         let BuildInput { version, project_manager, gui } = input;
-        let ide_desktop = crate::ide::web::IdeDesktop::new(&ide_desktop);
+        let ide_desktop = crate::ide::web::IdeDesktop::new(&ide_desktop, self.octocrab.clone());
         let target_os = self.target_os;
         let target_arch = self.target_arch;
         async move {

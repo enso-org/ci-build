@@ -62,7 +62,7 @@ impl IsTarget for Gui {
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let WithDestination { inner, destination } = job;
         async move {
-            let ide = IdeDesktop::new(&context.repo_root.app.ide_desktop);
+            let ide = IdeDesktop::new(&context.repo_root.app.ide_desktop, context.octocrab.clone());
             let wasm = Wasm.get(context, inner.wasm);
             ide.build_content(wasm, &inner.build_info.await?, &destination).await?;
             Ok(Artifact::new(destination))
@@ -117,7 +117,7 @@ impl IsWatchable for Gui {
         let WatchTargetJob { watch_input, build: WithDestination { inner, destination } } = job;
         let BuildInput { build_info, wasm } = inner;
         let perhaps_watched_wasm = perhaps_watch(Wasm, context.clone(), wasm, watch_input.wasm);
-        let ide = IdeDesktop::new(&context.repo_root.app.ide_desktop);
+        let ide = IdeDesktop::new(&context.repo_root.app.ide_desktop, context.octocrab.clone());
         async move {
             let perhaps_watched_wasm = perhaps_watched_wasm.await?;
             let wasm_artifacts = ok_ready_boxed(perhaps_watched_wasm.as_ref().clone());
