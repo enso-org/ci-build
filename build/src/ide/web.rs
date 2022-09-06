@@ -75,13 +75,6 @@ impl command::FallibleManipulator for IconsArtifacts {
         Ok(())
     }
 }
-//
-// /// A file description of a GitHub repository.
-// #[derive(Debug, Clone, serde::Deserialize)]
-// pub struct GithubFile {
-//     pub name:         String,
-//     pub download_url: String,
-// }
 
 pub async fn download_google_font(
     octocrab: &Octocrab,
@@ -99,19 +92,6 @@ pub async fn download_google_font(
         let reply = ide_ci::io::web::client::download(&octocrab.client, url).await?;
         ide_ci::io::web::stream_to_file(reply, &destination_file).await?;
     }
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_download_fonts() -> Result {
-    setup_logging()?;
-    let octocrab = setup_octocrab().await?;
-
-    let dir = r"C:\Temp\fonts";
-    ide_ci::fs::reset_dir(dir)?;
-    download_google_font(&octocrab, "mplus1", dir).await?;
-
-
     Ok(())
 }
 
