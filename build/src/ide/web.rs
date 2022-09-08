@@ -13,8 +13,8 @@ use ide_ci::program::command;
 use ide_ci::program::EMPTY_ARGS;
 use ide_ci::programs::node::NpmCommand;
 use ide_ci::programs::Npm;
-use std::process::Stdio;
 use octocrab::models::repos::Content;
+use std::process::Stdio;
 use tempfile::TempDir;
 use tokio::process::Child;
 use tracing::Span;
@@ -85,7 +85,8 @@ pub async fn download_google_font(
     let repo = RepoContext::from_str(GOOGLE_FONTS_REPOSITORY)?;
     let path = format!("{GOOGLE_FONT_DIRECTORY}/{family}");
     let files = repo.repos(octocrab).get_content().path(path).send().await?;
-    let ttf_files = files.items.into_iter().filter(|file| file.name.ends_with(".ttf")).collect_vec();
+    let ttf_files =
+        files.items.into_iter().filter(|file| file.name.ends_with(".ttf")).collect_vec();
     for file in &ttf_files {
         let destination_file = destination_dir.join(&file.name);
         let url = file.download_url.as_ref().context("Missing 'download_url' in the reply.")?;
