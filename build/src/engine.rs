@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use std::collections::BTreeSet;
 
+use crate::paths::generated;
 use crate::paths::ComponentPaths;
 use crate::paths::Paths;
 
@@ -12,6 +13,8 @@ pub mod context;
 pub mod env;
 pub mod sbt;
 
+use crate::get_graal_version;
+use crate::get_java_major_version;
 pub use context::RunContext;
 
 const FLATC_VERSION: Version = Version::new(1, 12, 0);
@@ -297,3 +300,18 @@ pub async fn package_component(paths: &ComponentPaths) -> Result<PathBuf> {
 }
 
 //////////////////////////////////
+
+
+pub async fn deduce_graal(
+    client: Octocrab,
+    build_sbt: &generated::RepoRootBuildSbt,
+) -> Result<ide_ci::cache::goodie::graalvm::GraalVM> {
+    let build_sbt_content = ide_ci::fs::tokio::read_to_string(build_sbt).await?;
+    Ok(ide_ci::cache::goodie::graalvm::GraalVM {
+        client,
+        graal_version: get_graal_version(&build_sbt_content)?,
+        java_version: get_java_major_version(&build_sbt_content)?,
+        os: TARGET_OS,
+        arch: TARGET_ARCH,
+    })
+}

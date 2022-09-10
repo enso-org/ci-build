@@ -62,7 +62,7 @@ impl IsTarget for Gui {
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let WithDestination { inner, destination } = job;
         async move {
-            let ide = IdeDesktop::new(&context.repo_root.app.ide_desktop, context.octocrab.clone());
+            let ide = ide_desktop_from_context(&context);
             let wasm = Wasm.get(context, inner.wasm);
             ide.build_content(wasm, &inner.build_info.await?, &destination).await?;
             Ok(Artifact::new(destination))
@@ -118,7 +118,7 @@ impl IsWatchable for Gui {
         let WatchTargetJob { watch_input, build: WithDestination { inner, destination } } = job;
         let BuildInput { build_info, wasm } = inner;
         let perhaps_watched_wasm = perhaps_watch(Wasm, context.clone(), wasm, watch_input.wasm);
-        let ide = IdeDesktop::new(&context.repo_root.app.ide_desktop, context.octocrab.clone());
+        let ide = ide_desktop_from_context(&context);
         async move {
             let perhaps_watched_wasm = perhaps_watched_wasm.await?;
             let wasm_artifacts = ok_ready_boxed(perhaps_watched_wasm.as_ref().clone());
@@ -166,4 +166,8 @@ pub struct BuildInfo {
     #[derivative(Debug(format_with = "std::fmt::Display::fmt"))]
     pub engine_version: Version,
     pub name:           String,
+}
+
+pub fn ide_desktop_from_context(context: &Context) -> IdeDesktop {
+    IdeDesktop::new(&context.repo_root, context.octocrab.clone(), context.cache.clone())
 }

@@ -4,6 +4,8 @@ use crate::project::gui::BuildInfo;
 use crate::project::wasm;
 use crate::project::ProcessWrapper;
 
+use crate::ide::web::env::CSC_KEY_PASSWORD;
+use crate::paths::generated;
 use anyhow::Context;
 use futures_util::future::try_join;
 use futures_util::future::try_join4;
@@ -54,6 +56,10 @@ pub mod env {
     // Variables introduced by the Electron Builder itself.
     // See: https://www.electron.build/code-signing
 
+    define_env_var! {
+        /// The password to decrypt the certificate given in CSC_LINK.
+        CSC_KEY_PASSWORD, String
+    }
     define_env_var! {
         /// The HTTPS link (or base64-encoded data, or file:// link, or local path) to certificate
         /// (*.p12 or *.pfx file). Shorthand ~/ is supported (home directory).
@@ -184,13 +190,24 @@ pub fn target_flag(os: OS) -> Result<&'static str> {
 
 #[derive(Clone, Debug)]
 pub struct IdeDesktop {
-    pub package_dir: PathBuf,
+    pub build_sbt:   generated::RepoRootBuildSbt,
+    pub package_dir: generated::RepoRootAppIdeDesktop,
     pub octocrab:    Octocrab,
+    pub cache:       ide_ci::cache::Cache,
 }
 
 impl IdeDesktop {
-    pub fn new(package_dir: impl Into<PathBuf>, octocrab: Octocrab) -> Self {
-        Self { package_dir: package_dir.into(), octocrab }
+    pub fn new(
+        repo_root: &generated::RepoRoot,
+        octocrab: Octocrab,
+        cache: ide_ci::cache::Cache,
+    ) -> Self {
+        Self {
+            build_sbt: repo_root.build_sbt.clone(),
+            package_dir: repo_root.app.ide_desktop.clone(),
+            octocrab,
+            cache,
+        }
     }
 
     pub fn npm(&self) -> Result<NpmCommand> {
@@ -294,6 +311,14 @@ impl IdeDesktop {
         output_path: impl AsRef<Path>,
         target_os: OS,
     ) -> Result {
+        if TARGET_OS == OS::MacOS && CSC_KEY_PASSWORD.is_set() {
+            // This means that we will be doing code signing on MacOS. This requires JDK environment
+            // to be set up.
+            let graalvm =
+                crate::engine::deduce_graal(self.octocrab.clone(), &self.build_sbt).await?;
+            graalvm.install_if_missing(&self.cache).await?;
+        }
+
         self.npm()?.install().run_ok().await?;
 
         let engine_version_to_use = project_manager.engine_versions.iter().max();

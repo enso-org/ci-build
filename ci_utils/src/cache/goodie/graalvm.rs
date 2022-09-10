@@ -22,7 +22,6 @@ crate::define_env_var! {
     GRAALVM_HOME, PathBuf
 }
 
-//std::env::set_var("GRAALVM_HOME", &root);
 pub fn graal_version_from_version_string(version_string: &str) -> Result<Version> {
     let line = version_string.lines().find(|line| line.contains("GraalVM")).context(
         "There is a Java environment available but it is not recognizable as GraalVM one.",

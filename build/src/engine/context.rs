@@ -15,8 +15,6 @@ use crate::engine::ReleaseCommand;
 use crate::engine::ReleaseOperation;
 use crate::engine::FLATC_VERSION;
 use crate::engine::PARALLEL_ENSO_TESTS;
-use crate::get_graal_version;
-use crate::get_java_major_version;
 use crate::paths::cache_directory;
 use crate::paths::Paths;
 use crate::paths::TargetTriple;
@@ -29,7 +27,6 @@ use crate::enso::IrCaches;
 
 use crate::engine::sbt::SbtCommandProvider;
 use ide_ci::cache;
-use ide_ci::cache::goodie::graalvm;
 use ide_ci::platform::DEFAULT_SHELL;
 use ide_ci::programs::graal;
 use ide_ci::programs::sbt;
@@ -160,14 +157,8 @@ impl RunContext {
 
 
         // Setup GraalVM
-        let build_sbt_content = ide_ci::fs::read_to_string(self.paths.build_sbt())?;
-        let graalvm = graalvm::GraalVM {
-            client:        self.octocrab.clone(),
-            graal_version: get_graal_version(&build_sbt_content)?,
-            java_version:  get_java_major_version(&build_sbt_content)?,
-            os:            TARGET_OS,
-            arch:          TARGET_ARCH,
-        };
+        let graalvm =
+            crate::engine::deduce_graal(self.octocrab.clone(), &self.repo_root.build_sbt).await?;
         graalvm.install_if_missing(&self.cache).await?;
         graal::Gu.require_present().await?;
 

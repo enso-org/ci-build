@@ -53,3 +53,25 @@ pub trait GoodieExt: Goodie {
 }
 
 impl<T: Goodie> GoodieExt for T {}
+//
+// /// Whoever owns a token, can assume that the Goodie is available.
+// #[derive(Clone, Debug, Display)]
+// pub struct Token<G>(G);
+//
+// #[derive(Clone, Debug, Display)]
+// pub struct PotentialFutureGoodie<G>(Box<dyn FnOnce() -> BoxFuture<'static, Result<Token<G>>>>);
+//
+// impl<G> PotentialFutureGoodie<G> {
+//     pub fn new<F, Fut>(f: F) -> Self
+//     where
+//         F: FnOnce() -> Fut + 'static,
+//         Fut: Future<Output = Result<Token<G>>> + Send + 'static, {
+//         Self(Box::new(move || f().boxed()))
+//     }
+// }
+//
+// // pub type GoodieGenerator<G: Goodie> =
+// //     dyn FnOnce(Cache, G) -> BoxFuture<'static, Result<Token<G>>> + Send + Sync + 'static;
+// //
+// // pub type PotentialFutureGoodie<G: Goodie> =
+// //     dyn FnOnce(Cache) -> BoxFuture<'static, Result<Token<G>>> + Send + Sync + 'static;

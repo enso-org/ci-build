@@ -46,3 +46,8 @@ pub async fn read<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
     file.read_to_end(&mut contents).await?;
     Ok(contents)
 }
+
+#[context("Failed to read the file: {}", path.as_ref().display())]
+pub async fn read_to_string(path: impl AsRef<Path>) -> Result<String> {
+    tokio::fs::read_to_string(&path).await.anyhow_err()
+}

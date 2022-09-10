@@ -65,6 +65,7 @@
         docker-entrypoint.sh:
         Dockerfile:
     simple-library-server/:
+  build.sbt:
   run:
   CHANGELOG.md:
 

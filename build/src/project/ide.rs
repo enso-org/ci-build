@@ -1,6 +1,7 @@
 use crate::prelude::*;
 
-use futures_util::future::try_join;
+use crate::project::gui::ide_desktop_from_context;
+use crate::project::Context;
 use ide_ci::actions::artifacts::upload_compressed_directory;
 use ide_ci::actions::artifacts::upload_single_file;
 use ide_ci::actions::workflow::is_in_env;
@@ -91,8 +92,6 @@ pub struct BuildInput {
     pub project_manager: BoxFuture<'static, Result<crate::project::backend::Artifact>>,
     #[derivative(Debug = "ignore")]
     pub gui:             BoxFuture<'static, Result<crate::project::gui::Artifact>>,
-    #[derivative(Debug = "ignore")]
-    pub octocrab:        Octocrab,
 }
 
 #[derive(Clone, Debug)]
@@ -116,16 +115,16 @@ pub struct Ide {
 impl Ide {
     pub fn build(
         &self,
-        ide_desktop: crate::paths::generated::RepoRootAppIdeDesktop,
+        context: &Context,
         input: BuildInput,
         output_path: impl AsRef<Path> + Send + Sync + 'static,
     ) -> BoxFuture<'static, Result<Artifact>> {
-        let BuildInput { version, project_manager, gui, octocrab } = input;
-        let ide_desktop = crate::ide::web::IdeDesktop::new(&ide_desktop, octocrab);
+        let BuildInput { version, project_manager, gui } = input;
+        let ide_desktop = ide_desktop_from_context(context);
         let target_os = self.target_os;
         let target_arch = self.target_arch;
         async move {
-            let (gui, project_manager) = try_join(gui, project_manager).await?;
+            let (gui, project_manager) = try_join!(gui, project_manager)?;
             ide_desktop.dist(&gui, &project_manager, &output_path, target_os).await?;
             Ok(Artifact::new(target_os, target_arch, &version, output_path))
         }
