@@ -4,6 +4,7 @@ use crate::engine::ComponentPathExt;
 use crate::paths::ComponentPaths;
 use crate::paths::Paths;
 use anyhow::Context;
+use ide_ci::programs::java::JAVA_HOME;
 
 #[async_trait]
 pub trait Bundle {
@@ -60,9 +61,21 @@ impl Bundle for ProjectManager {
     }
 }
 
-#[context("Placing a GraalVM package under {}", target_directory.as_ref().display())]
+// #[context("Placing a GraalVM package under {}", target_directory.as_ref().display())]
 pub async fn place_graal_under(target_directory: impl AsRef<Path>) -> Result {
-    let graal_path = PathBuf::from(ide_ci::env::expect_var_os("JAVA_HOME")?);
+    let graal_path = {
+        let java_home = JAVA_HOME.get()?;
+        if TARGET_OS == OS::MacOS {
+            // On macOS we need to drop trailing `/Contents/Home` from the path.
+            java_home
+                .parent()
+                .and_then(|p| p.parent())
+                .context(format!("Invalid Java home for macOS: {}", java_home.display()))?
+                .to_path_buf()
+        } else {
+            java_home
+        }
+    };
     let graal_dirname = graal_path
         .file_name()
         .context(anyhow!("Invalid Graal Path deduced from JAVA_HOME: {}", graal_path.display()))?;

@@ -19,6 +19,9 @@ const CE_BUILDS_REPOSITORY: &str = "graalvm-ce-builds";
 
 crate::define_env_var! {
     /// Should be the same as `JAVA_HOME` for Graal-based Java distribution.
+    ///
+    /// Note that this is not the root directory of the GraalVM installation (at least on macOS),
+    /// but the directory where the `bin` directory is located.
     GRAALVM_HOME, PathBuf
 }
 
