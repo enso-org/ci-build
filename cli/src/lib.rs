@@ -157,7 +157,7 @@ impl Processor {
                 async move { Ok(Source::BuildLocally(resolved.await?)) }.boxed()
             }
             arg::SourceKind::Local =>
-                ready(Ok(Source::External(ExternalSource::LocalFile(source.path.clone())))).boxed(),
+                ready(Ok(Source::External(ExternalSource::LocalFile(source.path)))).boxed(),
             arg::SourceKind::CiRun => {
                 let run_id = source.run_id.context(format!(
                     "Missing run ID, please provide {} argument.",
@@ -174,7 +174,7 @@ impl Processor {
             }
             arg::SourceKind::CurrentCiRun =>
                 ready(Ok(Source::External(ExternalSource::OngoingCiRun(OngoingCiRunSource {
-                    artifact_name: resolve_artifact_name(source.artifact_name.clone(), &target),
+                    artifact_name: resolve_artifact_name(source.artifact_name, &target),
                 }))))
                 .boxed(),
             arg::SourceKind::Release => {
@@ -563,7 +563,7 @@ impl Resolvable for Wasm {
             crate_path,
             wasm_opt_options,
             extra_cargo_options: cargo_options,
-            profile: wasm_profile.into(),
+            profile: wasm_profile,
             profiling_level: profiling_level.map(into),
             wasm_size_limit: wasm_size_limit.filter(|size_limit| size_limit.get_bytes() > 0),
         })
@@ -725,10 +725,10 @@ pub async fn main_internal(config: enso_build::config::Config) -> Result {
         }
         Target::Release(release) => match release.action {
             Action::CreateDraft => {
-                enso_build::release::create_release(&*ctx).await?;
+                enso_build::release::create_release(&ctx).await?;
             }
             Action::Publish => {
-                enso_build::release::publish_release(&*ctx).await?;
+                enso_build::release::publish_release(&ctx).await?;
             }
         },
         Target::CiGen => ci_gen::generate(

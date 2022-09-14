@@ -51,7 +51,7 @@ pub async fn download_project_templates(client: reqwest::Client, enso_root: Path
     Ok(())
 }
 
-#[derive(Clone, Copy, Debug, Display, PartialEq)]
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq)]
 pub enum BuildMode {
     Development,
     NightlyRelease,
@@ -154,18 +154,18 @@ pub const NIGHTLY: BuildConfigurationFlags = BuildConfigurationFlags {
     build_project_manager_bundle: false,
 };
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ReleaseCommand {
     Upload,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ReleaseOperation {
     pub command: ReleaseCommand,
     pub repo:    RepoContext,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RunOperation {
     pub command_pieces: Vec<OsString>,
 }
@@ -173,25 +173,25 @@ pub struct RunOperation {
 impl RunOperation {}
 
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BuildOperation {}
 
 impl BuildOperation {}
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Operation {
     Release(ReleaseOperation),
     Run(RunOperation),
     Build(BuildOperation),
 }
 
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct BuiltArtifacts {
     pub packages: BuiltPackageArtifacts,
     pub bundles:  BuiltBundleArtifacts,
 }
 
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct BuiltPackageArtifacts {
     pub engine:          Option<ComponentPaths>,
     pub launcher:        Option<ComponentPaths>,
@@ -200,10 +200,7 @@ pub struct BuiltPackageArtifacts {
 
 impl BuiltPackageArtifacts {
     pub fn iter(&self) -> impl IntoIterator<Item = &ComponentPaths> {
-        [&self.engine, &self.launcher, &self.project_manager]
-            .into_iter()
-            .map(|b| b.iter())
-            .flatten()
+        [&self.engine, &self.launcher, &self.project_manager].into_iter().flat_map(|b| b.iter())
     }
 }
 
@@ -217,7 +214,7 @@ impl IntoIterator for BuiltPackageArtifacts {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct BuiltBundleArtifacts {
     pub launcher:        Option<ComponentPaths>,
     pub project_manager: Option<ComponentPaths>,
@@ -225,7 +222,7 @@ pub struct BuiltBundleArtifacts {
 
 impl BuiltBundleArtifacts {
     pub fn iter(&self) -> impl IntoIterator<Item = &ComponentPaths> {
-        [&self.project_manager, &self.launcher].into_iter().map(|b| b.iter()).flatten()
+        [&self.project_manager, &self.launcher].into_iter().flat_map(|b| b.iter())
     }
 }
 

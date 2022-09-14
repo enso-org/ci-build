@@ -48,7 +48,7 @@ pub const WASM_ARTIFACT_NAME: &str = "gui_wasm";
 
 pub const DEFAULT_TARGET_CRATE: &str = "app/gui";
 
-#[derive(Clone, Copy, Debug, Default, strum::Display, strum::EnumString, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, strum::Display, strum::EnumString, PartialEq, Eq)]
 #[strum(serialize_all = "kebab-case")]
 pub enum ProfilingLevel {
     #[default]
@@ -58,7 +58,7 @@ pub enum ProfilingLevel {
     Debug,
 }
 
-#[derive(clap::ArgEnum, Clone, Copy, Debug, PartialEq, strum::Display, strum::AsRefStr)]
+#[derive(clap::ArgEnum, Clone, Copy, Debug, PartialEq, Eq, strum::Display, strum::AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Profile {
     Dev,
@@ -149,7 +149,7 @@ impl BuildInput {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Wasm;
 
 #[async_trait]

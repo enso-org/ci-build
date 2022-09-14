@@ -238,6 +238,7 @@ pub async fn compressed_size(path: impl AsRef<Path>) -> Result<byte_unit::Byte> 
     crate::io::read_length(encoded_stream).await.map(into)
 }
 
+#[allow(clippy::if_same_then_else)]
 pub fn check_if_identical(source: impl AsRef<Path>, target: impl AsRef<Path>) -> bool {
     (|| -> Result<bool> {
         if crate::fs::metadata(&source)?.len() == crate::fs::metadata(&target)?.len() {

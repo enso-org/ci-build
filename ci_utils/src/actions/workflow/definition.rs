@@ -250,7 +250,7 @@ impl Job {
 
     pub fn use_job_outputs(&mut self, job_id: impl Into<String>, job: &Job) {
         let job_id = job_id.into();
-        for (output_name, _) in &job.outputs {
+        for output_name in job.outputs.keys() {
             let reference = format!("${{{{needs.{}.outputs.{}}}}}", job_id, output_name);
             self.env.insert(output_name.into(), reference);
         }

@@ -70,7 +70,7 @@ pub async fn download_and_extract(
     let buffer = std::io::Cursor::new(contents);
 
     debug!("Extracting {} to {}", filename.display(), output_dir.as_ref().display());
-    let format = Format::from_filename(&PathBuf::from(filename))?;
+    let format = Format::from_filename(filename)?;
     format.extract(buffer, output_dir.as_ref()).with_context(|| {
         format!("Failed to extract data from {} to {}.", url_text, output_dir.as_ref().display(),)
     })
@@ -98,7 +98,7 @@ pub async fn download_relative(
         .map_err(anyhow::Error::from)
         // We must use fold (rather than foreach) to properly keep `output` alive long enough.
         .try_fold(output, |mut output, chunk| async move {
-            output.write(&chunk.clone()).await?;
+            let _amount = output.write(&chunk.clone()).await?;
             Ok(output)
         })
         .await?;

@@ -26,7 +26,7 @@ impl AsRef<Path> for Artifact {
 
 impl IsArtifact for Artifact {}
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProjectManager;
 
 impl IsTarget for ProjectManager {
@@ -47,7 +47,7 @@ impl IsTarget for ProjectManager {
         job: BuildTargetJob<Self>,
     ) -> BoxFuture<'static, Result<Self::Artifact>> {
         let WithDestination { inner, destination } = job;
-        let this = self.clone();
+        let this = *self;
         async move {
             let paths = crate::paths::Paths::new_versions(&inner.repo_root, inner.versions)?;
             let context = crate::engine::context::RunContext {

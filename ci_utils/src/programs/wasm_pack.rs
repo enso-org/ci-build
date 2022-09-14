@@ -9,7 +9,7 @@ use crate::programs::Cargo;
 /// What kind of Cargo build profile should be used.
 ///
 /// Typically affects optimization, debug symbol generation and so.
-#[derive(Clone, Copy, Debug, PartialEq, Display, strum::AsRefStr)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Display, strum::AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Profile {
     Dev,
@@ -19,7 +19,7 @@ pub enum Profile {
 
 impl AsRef<OsStr> for Profile {
     fn as_ref(&self) -> &OsStr {
-        &OsStr::new(match self {
+        OsStr::new(match self {
             Profile::Dev => "--dev",
             Profile::Release => "--release",
             Profile::Profile => "--profile",
@@ -37,7 +37,7 @@ pub enum Target {
 
 impl AsRef<OsStr> for Target {
     fn as_ref(&self) -> &OsStr {
-        &OsStr::new(match self {
+        OsStr::new(match self {
             Target::Bundler => "bundler",
             Target::NodeJs => "nodejs",
             Target::Web => "web",
@@ -46,7 +46,7 @@ impl AsRef<OsStr> for Target {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, strum::AsRefStr)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, strum::AsRefStr)]
 #[strum(serialize_all = "kebab-case")]
 pub enum TestFlags {
     Chrome,

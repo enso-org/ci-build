@@ -8,7 +8,7 @@ pub fn url(target: &TargetTriple) -> Result<Url> {
         "https://github.com/enso-org/{repo}/releases/download/{tag}/{asset}.{ext}",
         repo = "ci-build",
         tag = target.versions.tag(),
-        asset = format!("project-manager-bundle-{target}"),
+        asset = format_args!("project-manager-bundle-{target}"),
         ext = ARCHIVE_EXTENSION,
     );
     Url::parse(&url_text).anyhow_err()

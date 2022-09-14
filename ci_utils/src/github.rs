@@ -121,7 +121,7 @@ pub trait RepoPointer: Display {
             .await
             .context(format!("Failed to list artifacts of run {run_id} in {self}."))?
             .value
-            .context(format!("Failed to find any artifacts."))?;
+            .context("Failed to find any artifacts.".to_string())?;
 
         artifacts
             .into_iter()

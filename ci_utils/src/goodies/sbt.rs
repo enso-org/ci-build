@@ -29,7 +29,7 @@ impl Goodie for Sbt {
 
     async fn install(&self, database: &GoodieDatabase) -> Result<Self::Instance> {
         let url = "https://github.com/sbt/sbt/releases/download/v1.5.5/sbt-1.5.5.tgz";
-        crate::io::download_and_extract(url.clone(), &database.root_directory).await?;
+        crate::io::download_and_extract(url, &database.root_directory).await?;
         self.lookup(database).await
     }
 }

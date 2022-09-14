@@ -42,7 +42,7 @@ pub struct BuildInput {
     pub build_info: BoxFuture<'static, Result<BuildInfo>>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Gui;
 
 #[async_trait]
@@ -119,7 +119,7 @@ impl IsWatchable for Gui {
     ) -> BoxFuture<'static, Result<Self::Watcher>> {
         let WatchTargetJob { watch_input, build: WithDestination { inner, destination } } = job;
         let BuildInput { build_info, repo_root, wasm } = inner;
-        let perhaps_watched_wasm = perhaps_watch(Wasm, context.clone(), wasm, watch_input.wasm);
+        let perhaps_watched_wasm = perhaps_watch(Wasm, context, wasm, watch_input.wasm);
         let ide = IdeDesktop::new(&repo_root.app.ide_desktop);
         async move {
             let perhaps_watched_wasm = perhaps_watched_wasm.await?;

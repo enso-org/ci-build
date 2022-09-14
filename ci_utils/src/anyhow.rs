@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use anyhow::Error;
 
+#[allow(clippy::type_complexity)]
 pub trait ResultExt<T, E> {
     fn anyhow_err(self) -> Result<T>;
 

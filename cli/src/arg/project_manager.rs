@@ -8,7 +8,7 @@ use clap::Args;
 
 source_args_hlp!(ProjectManager, "project-manager", BuildInput);
 
-#[derive(Args, Clone, Debug, PartialEq)]
+#[derive(Args, Clone, Debug, PartialEq, Eq)]
 pub struct BuildInput {}
 
 #[derive(Args, Clone, Debug)]

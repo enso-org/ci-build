@@ -5,7 +5,7 @@ use clap::Subcommand;
 use enso_build::prelude::*;
 use enso_build::project::backend::Backend;
 
-#[derive(Args, Clone, Debug, PartialEq)]
+#[derive(Args, Clone, Debug, PartialEq, Eq)]
 pub struct BuildInput {
     // #[clap(flatten)]
     // pub project_manager: Source<project::project_manager::ProjectManager>,

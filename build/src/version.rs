@@ -46,7 +46,7 @@ pub async fn latest_nightly_release(octocrab: &Octocrab, repo: &RepoContext) -> 
 }
 
 
-#[derive(Clone, Derivative, Serialize, Deserialize, Shrinkwrap, PartialEq)]
+#[derive(Clone, Derivative, Serialize, Deserialize, Shrinkwrap, PartialEq, Eq)]
 #[derivative(Debug)]
 pub struct Versions {
     #[shrinkwrap(main_field)]
@@ -246,7 +246,7 @@ mod tests {
     }
 }
 
-#[derive(clap::ArgEnum, Clone, Copy, PartialEq, Debug, EnumString, EnumIter, strum::Display)]
+#[derive(clap::ArgEnum, Clone, Copy, PartialEq, Eq, Debug, EnumString, EnumIter, strum::Display)]
 #[strum(serialize_all = "kebab-case")]
 pub enum BuildKind {
     Dev,

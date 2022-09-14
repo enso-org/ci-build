@@ -7,7 +7,7 @@ use enso_build::project::engine::Engine;
 
 source_args_hlp!(Engine, "engine", BuildInput);
 
-#[derive(Args, Clone, Debug, PartialEq)]
+#[derive(Args, Clone, Debug, PartialEq, Eq)]
 pub struct BuildInput {}
 
 #[derive(Args, Clone, Debug)]

@@ -79,7 +79,7 @@ impl OrganizationPointer for OrganizationContext {
 }
 
 /// Data denoting a specific GitHub repository.
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RepoContext {
     /// Owner - an organization's or user's name.
     pub owner: String,

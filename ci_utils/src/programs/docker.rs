@@ -150,22 +150,22 @@ impl Docker {
         driver: &NetworkDriver,
         name: impl AsRef<str>,
     ) -> Result<String> {
-        Ok(Docker
+        Docker
             .cmd()?
             .args(["network", "create", "--driver", driver.as_ref(), name.as_ref()])
             .output_ok()
             .await?
-            .single_line_stdout()?)
+            .single_line_stdout()
     }
 
     /// Returns network ID.
     pub async fn remove_network(&self, name_or_id: impl AsRef<str>) -> Result<String> {
-        Ok(Docker
+        Docker
             .cmd()?
             .args(["network", "rm", name_or_id.as_ref()])
             .output_ok()
             .await?
-            .single_line_stdout()?)
+            .single_line_stdout()
     }
 
     pub async fn list_networks(&self) -> Result<Vec<NetworkInfo>> {
@@ -258,7 +258,7 @@ impl BuildOptions {
             if let Some(value) = value {
                 ret.push(format!("{name}={value}").into());
             } else {
-                ret.push(format!("{name}").into());
+                ret.push(name.to_string().into());
             }
         }
         if let Some(file) = self.file.as_ref() {
@@ -324,8 +324,8 @@ impl Default for Network {
 impl Display for Network {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Network::Bridge => write!(f, "{}", "bridge"),
-            Network::Host => write!(f, "{}", "host"),
+            Network::Bridge => write!(f, "bridge"),
+            Network::Host => write!(f, "host"),
             Network::User(name) => write!(f, "{}", name),
             Network::Container(name_or_id) => write!(f, "container:{}", name_or_id),
         }

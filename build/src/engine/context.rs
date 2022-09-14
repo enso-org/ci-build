@@ -152,7 +152,7 @@ impl RunContext {
         };
 
         let required_components =
-            once(graal::Component::NativeImage).chain(conditional_components.into_iter().copied());
+            once(graal::Component::NativeImage).chain(conditional_components.iter().copied());
         graal::install_missing_components(required_components).await?;
         prepare_simple_library_server.await??;
         Ok(())

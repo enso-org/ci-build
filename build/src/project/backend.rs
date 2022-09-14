@@ -86,7 +86,7 @@ pub async fn bundled_engine_versions(
     Ok(ret)
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Backend {
     pub target_os: OS,
 }

@@ -123,46 +123,44 @@ impl ArtifactUploader {
     }
 }
 
-pub fn upload_worker(
+pub async fn upload_worker(
     cancellation_token: tokio_util::sync::CancellationToken,
     job_receiver: flume::Receiver<FileToUpload>,
     uploader: FileUploader,
     result_sender: flume::Sender<UploadResult>,
-) -> impl Future<Output = ()> {
-    async move {
-        debug!("Upload worker spawned.");
-        let mut job_receiver = job_receiver.into_stream();
-        loop {
-            trace!("Waiting for input.");
-            let mut on_cancelled = pin!(cancellation_token.cancelled().fuse());
-            select! {
-                _ = on_cancelled => {
-                    debug!("Upload worker has been cancelled.");
-                    break;
-                },
-                (job, tail) = job_receiver.into_future() => {
-                    job_receiver = tail;
-                    trace!("Got job: {job:?}.");
-                    match job {
-                        Some(job) => {
-                            let result = uploader.upload_file(&job).await;
-                            result_sender.send(result).unwrap();
-                        }
-                        None => {
-                            debug!("Upload worker completed all available work.");
-                            break;
-                        }
+) {
+    debug!("Upload worker spawned.");
+    let mut job_receiver = job_receiver.into_stream();
+    loop {
+        trace!("Waiting for input.");
+        let mut on_cancelled = pin!(cancellation_token.cancelled().fuse());
+        select! {
+            _ = on_cancelled => {
+                debug!("Upload worker has been cancelled.");
+                break;
+            },
+            (job, tail) = job_receiver.into_future() => {
+                job_receiver = tail;
+                trace!("Got job: {job:?}.");
+                match job {
+                    Some(job) => {
+                        let result = uploader.upload_file(&job).await;
+                        result_sender.send(result).unwrap();
                     }
-                    trace!("Job complete.");
+                    None => {
+                        debug!("Upload worker completed all available work.");
+                        break;
+                    }
                 }
-                complete => {
-                    trace!("Complete.");
-                    break;
-                },
+                trace!("Job complete.");
             }
+            complete => {
+                trace!("Complete.");
+                break;
+            },
         }
-        debug!("Upload worker finished.");
     }
+    debug!("Upload worker finished.");
 }
 
 #[derive(Derivative)]

@@ -100,7 +100,7 @@ impl Cache {
             match retrieve.await {
                 Ok(out) => {
                     debug!("Found in cache, skipping generation.");
-                    return Ok(out);
+                    Ok(out)
                 }
                 Err(e) => {
                     debug!("Value cannot be retrieved from cache because: {e}");

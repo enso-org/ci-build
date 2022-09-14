@@ -202,7 +202,7 @@ pub struct Source<Target: IsTargetSource> {
 }
 
 /// Discriminator denoting how some target artifact should be obtained.
-#[derive(ArgEnum, Clone, Copy, Debug, PartialEq)]
+#[derive(ArgEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SourceKind {
     /// Target will be built from the target repository's sources.
     Build,

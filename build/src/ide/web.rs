@@ -109,7 +109,7 @@ impl<Output: AsRef<Path>> ContentEnvironment<TempDir, Output> {
         let asset_dir = TempDir::new()?;
         let assets_download = download_js_assets(&asset_dir);
         let (wasm, _, _) = try_join3(wasm, installation, assets_download).await?;
-        ide.write_build_info(&build_info)?;
+        ide.write_build_info(build_info)?;
         Ok(ContentEnvironment { asset_dir, wasm, output_path })
     }
 }

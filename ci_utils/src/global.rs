@@ -21,7 +21,7 @@ pub fn store_static_text(text: impl AsRef<str>) -> &'static str {
     lazy_static! {
         pub static ref STRING_STORAGE: std::sync::Mutex<HashSet<&'static str>> = default();
     }
-    *STRING_STORAGE.lock().unwrap().get_or_insert_with(text.as_ref(), |text| Box::leak(text.into()))
+    STRING_STORAGE.lock().unwrap().get_or_insert_with(text.as_ref(), |text| Box::leak(text.into()))
 }
 
 const REFRESHES_PER_SECOND: u32 = 100;

@@ -22,7 +22,7 @@ use ide_ci::env::Variable;
 use ide_ci::goodie::GoodieDatabase;
 use ide_ci::models::config::RepoContext;
 
-#[derive(Subcommand, Clone, PartialEq, Debug, strum::Display)]
+#[derive(Subcommand, Clone, PartialEq, Eq, Debug, strum::Display)]
 pub enum WhatToDo {
     Build(Build),
     // Three release-related commands below.
@@ -54,25 +54,25 @@ impl WhatToDo {
 }
 
 /// Just build the packages.
-#[derive(Args, Clone, PartialEq, Debug)]
+#[derive(Args, Clone, PartialEq, Eq, Debug)]
 pub struct Build {}
 
 /// Create a new draft release on GitHub and emit relevant information to the CI environment.
-#[derive(Args, Clone, PartialEq, Debug)]
+#[derive(Args, Clone, PartialEq, Eq, Debug)]
 pub struct CreateRelease {}
 
 /// Build all the release packages and bundles and upload them to GitHub release. Must run with
 /// environment adjusted by the `prepare` command.
-#[derive(Args, Clone, PartialEq, Debug)]
+#[derive(Args, Clone, PartialEq, Eq, Debug)]
 pub struct UploadAsset {}
 
 /// Publish the release.  Must run with environment adjusted by the `prepare` command. Typically
 /// called once after platform-specific `upload` commands are done.
-#[derive(Args, Clone, PartialEq, Debug)]
+#[derive(Args, Clone, PartialEq, Eq, Debug)]
 pub struct PublishRelease {}
 
 /// Run an arbitrary command with the build environment set (like `PATH`).
-#[derive(Args, Clone, PartialEq, Debug)]
+#[derive(Args, Clone, PartialEq, Eq, Debug)]
 pub struct Run {
     #[clap(last = true)]
     pub command_pieces: Vec<OsString>,

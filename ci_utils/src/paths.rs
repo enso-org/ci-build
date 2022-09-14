@@ -102,7 +102,7 @@ impl Node {
         self.parameters
             .iter()
             .sorted()
-            .map(|name| syn::Ident::new(&name, Span::call_site()))
+            .map(|name| syn::Ident::new(name, Span::call_site()))
             .collect_vec()
     }
 
@@ -148,7 +148,7 @@ impl Node {
         self.foreach_(&mut stack, &mut f);
     }
 
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = &'a Self> + 'a {
+    pub fn iter(&self) -> impl Iterator<Item = &Self> {
         let me = once(self);
         let children = self.children().iter().flat_map(|child| child.iter());
         // Must be boxed because it would leak a recursive lambda type otherwise.
@@ -206,7 +206,7 @@ pub fn child_struct_ident(init: &[&Node], last: &Node) -> Ident {
 }
 
 pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
-    let ty_name = struct_ident(full_path.into_iter().cloned());
+    let ty_name = struct_ident(full_path.iter().cloned());
     let path_component = last_node.path_formatter();
 
     let children_var = last_node.children().iter().map(Node::var_ident).collect_vec();
@@ -215,8 +215,7 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
 
     let parameter_vars = last_node.all_parameters_vars();
     let own_parameter_vars: Vec<Ident> = last_node.own_parameter_vars();
-    let parent_parameter_vars =
-        full_path.into_iter().flat_map(|n| n.own_parameter_vars()).collect_vec();
+    let parent_parameter_vars = full_path.iter().flat_map(|n| n.own_parameter_vars()).collect_vec();
 
 
     let child_parameter_vars = last_node
@@ -226,18 +225,18 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
         .map(to_ident)
         .collect_vec();
     let all_parameters = {
-        let mut v = parent_parameter_vars.clone();
+        let mut v = parent_parameter_vars;
         v.extend(child_parameter_vars.clone());
         v
     };
 
-    let mut foo = vec![];
+    let mut bar = vec![];
     for i in 0..full_path.len() {
         let nodes = &full_path[0..=i];
         let node = full_path[i];
-        let ty_name = struct_ident(nodes.into_iter().cloned());
+        let ty_name = struct_ident(nodes.iter().cloned());
         let vars = node.own_parameter_vars();
-        foo.push(quote! {
+        bar.push(quote! {
             #ty_name::segment_name(#(#vars),*)
         });
     }
@@ -280,7 +279,7 @@ pub fn generate_struct(full_path: &[&Node], last_node: &Node) -> TokenStream {
 
        impl #ty_name {
            pub fn new(#(#all_parameters: impl AsRef<std::path::Path>, )*) -> Self {
-                let path = std::path::PathBuf::from_iter([#(#foo,)*]);
+                let path = std::path::PathBuf::from_iter([#(#bar,)*]);
                 Self::new_root(path, #(#child_parameter_vars,)*)
            }
 

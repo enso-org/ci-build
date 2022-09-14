@@ -44,7 +44,7 @@ impl Shell for Cmd {
     }
 }
 
-pub fn run_commands<'a, Cmds, Arg>(commands: Cmds) -> anyhow::Result<Command>
+pub fn run_commands<Cmds, Arg>(commands: Cmds) -> anyhow::Result<Command>
 where
     Cmds: IntoIterator<Item: IntoIterator<Item = Arg>>,
     Arg: AsRef<OsStr>, {
@@ -119,10 +119,11 @@ pub async fn compare_env(
         })
         .collect_vec();
 
-    changes.extend(environment_before.into_iter().map(|(variable_name, _)| Modification {
-        variable_name: variable_name.into(),
-        action:        env::Action::Remove,
-    }));
+    changes.extend(
+        environment_before
+            .into_iter()
+            .map(|(variable_name, _)| Modification { variable_name, action: env::Action::Remove }),
+    );
     // dbg!(&changes);
 
     Ok(changes)
