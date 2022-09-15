@@ -114,6 +114,12 @@ impl std::str::FromStr for RepoContext {
     }
 }
 
+impl RepoContext {
+    pub fn new(owner: impl Into<String>, name: impl Into<String>) -> Self {
+        Self { owner: owner.into(), name: name.into() }
+    }
+}
+
 /// Description of the runners deployment for a specific GitHub repository.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
