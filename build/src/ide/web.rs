@@ -227,6 +227,7 @@ impl IdeDesktop {
     }
 
     pub async fn install(&self) -> Result {
+        self.npm()?.install().run_ok().await?;
         self.npm()?.install().arg("--workspaces").run_ok().await?;
         Ok(())
     }
