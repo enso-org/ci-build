@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use byte_unit::Byte;
 use ide_ci::program;
+use ide_ci::programs;
 use semver::VersionReq;
 
 pub fn load_yaml(yaml_text: &str) -> Result<Config> {
@@ -17,7 +18,22 @@ pub enum RecognizedProgram {
 impl RecognizedProgram {
     pub async fn version(&self) -> Result<Version> {
         match self {
-            RecognizedProgram::Other(program) => program::Unknown(program.clone()).version().await,
+            RecognizedProgram::Other(program) => {
+                if let Some(cargo_program) = program.strip_prefix("cargo-") {
+                    // Special case for cargo-programs. Cargo is able to find them even if they are
+                    // not in PATH. Thus, we invoke them via cargo, not to spuriously fail the
+                    // version check.
+                    let version_string = programs::Cargo
+                        .cmd()?
+                        .arg(cargo_program)
+                        .arg("--version")
+                        .run_stdout()
+                        .await?;
+                    Version::find_in_text(&version_string)
+                } else {
+                    program::Unknown(program.clone()).version().await
+                }
+            }
         }
     }
 }
