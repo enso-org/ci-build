@@ -58,10 +58,6 @@ pub mod env {
     // See: https://www.electron.build/code-signing
 
     define_env_var! {
-        /// The password to decrypt the certificate given in CSC_LINK.
-        CSC_KEY_PASSWORD, String
-    }
-    define_env_var! {
         /// The HTTPS link (or base64-encoded data, or file:// link, or local path) to certificate
         /// (*.p12 or *.pfx file). Shorthand ~/ is supported (home directory).
         WIN_CSC_LINK, String
@@ -69,6 +65,25 @@ pub mod env {
     define_env_var! {
         /// The password to decrypt the certificate given in WIN_CSC_LINK.
         WIN_CSC_KEY_PASSWORD, String
+    }
+
+    define_env_var! {
+        /// The HTTPS link (or base64-encoded data, or file:// link, or local path) to certificate
+        /// (*.p12 or *.pfx file). Shorthand ~/ is supported (home directory).
+        CSC_LINK, String
+    }
+    define_env_var! {
+        /// The password to decrypt the certificate given in CSC_LINK.
+        CSC_KEY_PASSWORD, String
+    }
+    define_env_var! {
+        /// The username of apple developer account.
+        APPLEID, String
+    }
+    define_env_var! {
+        /// The app-specific password (not Apple ID password). See:
+        /// https://support.apple.com/HT204397
+        APPLEIDPASS, String
     }
 }
 

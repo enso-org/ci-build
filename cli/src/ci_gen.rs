@@ -41,16 +41,37 @@ pub const TARGETED_SYSTEMS: [OS; 3] = [OS::Windows, OS::Linux, OS::MacOS];
 
 pub const DEFAULT_BRANCH_NAME: &str = "develop";
 
-/// Name of the GitHub Actions secret that stores path to the Windows code signing certificate
-/// within the runner.
-pub const SECRET_WINDOWS_CERT_PATH: &str = "MICROSOFT_CODE_SIGNING_CERT";
+/// Secrets set up in our organization.
+///
+/// To manage, see: https://github.com/organizations/enso-org/settings/secrets/actions
+pub mod secret {
+    // === AWS S3 deploy (release list) ===
+    pub const ARTEFACT_S3_ACCESS_KEY_ID: &str = "ARTEFACT_S3_ACCESS_KEY_ID";
+    pub const ARTEFACT_S3_SECRET_ACCESS_KEY: &str = "ARTEFACT_S3_SECRET_ACCESS_KEY";
 
-/// Name of the GitHub Actions secret that stores password to the Windows code signing certificate.
-pub const SECRET_WINDOWS_CERT_PASSWORD: &str = "MICROSOFT_CODE_SIGNING_CERT_PASSWORD";
 
-pub const ECR_PUSH_RUNTIME_SECRET_ACCESS_KEY: &str = "ECR_PUSH_RUNTIME_SECRET_ACCESS_KEY";
+    // === AWS ECR deployment (runtime release to cloud) ===
+    pub const ECR_PUSH_RUNTIME_SECRET_ACCESS_KEY: &str = "ECR_PUSH_RUNTIME_SECRET_ACCESS_KEY";
+    pub const ECR_PUSH_RUNTIME_ACCESS_KEY_ID: &str = "ECR_PUSH_RUNTIME_ACCESS_KEY_ID";
 
-pub const ECR_PUSH_RUNTIME_ACCESS_KEY_ID: &str = "ECR_PUSH_RUNTIME_ACCESS_KEY_ID";
+
+    // === Apple Code Signing & Notarization ===
+    pub const APPLE_CODE_SIGNING_CERT: &str = "APPLE_CODE_SIGNING_CERT";
+    pub const APPLE_CODE_SIGNING_CERT_PASSWORD: &str = "APPLE_CODE_SIGNING_CERT_PASSWORD";
+    pub const APPLE_NOTARIZATION_USERNAME: &str = "APPLE_NOTARIZATION_USERNAME";
+    pub const APPLE_NOTARIZATION_PASSWORD: &str = "APPLE_NOTARIZATION_PASSWORD";
+
+
+    // === Windows Code Signing ===
+    /// Name of the GitHub Actions secret that stores path to the Windows code signing certificate
+    /// within the runner.
+    pub const WINDOWS_CERT_PATH: &str = "MICROSOFT_CODE_SIGNING_CERT";
+
+    /// Name of the GitHub Actions secret that stores password to the Windows code signing
+    /// certificate.
+    pub const WINDOWS_CERT_PASSWORD: &str = "MICROSOFT_CODE_SIGNING_CERT_PASSWORD";
+}
+
 
 impl RunsOn for DeluxeRunner {
     fn runs_on(&self) -> Vec<RunnerLabel> {
@@ -160,8 +181,8 @@ pub struct PublishRelease;
 impl JobArchetype for PublishRelease {
     fn job(os: OS) -> Job {
         let mut ret = plain_job(&os, "Publish release", "release publish");
-        ret.expose_secret_as("ARTEFACT_S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID");
-        ret.expose_secret_as("ARTEFACT_S3_SECRET_ACCESS_KEY ", "AWS_SECRET_ACCESS_KEY");
+        ret.expose_secret_as(secret::ARTEFACT_S3_ACCESS_KEY_ID, "AWS_ACCESS_KEY_ID");
+        ret.expose_secret_as(secret::ARTEFACT_S3_SECRET_ACCESS_KEY, "AWS_SECRET_ACCESS_KEY");
         ret.env("AWS_REGION", "us-west-1");
         ret
     }
@@ -297,8 +318,12 @@ pub fn benchmark() -> Result<Workflow> {
         ..default()
     };
     let mut workflow = Workflow { name: "Benchmark Engine".into(), on, ..default() };
-    workflow
-        .env("ENSO_BUILD_MINIMAL_RUN", wrap_expression(format!("inputs.{just_check_input_name}")));
+    // Note that we need to use `true == input` instead of `input` because that interprets input as
+    // `false` rather than empty string. Empty string is not falsy enough.
+    workflow.env(
+        "ENSO_BUILD_MINIMAL_RUN",
+        wrap_expression(format!("true == inputs.{just_check_input_name}")),
+    );
 
     let benchmark_job =
         plain_job(&BenchmarkRunner, "Benchmark Engine", "backend benchmark runtime");

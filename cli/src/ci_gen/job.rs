@@ -1,9 +1,8 @@
 use crate::prelude::*;
 
 use crate::ci_gen::runs_on;
+use crate::ci_gen::secret;
 use crate::ci_gen::step;
-use crate::ci_gen::SECRET_WINDOWS_CERT_PASSWORD;
-use crate::ci_gen::SECRET_WINDOWS_CERT_PATH;
 use ide_ci::actions::workflow::definition::cancel_workflow_action;
 use ide_ci::actions::workflow::definition::checkout_repo_step;
 use ide_ci::actions::workflow::definition::Job;
@@ -14,22 +13,6 @@ use ide_ci::actions::workflow::definition::Strategy;
 use std::convert::identity;
 
 
-// pub struct PlainScriptRunJob {
-//     name:        String,
-//     script_args: String,
-// }
-//
-// impl PlainScriptRunJob {
-//     pub fn new(name: impl Into<String>, script_args: impl Into<String>) -> Self {
-//         Self { name: name.into(), script_args: script_args.into() }
-//     }
-// }
-//
-// impl JobArchetype for PlainScriptRunJob {
-//     fn job(os: OS) -> Job {
-//         plain_job(&os, "WASM GUI tests", "wasm test --no-native")
-//     }
-// }
 
 pub trait RunsOn {
     fn strategy(&self) -> Option<Strategy> {
@@ -218,12 +201,9 @@ impl JobArchetype for UploadRuntimeToEcr {
     fn job(os: OS) -> Job {
         plain_job_customized(&os, "Upload Runtime to ECR", "release deploy-to-ecr", |step| {
             step.with_env("ENSO_BUILD_ECR_REPOSITORY", enso_build::aws::ecr::runtime::NAME)
+                .with_secret_exposed_as(secret::ECR_PUSH_RUNTIME_ACCESS_KEY_ID, "AWS_ACCESS_KEY_ID")
                 .with_secret_exposed_as(
-                    crate::ci_gen::ECR_PUSH_RUNTIME_ACCESS_KEY_ID,
-                    "AWS_ACCESS_KEY_ID",
-                )
-                .with_secret_exposed_as(
-                    crate::ci_gen::ECR_PUSH_RUNTIME_SECRET_ACCESS_KEY,
+                    secret::ECR_PUSH_RUNTIME_SECRET_ACCESS_KEY,
                     "AWS_SECRET_ACCESS_KEY",
                 )
                 .with_env("AWS_DEFAULT_REGION", enso_build::aws::ecr::runtime::REGION)
@@ -235,13 +215,19 @@ pub fn expose_os_specific_signing_secret(os: OS, step: Step) -> Step {
     match os {
         OS::Windows => step
             .with_secret_exposed_as(
-                SECRET_WINDOWS_CERT_PATH,
+                secret::WINDOWS_CERT_PATH,
                 &enso_build::ide::web::env::WIN_CSC_LINK,
             )
             .with_secret_exposed_as(
-                SECRET_WINDOWS_CERT_PASSWORD,
+                secret::WINDOWS_CERT_PASSWORD,
                 &enso_build::ide::web::env::WIN_CSC_KEY_PASSWORD,
             ),
+        OS::MacOS => step
+            .with_secret_exposed_as(secret::APPLE_CODE_SIGNING_CERT, "CSC_LINK")
+            .with_secret_exposed_as(secret::APPLE_CODE_SIGNING_CERT_PASSWORD, "CSC_KEY_PASSWORD")
+            .with_secret_exposed_as(secret::APPLE_NOTARIZATION_USERNAME, "APPLEID")
+            .with_secret_exposed_as(secret::APPLE_NOTARIZATION_PASSWORD, "APPLEIDPASS")
+            .with_env("CSC_IDENTITY_AUTO_DISCOVERY", "true"),
         _ => step,
     }
 }

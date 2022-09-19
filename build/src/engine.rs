@@ -82,7 +82,6 @@ pub struct BuildConfigurationFlags {
     /// If true, repository shall be cleaned at the build start.
     ///
     /// Makes sense given that incremental builds with SBT are currently broken.
-    pub clean_repo:                    bool,
     pub test_scala:                    bool,
     pub test_standard_library:         bool,
     /// Whether benchmarks are compiled.
@@ -158,7 +157,6 @@ impl BuildConfigurationFlags {
 impl Default for BuildConfigurationFlags {
     fn default() -> Self {
         Self {
-            clean_repo:                    false,
             test_scala:                    false,
             test_standard_library:         false,
             build_benchmarks:              false,
