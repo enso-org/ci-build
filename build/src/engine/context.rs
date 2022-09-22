@@ -31,7 +31,6 @@ use ide_ci::platform::DEFAULT_SHELL;
 use ide_ci::programs::graal;
 use ide_ci::programs::sbt;
 use ide_ci::programs::Flatc;
-use ide_ci::programs::Git;
 use ide_ci::programs::Sbt;
 
 pub type FutureEnginePackage = BoxFuture<'static, Result<crate::paths::generated::EnginePackage>>;
@@ -208,13 +207,6 @@ impl RunContext {
         // sbt:warning: java.lang.ClassNotFoundException:
         // org.enso.interpreter.node.expression.builtin.bool.True
         ide_ci::fs::remove_if_exists(&self.paths.repo_root.engine.runtime.target)?;
-
-        let git = Git::new(&self.paths.repo_root);
-        // if self.config.clean_repo {
-        //     git.cmd()?.nice_clean().run_ok().await?;
-        //     let lib_src = PathBuf::from_iter(["distribution", "lib"]);
-        //     git.args(["checkout"])?.arg(lib_src).run_ok().await?;
-        // }
 
         // We want to start this earlier, and await only before Engine build starts.
         let perhaps_generate_java_from_rust_job =
