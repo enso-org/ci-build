@@ -78,7 +78,7 @@ pub struct BuildInput {
 
     /// Fail the build if compressed WASM exceeds the specified size. Supports format like
     /// "4.06MiB". Pass "0" to disable check.
-    #[clap(long, enso_env(), maybe_default = DEFAULT_WASM_SIZE_LIMIT.get() )]
+    #[clap(long, enso_env(), default_value_if("skip_wasm_opt", Some("true"), Some("0")), maybe_default = DEFAULT_WASM_SIZE_LIMIT.get())]
     pub wasm_size_limit: Option<byte_unit::Byte>,
 }
 
