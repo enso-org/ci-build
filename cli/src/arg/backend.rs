@@ -18,18 +18,22 @@ source_args_hlp!(Backend, "backend", BuildInput);
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
-    /// Gets the GUI, either by compiling it from scratch or downloading from an external source.
+    /// Gets the backend, either by compiling it from scratch or downloading from an external
+    /// source.
     Get {
         #[clap(flatten)]
         source: Source<Backend>,
     },
-    /// Continuously rebuilds GUI when its sources are changed and serves it using dev-server.
+    /// Build backend and upload it as a release asset. This command is intended to be run as part
+    /// of the CI process.
     Upload {
         #[clap(flatten)]
         input: BuildInput,
     },
     /// Execute benchmarks.
     Benchmark {
+        /// Execute benchmark code only once. This is not useful for benchmarking, but ensures that
+        /// the benchmarks can execute without issues.
         #[clap(long, enso_env())]
         minimal_run: bool,
         #[clap(arg_enum)]
@@ -40,17 +44,18 @@ pub enum Command {
         #[clap(arg_enum, required = true)]
         which: Vec<enso_build::engine::Tests>,
     },
-    /// Run the tests.
+    /// Run an SBT command.
     Sbt {
         #[clap(last = true)]
         command: Vec<String>,
     },
+    /// Perform the CI check routine for the backend.
     CiCheck {},
 }
 
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct Target {
-    /// Command for GUI package.
+    /// Command for backend package.
     #[clap(subcommand)]
     pub command: Command,
 }
