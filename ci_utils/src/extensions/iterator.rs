@@ -2,9 +2,33 @@ use crate::prelude::*;
 use std::iter::Rev;
 use std::iter::Take;
 
+pub trait IteratorExt: Iterator {
+    fn try_filter<R>(mut self, mut f: impl FnMut(&Self::Item) -> Result<bool>) -> Result<R>
+    where
+        Self: Sized,
+        R: Default + Extend<Self::Item> + Sized, {
+        self.try_fold(default(), |mut acc: R, item| {
+            acc.extend(f(&item)?.then_some(item));
+            Ok(acc)
+        })
+    }
+
+    fn try_map<R, U>(mut self, mut f: impl FnMut(&Self::Item) -> Result<U>) -> Result<R>
+    where
+        Self: Sized,
+        R: Default + Extend<U> + Sized, {
+        self.try_fold(default(), |mut acc: R, item| {
+            acc.extend_one(f(&item)?);
+            Ok(acc)
+        })
+    }
+}
+
+impl<I: Iterator> IteratorExt for I {}
+
 pub trait TryIteratorExt: Iterator {
     type Ok;
-    fn collect_result(self) -> Result<Vec<Self::Ok>>;
+    fn try_collect_vec(self) -> Result<Vec<Self::Ok>>;
 }
 
 impl<T, U, E> TryIteratorExt for T
@@ -13,7 +37,7 @@ where
     E: Into<anyhow::Error>,
 {
     type Ok = U;
-    fn collect_result(self) -> Result<Vec<U>> {
+    fn try_collect_vec(self) -> Result<Vec<U>> {
         self.map(|i| i.anyhow_err()).collect::<Result<Vec<_>>>()
     }
 }

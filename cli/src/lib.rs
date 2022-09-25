@@ -357,7 +357,7 @@ impl Processor {
 
     pub fn handle_backend(&self, backend: arg::backend::Target) -> BoxFuture<'static, Result> {
         match backend.command {
-            arg::backend::Command::Get { source } => self.get(source).void_ok().boxed(),
+            arg::backend::Command::Build { source } => self.get(source).void_ok().boxed(),
             arg::backend::Command::Upload { input } => {
                 let input = enso_build::project::Backend::resolve(self, input);
                 let repo = self.remote_repo.clone();

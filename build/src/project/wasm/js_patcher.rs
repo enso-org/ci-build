@@ -12,7 +12,7 @@ lazy_static! {
         Replacement::new(r"(?s)export default init;", "export default init"),
     ]
     .into_iter()
-    .collect_result()
+    .try_collect_vec()
     .unwrap();
 }
 

@@ -4,25 +4,39 @@ use anyhow::Context;
 use std::collections::BTreeSet;
 use unicase::UniCase;
 
+pub fn current_dir() -> Result<PathBuf> {
+    std::env::current_dir().context("Failed to get current directory.")
+}
+
+#[context("Failed to set current directory to {}.", path.as_ref().display())]
+pub fn set_current_dir(path: impl AsRef<Path>) -> Result {
+    debug!("Changing working directory to {}.", path.as_ref().display());
+    std::env::set_current_dir(&path).anyhow_err()
+}
+
 #[macro_export]
 macro_rules! define_env_var {
-    ($(#[$attr:meta])* $name: ident, PathBuf) => {
+    () => {};
+    ($(#[$attr:meta])* $name: ident, PathBuf; $($tail:tt)*) => {
         #[allow(non_upper_case_globals)]
         $(#[$attr])*
         pub const $name: $crate::env::new::PathBufVariable =
             $crate::env::new::PathBufVariable(stringify!($name));
+        $crate::define_env_var!($($tail)*);
     };
-    ($(#[$attr:meta])* $name: ident, String) => {
+    ($(#[$attr:meta])* $name: ident, String; $($tail:tt)*) => {
         #[allow(non_upper_case_globals)]
         $(#[$attr])*
         pub const $name: $crate::env::new::SimpleVariable<String, str> =
             $crate::env::new::SimpleVariable::new(stringify!($name));
+        $crate::define_env_var!($($tail)*);
     };
-    ($(#[$attr:meta])* $name: ident, $ty_name: ty) => {
+    ($(#[$attr:meta])* $name: ident, $ty_name: ty; $($tail:tt)*) => {
         #[allow(non_upper_case_globals)]
         $(#[$attr])*
         pub const $name: $crate::env::new::SimpleVariable<$ty_name> =
             $crate::env::new::SimpleVariable::new(stringify!($name));
+        $crate::define_env_var!($($tail)*);
     };
 }
 

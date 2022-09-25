@@ -9,7 +9,7 @@ pub mod project_manager {
     define_env_var! {
         /// Custom project root. Useful if we want to use backend without affecting user's default
         /// workspace.
-        PROJECTS_ROOT, PathBuf
+        PROJECTS_ROOT, PathBuf;
     }
 
     #[derive(Clone, Copy, Debug)]

@@ -42,16 +42,17 @@ pub mod env {
 
     use ide_ci::define_env_var;
 
-    define_env_var!(ENSO_BUILD_IDE, PathBuf);
-    define_env_var!(ENSO_BUILD_PROJECT_MANAGER, PathBuf);
-    define_env_var!(ENSO_BUILD_GUI, PathBuf);
-    define_env_var!(ENSO_BUILD_ICONS, PathBuf);
-    define_env_var!(ENSO_BUILD_GUI_WASM, PathBuf);
-    define_env_var!(ENSO_BUILD_GUI_JS_GLUE, PathBuf);
-    define_env_var!(ENSO_BUILD_GUI_ASSETS, PathBuf);
-    define_env_var!(ENSO_BUILD_IDE_BUNDLED_ENGINE_VERSION, Version);
-    define_env_var!(ENSO_BUILD_PROJECT_MANAGER_IN_BUNDLE_PATH, PathBuf);
-
+    define_env_var! {
+        ENSO_BUILD_IDE, PathBuf;
+        ENSO_BUILD_PROJECT_MANAGER, PathBuf;
+        ENSO_BUILD_GUI, PathBuf;
+        ENSO_BUILD_ICONS, PathBuf;
+        ENSO_BUILD_GUI_WASM, PathBuf;
+        ENSO_BUILD_GUI_JS_GLUE, PathBuf;
+        ENSO_BUILD_GUI_ASSETS, PathBuf;
+        ENSO_BUILD_IDE_BUNDLED_ENGINE_VERSION, Version;
+        ENSO_BUILD_PROJECT_MANAGER_IN_BUNDLE_PATH, PathBuf;
+    }
 
     // === Electron Builder ===
     // Variables introduced by the Electron Builder itself.
@@ -60,30 +61,24 @@ pub mod env {
     define_env_var! {
         /// The HTTPS link (or base64-encoded data, or file:// link, or local path) to certificate
         /// (*.p12 or *.pfx file). Shorthand ~/ is supported (home directory).
-        WIN_CSC_LINK, String
-    }
-    define_env_var! {
-        /// The password to decrypt the certificate given in WIN_CSC_LINK.
-        WIN_CSC_KEY_PASSWORD, String
-    }
+        WIN_CSC_LINK, String;
 
-    define_env_var! {
+        /// The password to decrypt the certificate given in WIN_CSC_LINK.
+        WIN_CSC_KEY_PASSWORD, String;
+
         /// The HTTPS link (or base64-encoded data, or file:// link, or local path) to certificate
         /// (*.p12 or *.pfx file). Shorthand ~/ is supported (home directory).
-        CSC_LINK, String
-    }
-    define_env_var! {
+        CSC_LINK, String;
+
         /// The password to decrypt the certificate given in CSC_LINK.
-        CSC_KEY_PASSWORD, String
-    }
-    define_env_var! {
+        CSC_KEY_PASSWORD, String;
+
         /// The username of apple developer account.
-        APPLEID, String
-    }
-    define_env_var! {
+        APPLEID, String;
+
         /// The app-specific password (not Apple ID password). See:
         /// https://support.apple.com/HT204397
-        APPLEIDPASS, String
+        APPLEIDPASS, String;
     }
 }
 

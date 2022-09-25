@@ -32,7 +32,7 @@ impl BuildContext {
         async move {
             match ide_ci::actions::env::GITHUB_SHA.get() {
                 Ok(commit) => Ok(commit),
-                Err(_e) => Git::new(root).head_hash().await,
+                Err(_e) => Git::new(root).await?.head_hash().await,
             }
         }
         .boxed()

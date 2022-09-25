@@ -5,7 +5,7 @@ use crate::programs;
 const DOWNLOAD_URL_TEXT: &str = "https://github.com/sbt/sbt/releases/download/v1.5.5/sbt-1.5.5.tgz";
 
 crate::define_env_var! {
-    SBT_HOME, PathBuf
+    SBT_HOME, PathBuf;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Display)]

@@ -28,7 +28,7 @@ pub const ENVIRONMENT_VARIABLE_NAME_PREFIX: &str = "ENSO_BUILD";
 pub const DEFAULT_REMOTE_REPOSITORY_FALLBACK: &str = "enso-org/enso";
 
 pub fn default_repo_path() -> Option<PathBuf> {
-    enso_build::repo::deduce_repository_path()
+    enso_build::repo::deduce_repository_path().ok()
 }
 
 pub fn default_repo_remote() -> RepoContext {
@@ -134,35 +134,35 @@ pub enum Target {
 pub struct Cli {
     /// Path to the directory with sources to be built, typically the root of the 'enso'
     /// repository's working copy.
-    #[clap(long, maybe_default_os = default_repo_path(), enso_env())]
+    #[clap(long, global = true, maybe_default_os = default_repo_path(), enso_env())]
     pub repo_path: PathBuf,
 
     /// Where build script will cache some of the third-party artifacts (like network downloads).
-    #[clap(long, maybe_default_os = default_cache_path(), enso_env())]
+    #[clap(long, global = true, maybe_default_os = default_cache_path(), enso_env())]
     pub cache_path: PathBuf,
 
     /// The GitHub repository with the project. This is mainly used to manage releases (checking
     /// released versions to generate a new one, or uploading release assets).
     /// The argument should follow the format `owner/repo_name`.
-    #[clap(long, default_value_t = default_repo_remote(), enso_env())]
+    #[clap(long, global = true, default_value_t = default_repo_remote(), enso_env())]
     pub repo_remote: RepoContext,
 
     /// The build kind. Affects the default version generation.
-    #[clap(long, arg_enum, default_value_t = enso_build::version::BuildKind::Dev, env = crate::BuildKind::NAME)]
+    #[clap(long, global = true, arg_enum, default_value_t = enso_build::version::BuildKind::Dev, env = crate::BuildKind::NAME)]
     pub build_kind: enso_build::version::BuildKind,
 
     /// Platform to target. Currently cross-compilation is enabled only for GUI/IDE (without
     /// Project Manager) on platforms where Electron Builder supports this.
-    #[clap(long, default_value_t = TARGET_OS, enso_env(), possible_values=[OS::Windows.as_str(), OS::Linux.as_str(), OS::MacOS.as_str()])]
+    #[clap(long, global = true, default_value_t = TARGET_OS, enso_env(), possible_values=[OS::Windows.as_str(), OS::Linux.as_str(), OS::MacOS.as_str()])]
     pub target_os: OS,
 
     /// Does not check the program version requirements defined in the build-config.yaml.
-    #[clap(long, enso_env())]
+    #[clap(long, global = true, enso_env())]
     pub skip_version_check: bool,
 
     /// Whether built artifacts should be uploaded as part of CI run. Ignored in non-CI
     /// environment.
-    #[clap(long, hide = !ide_ci::actions::workflow::is_in_env(), parse(try_from_str), default_value_t = true, enso_env())]
+    #[clap(long, global = true, hide = !ide_ci::actions::workflow::is_in_env(), parse(try_from_str), default_value_t = true, enso_env())]
     pub upload_artifacts: bool,
 
     #[clap(subcommand)]
@@ -175,7 +175,9 @@ pub struct Cli {
 #[derive(Args, Clone, Debug, PartialEq)]
 pub struct Source<Target: IsTargetSource> {
     /// How the given target should be acquired.
-    #[clap(name = Target::SOURCE_NAME, arg_enum, long, default_value_t= SourceKind::Build, enso_env())]
+    #[clap(name = Target::SOURCE_NAME, arg_enum, long, default_value_t= SourceKind::Build,
+    enso_env(), default_value_if(Target::RUN_ID_NAME, None, Some("ci-run")),
+    default_value_if(Target::RELEASE_DESIGNATOR_NAME, None, Some("release")))]
     pub source: SourceKind,
 
     /// If source is `local`, this argument is used to give the path with the component.

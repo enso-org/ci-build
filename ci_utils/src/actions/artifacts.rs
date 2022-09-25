@@ -124,11 +124,11 @@ pub fn single_dir_provider(path: &Path) -> Result<impl Stream<Item = FileToUploa
     // TODO not optimal, could discover files at the same time as handling them.
     let files = walkdir::WalkDir::new(path)
         .into_iter()
-        .collect_result()?
+        .try_collect_vec()?
         .into_iter()
         .filter(|entry| !entry.file_type().is_dir())
         .map(|entry| FileToUpload::new_relative(path, entry.path()))
-        .collect_result()?;
+        .try_collect_vec()?;
 
     info!("Discovered {} files under the {}.", files.len(), path.display());
     Ok(futures::stream::iter(files))

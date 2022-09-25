@@ -24,6 +24,7 @@
 #![feature(explicit_generic_args_with_impl_trait)]
 #![feature(pin_macro)]
 #![feature(result_option_inspect)]
+#![feature(extend_one)]
 #![deny(non_ascii_idents)]
 #![warn(unsafe_code)]
 #![warn(missing_copy_implementations)]
@@ -169,6 +170,7 @@ pub mod prelude {
     pub use crate::extensions::from_string::FromString;
     pub use crate::extensions::future::FutureExt as _;
     pub use crate::extensions::future::TryFutureExt as _;
+    pub use crate::extensions::iterator::IteratorExt;
     pub use crate::extensions::iterator::TryIteratorExt;
     pub use crate::extensions::output::OutputExt as _;
     pub use crate::extensions::path::PathExt as _;

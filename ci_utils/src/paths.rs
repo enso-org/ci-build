@@ -484,7 +484,7 @@ mod tests {
     #[ignore]
     fn generate() -> Result {
         setup_logging()?;
-        let yaml_contents = include_bytes!("../../build/ide-paths.yaml");
+        let yaml_contents = include_bytes!("../../build/paths.yaml");
         let code = process(yaml_contents.as_slice())?;
         debug!("{}", code);
         Ok(())

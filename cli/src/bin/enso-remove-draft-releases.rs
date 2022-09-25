@@ -7,7 +7,7 @@ use ide_ci::models::config::RepoContext;
 #[tokio::main]
 async fn main() -> Result {
     setup_logging()?;
-    let repo = RepoContext::from_str("enso-org/enso-staging")?;
+    let repo = RepoContext::from_str("enso-org/enso")?;
     let octo = setup_octocrab().await?;
 
     let releases = repo.all_releases(&octo).await?;
@@ -16,7 +16,7 @@ async fn main() -> Result {
         let id = release.id;
 
         let route = format!("{}repos/{repo}/releases/{id}", octo.base_url);
-        println!("Will delete {}: {route}.", release.name.unwrap_or_default());
+        info!("Will delete {}: {route}.", release.name.unwrap_or_default());
         let response = octo._delete(route, Option::<&()>::None).await?;
         handle_error_response(response).await?;
     }

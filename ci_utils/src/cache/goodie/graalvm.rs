@@ -22,7 +22,7 @@ crate::define_env_var! {
     ///
     /// Note that this is not the root directory of the GraalVM installation (at least on macOS),
     /// but the directory where the `bin` directory is located.
-    GRAALVM_HOME, PathBuf
+    GRAALVM_HOME, PathBuf;
 }
 
 pub fn graal_version_from_version_string(version_string: &str) -> Result<Version> {

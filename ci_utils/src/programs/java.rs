@@ -4,7 +4,7 @@ use crate::program::command::Manipulator;
 
 crate::define_env_var! {
     /// Java installation directory.
-    JAVA_HOME, PathBuf
+    JAVA_HOME, PathBuf;
 }
 
 #[derive(Clone, Debug, derive_more::Deref, derive_more::DerefMut)]

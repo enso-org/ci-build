@@ -129,16 +129,23 @@ pub fn list_everything_on_failure() -> impl IntoIterator<Item = Step> {
     [win, non_win]
 }
 
+pub fn clean_step() -> Step {
+    run("git-clean")
+}
 
 /// The `f` is applied to the step that does an actual script invocation.
 pub fn setup_customized_script_steps(
     command_line: impl AsRef<str>,
-    f: impl FnOnce(Step) -> Step,
+    customize: impl FnOnce(Step) -> Step,
 ) -> Vec<Step> {
+    let clean_condition = format!("false"); // TODO
+    let clean_step = clean_step().with_if(&clean_condition);
+
     let mut steps = setup_script_steps();
-    let run_step = f(run(command_line));
-    steps.push(run_step);
+    steps.push(clean_step.clone());
+    steps.push(customize(run(command_line)));
     steps.extend(list_everything_on_failure());
+    steps.push(clean_step.with_if(format!("always() && {}", clean_condition)));
     steps
 }
 

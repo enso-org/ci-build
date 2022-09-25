@@ -5,6 +5,7 @@ use crate::prelude::*;
 
 use std::fs::File;
 use std::fs::Metadata;
+use std::io::Write;
 
 pub mod tokio;
 
@@ -41,6 +42,16 @@ pub fn read_to_string(path: impl AsRef<Path>) -> Result<String> {
 #[context("Failed to write path: {}", path.as_ref().display())]
 pub fn write(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result {
     std::fs::write(&path, contents).anyhow_err()
+}
+
+pub fn append(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) -> Result {
+    std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&path)
+        .context(format!("Failed to open {} for writing.", path.as_ref().display()))?
+        .write_all(contents.as_ref())
+        .context(format!("Failed to write to {}.", path.as_ref().display()))
 }
 
 #[context("Failed to open path for reading: {}", path.as_ref().display())]

@@ -60,6 +60,13 @@ pub trait PathExt: AsRef<Path> {
     fn as_str(&self) -> &str {
         self.as_ref().to_str().unwrap()
     }
+
+    /// Split path to components and collect them into a new PathBuf.
+    ///
+    /// This is useful for `/` -> native separator conversion.
+    fn normalize(&self) -> PathBuf {
+        self.as_ref().components().collect()
+    }
 }
 
 impl<T: AsRef<Path>> PathExt for T {}

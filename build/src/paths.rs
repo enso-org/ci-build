@@ -11,7 +11,7 @@ pub mod generated {
 ide_ci::define_env_var! {
     /// Directory where JUnit-format test run results are stored.
     /// These are generated as part of the standard library test suite run.
-    ENSO_TEST_JUNIT_DIR, PathBuf
+    ENSO_TEST_JUNIT_DIR, PathBuf;
 }
 
 pub const EDITION_FILE_ARTIFACT_NAME: &str = "Edition File";
@@ -284,4 +284,17 @@ pub fn project_manager(base_path: impl AsRef<Path>) -> PathBuf {
         .as_ref()
         .join_iter(["enso", "bin", "project-manager"])
         .with_appended_extension(EXE_EXTENSION)
+}
+
+/// The path to the first `Cargo.toml` above the given path.
+pub fn parent_cargo_toml(initial_path: impl AsRef<Path>) -> Result<PathBuf> {
+    let mut path = initial_path.as_ref().to_path_buf();
+    loop {
+        path.push("Cargo.toml");
+        if path.exists() {
+            return Ok(path);
+        }
+        path.pop();
+        ensure!(path.pop(), "No Cargo.toml found for {}", initial_path.as_ref().display());
+    }
 }

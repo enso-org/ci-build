@@ -8,7 +8,7 @@ pub mod definition;
 /// Check if we are running in an environment that looks like being spawned by GitHub Actions
 /// workflow.
 pub fn is_in_env() -> bool {
-    env::Actions.fetch().contains(&true)
+    env::GITHUB_ACTIONS.get().contains(&true)
 }
 
 /// Sets an action's output parameter.
@@ -41,7 +41,7 @@ pub fn set_env(name: &str, value: &impl ToString) -> Result {
     debug!("Will try writing Github Actions environment variable: {name}={value_string}");
     std::env::set_var(name, value.to_string());
     if is_in_env() {
-        let env_file = env::EnvFile.fetch()?;
+        let env_file = env::GITHUB_ENV.get()?;
         let mut file = std::fs::OpenOptions::new().create_new(false).append(true).open(env_file)?;
         writeln!(file, "{name}={value_string}")?;
     }

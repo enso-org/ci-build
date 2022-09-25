@@ -15,9 +15,11 @@ use strum::IntoEnumIterator;
 use tracing::instrument;
 
 // Variable that stores Enso Engine version.
-define_env_var!(ENSO_VERSION, Version);
-define_env_var!(ENSO_EDITION, String);
-define_env_var!(ENSO_RELEASE_MODE, bool);
+define_env_var! {
+    ENSO_VERSION, Version;
+    ENSO_EDITION, String;
+    ENSO_RELEASE_MODE, bool;
+}
 
 pub const LOCAL_BUILD_PREFIX: &str = "dev";
 pub const NIGHTLY_BUILD_PREFIX: &str = "nightly";

@@ -44,7 +44,8 @@ pub async fn clean_except_for(
         let current_dir = root.join_iter(&prefix);
         let exclusions_in_current_dir =
             trie.children.keys().map(|c| Clean::Exclude(c.as_os_str().to_string_lossy().into()));
-        Git::new(current_dir).cmd()?.clean().apply_iter(exclusions_in_current_dir).run_ok().await?;
+        let git = Git::new(&current_dir).await?;
+        git.cmd()?.clean().apply_iter(exclusions_in_current_dir).run_ok().await?;
 
         for (child_name, child_trie) in trie.children.iter() {
             if !child_trie.is_leaf() {

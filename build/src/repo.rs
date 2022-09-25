@@ -16,7 +16,7 @@ pub fn looks_like_enso_repository_root(path: impl AsRef<Path>) -> bool {
     .unwrap_or(false)
 }
 
-pub fn deduce_repository_path() -> Option<PathBuf> {
+pub fn deduce_repository_path() -> Result<PathBuf> {
     let candidate_paths = [
         std::env::current_dir().ok(),
         std::env::current_dir().ok().and_then(|p| p.parent().map(ToOwned::to_owned)),
@@ -25,8 +25,8 @@ pub fn deduce_repository_path() -> Option<PathBuf> {
     ];
     for candidate in candidate_paths {
         if let Some(path) = candidate && looks_like_enso_repository_root(&path) {
-            return Some(path)
+            return Ok(path)
         }
     }
-    None
+    bail!("Could not deduce repository path.")
 }

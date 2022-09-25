@@ -24,18 +24,13 @@ ide_ci::define_env_var! {
     /// depends on the `profiler` crates. We cannot do something like
     /// '--feature=enso_profiler/line-numbers' without causing build to fail when building a
     /// crate that doesn't have `enso_profiler` in its dependency tree.
-    ENSO_ENABLE_PROC_MACRO_SPAN, bool
-}
+    ENSO_ENABLE_PROC_MACRO_SPAN, bool;
 
-ide_ci::define_env_var! {
     /// Use the environment-variable API provided by the `enso_profiler_macros` library to
     /// implement the public interface to profiling-level configuration (see:
     /// https://github.com/enso-org/design/blob/main/epics/profiling/implementation.md)
-    ENSO_MAX_PROFILING_LEVEL, ProfilingLevel
-}
+    ENSO_MAX_PROFILING_LEVEL, ProfilingLevel;
 
-
-ide_ci::define_env_var! {
     /// The timeout for `wasm-bindgen-test-runner` in seconds.
-    WASM_BINDGEN_TEST_TIMEOUT, u64
+    WASM_BINDGEN_TEST_TIMEOUT, u64;
 }

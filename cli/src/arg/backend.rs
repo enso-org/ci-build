@@ -18,9 +18,9 @@ source_args_hlp!(Backend, "backend", BuildInput);
 
 #[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum Command {
-    /// Gets the backend, either by compiling it from scratch or downloading from an external
-    /// source.
-    Get {
+    /// Build the backend from local sources.
+    #[clap(alias = "get")]
+    Build {
         #[clap(flatten)]
         source: Source<Backend>,
     },

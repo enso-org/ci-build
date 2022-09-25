@@ -21,17 +21,19 @@ const POSTGRES_CONTAINER_DEFAULT_PORT: u16 = 5432;
 pub mod env {
 
     pub mod container {
-        use ide_ci::define_env_var;
-        define_env_var!(POSTGRES_DB, String);
-        define_env_var!(POSTGRES_USER, String);
-        define_env_var!(POSTGRES_PASSWORD, String);
+        ide_ci::define_env_var! {
+            POSTGRES_DB, String;
+            POSTGRES_USER, String;
+            POSTGRES_PASSWORD, String;
+        }
     }
     pub mod tests {
-        use ide_ci::define_env_var;
-        define_env_var!(ENSO_DATABASE_TEST_DB_NAME, String);
-        define_env_var!(ENSO_DATABASE_TEST_HOST, String);
-        define_env_var!(ENSO_DATABASE_TEST_DB_USER, String);
-        define_env_var!(ENSO_DATABASE_TEST_DB_PASSWORD, String);
+        ide_ci::define_env_var! {
+            ENSO_DATABASE_TEST_DB_NAME, String;
+            ENSO_DATABASE_TEST_HOST, String;
+            ENSO_DATABASE_TEST_DB_USER, String;
+            ENSO_DATABASE_TEST_DB_PASSWORD, String;
+        }
     }
 }
 

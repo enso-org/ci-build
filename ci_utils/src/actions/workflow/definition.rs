@@ -55,13 +55,13 @@ pub fn github_script_step(name: impl Into<String>, script: impl Into<String>) ->
 }
 
 pub fn setup_artifact_api() -> Step {
-    let script = [
-        r#"core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])"#,
-        r#"core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])"#,
-        r#"core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])"#,
-    ]
-    .join("\n");
-    github_script_step("Setup the Artifact API environment", script)
+    let script = r#"
+    core.exportVariable("ACTIONS_RUNTIME_TOKEN", process.env["ACTIONS_RUNTIME_TOKEN"])
+    core.exportVariable("ACTIONS_RUNTIME_URL", process.env["ACTIONS_RUNTIME_URL"])
+    core.exportVariable("GITHUB_RETENTION_DAYS", process.env["GITHUB_RETENTION_DAYS"])
+    console.log(context)
+    "#;
+    github_script_step("Expose Artifact API and context information.", script)
 }
 
 pub fn is_windows_runner() -> String {
@@ -423,7 +423,7 @@ impl Strategy {
         name: impl Into<String>,
         values: impl IntoIterator<Item: Serialize>,
     ) -> Result<&mut Self> {
-        let values = values.into_iter().map(serde_json::to_value).collect_result()?;
+        let values = values.into_iter().map(serde_json::to_value).try_collect_vec()?;
         self.matrix.insert(name.into(), serde_json::Value::Array(values));
         Ok(self)
     }

@@ -3,12 +3,17 @@ use crate::prelude::*;
 use crate::new_command_type;
 
 pub mod clean;
-
 pub use clean::Clean;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Git {
-    pub repo_path: Option<PathBuf>,
+    /// The path to the repository root above the `working_dir`.
+    ///
+    /// Many paths that git returns are relative to the repository root.
+    repo_path:   PathBuf,
+    /// Directory in which commands will be invoked.
+    /// It might not be the repository root and it makes difference for many commands.
+    working_dir: PathBuf,
 }
 
 impl Program for Git {
@@ -17,19 +22,49 @@ impl Program for Git {
         "git"
     }
     fn current_directory(&self) -> Option<PathBuf> {
-        self.repo_path.clone()
+        Some(self.working_dir.clone())
     }
 }
 
 impl Git {
-    pub fn new(repo_path: impl Into<PathBuf>) -> Self {
-        // TODO likely should normalize path to repo root (from e.g. repo subtree path)
-        //      but consider e.g. being invoked in the submodule tree
-        Self { repo_path: Some(repo_path.into()) }
+    pub async fn new(repo_path: impl Into<PathBuf>) -> Result<Self> {
+        let repo_path = repo_path.into();
+        let temp_git = Git { working_dir: repo_path.clone(), repo_path };
+        let repo_path = temp_git.repository_root().await?;
+        Ok(Git { repo_path, working_dir: temp_git.working_dir })
+    }
+
+    pub async fn new_current() -> Result<Self> {
+        Git::new(crate::env::current_dir()?).await
     }
 
     pub async fn head_hash(&self) -> Result<String> {
         self.cmd()?.args(["rev-parse", "--verify", "HEAD"]).output_ok().await?.single_line_stdout()
+    }
+
+    /// List of files that are different than the compared commit.
+    pub async fn diff_against(&self, compare_against: impl AsRef<str>) -> Result<Vec<PathBuf>> {
+        let root = self.repo_path.as_path();
+        Ok(self
+            .cmd()?
+            .args(["diff", "--name-only", compare_against.as_ref()])
+            .output_ok()
+            .await?
+            .into_stdout_string()?
+            .lines()
+            .map(|line| root.join(line.trim()).normalize())
+            .collect_vec())
+    }
+
+    pub async fn repository_root(&self) -> Result<PathBuf> {
+        let output = self
+            .cmd()?
+            .args(["rev-parse", "--show-toplevel"])
+            .output_ok()
+            .await?
+            .single_line_stdout()?;
+        let path = PathBuf::from(output).normalize();
+        Ok(path)
     }
 }
 
@@ -58,5 +93,28 @@ impl AsRef<OsStr> for Command {
         match self {
             Command::Clean => OsStr::new("clean"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore]
+    async fn repo_root() -> Result {
+        let git = Git::new(".").await?;
+        let diff = git.repository_root().await?;
+        println!("{:?}", diff);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn call_diff() -> Result {
+        let git = Git::new(".").await?;
+        let diff = git.diff_against("origin/develop").await?;
+        println!("{:?}", diff);
+        Ok(())
     }
 }

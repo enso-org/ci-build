@@ -10,7 +10,7 @@ use crate::postgres::EndpointConfiguration;
 use crate::postgres::Postgresql;
 
 ide_ci::define_env_var! {
-    ENSO_JVM_OPTS, String
+    ENSO_JVM_OPTS, String;
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -83,7 +83,7 @@ impl BuiltEnso {
                 let runner_context_string = crate::env::RunnerContainerName
                     .fetch()
                     .map(|name| name.0)
-                    .or_else(|_| ide_ci::actions::env::RunnerName.fetch())
+                    .or_else(|_| ide_ci::actions::env::RUNNER_NAME.get())
                     .unwrap_or_else(|_| Uuid::new_v4().to_string());
                 // GH-hosted runners are named like "GitHub Actions 10". Spaces are not allowed in
                 // the container name.
